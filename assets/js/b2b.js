@@ -6,10 +6,10 @@
    For real partners, move login and data to a backend with per-partner
    access rules (e.g. Supabase Auth + row-level security).
 
-   Pricing rule (set by Green Travel, per partner):
+   Pricing (set by Green Travel per partner, in the admin settings panel):
      our cost (net)  = public website fare / (1 + publicMarkup)
-     partner fee     = flat  (if net < threshold)
-                     = net × pct  (if net ≥ threshold)
+     mode "hybrid":  fee = flat (if net < threshold), net × pct (if net ≥ threshold)
+     mode "flat":    fee = flatAll on every ticket
      partner price   = net + fee   — always kept below the public fare
      suggested sell  = partner price × (1 + partner's own markup), capped at the public fare
    ========================================================= */
@@ -21,6 +21,8 @@
 
   /* ---------- Green Travel settings ---------- */
   const DEFAULT_PRICING = {
+    mode: "hybrid",     // "hybrid" (flat under the threshold, % above) or "flat" (same fee on every ticket)
+    flatAll: 20,        // fee per ticket in "flat" mode
     publicMarkup: 0.08, // Green Travel's markup on the public website (used to back out our cost)
     flat: 20,           // flat fee per ticket for tickets below the threshold
     threshold: 1000,    // USD, on our cost
@@ -28,8 +30,10 @@
   };
   // Demo partner accounts. Real accounts belong on a server.
   const ACCOUNTS = [
-    { email: "demo@partner.com", password: "demo1234", agency: "Demo Partner Travel", contact: "Partner Manager", phone: "+1 (312) 555-0100", partnerEmail: "demo@partner.com", website: "", pricing: {} },
+    { email: "demo@partner.com", password: "demo1234", role: "partner", agency: "Demo Partner Travel", contact: "Partner Manager", phone: "+1 (312) 555-0100", partnerEmail: "demo@partner.com", website: "", pricing: {} },
+    { email: "admin@greentravel.us", password: "admin1234", role: "admin", agency: "Green Travel", contact: "Green Travel", phone: "+1 (708) 963-2552", partnerEmail: "info@greentravel.us", website: "www.greentravel.us", pricing: {} },
   ];
+  const PARTNERS = () => ACCOUNTS.filter((a) => a.role === "partner");
 
   const KEY_SESSION = "gt-b2b-session", KEY_PROFILE = "gt-b2b-profile:", KEY_QUOTES = "gt-b2b-quotes:";
   const store = {
@@ -45,12 +49,20 @@
     if (!a) return null;
     return Object.assign({ agency: a.agency, contact: a.contact, phone: a.phone, email: a.partnerEmail, website: a.website, logo: "", sellMarkup: 6 }, store.get(KEY_PROFILE + a.email, {}));
   };
-  const pricing = () => Object.assign({}, DEFAULT_PRICING, (account() || {}).pricing || {});
+  const KEY_PRICING = "gt-b2b-pricing:";
+  const isAdmin = () => !!account() && account().role === "admin";
+  let adminTarget = null; // partner whose pricing the admin is editing/previewing
+  const pricingFor = (email) => {
+    const acc = ACCOUNTS.find((a) => a.email === email) || {};
+    return Object.assign({}, DEFAULT_PRICING, acc.pricing || {}, store.get(KEY_PRICING + email, {}));
+  };
+  const pricedPartner = () => (isAdmin() ? adminTarget || (PARTNERS()[0] || {}).email : (account() || {}).email);
+  const pricing = () => pricingFor(pricedPartner());
 
   function price(pub) {
     const c = pricing();
     const net = pub / (1 + c.publicMarkup);
-    let fee = net < c.threshold ? c.flat : net * c.pct;
+    let fee = c.mode === "flat" ? c.flatAll : net < c.threshold ? c.flat : net * c.pct;
     fee = Math.min(fee, (pub - net) * 0.6); // safety: the partner always pays less than the public fare
     const partner = Math.round(net + fee);
     const pr = profile();
@@ -65,7 +77,8 @@
     $("#b2bApp").hidden = !logged;
     $$("[data-b2b-logout]").forEach((b) => (b.hidden = !logged));
     window.GTB2B.active = logged;
-    if (logged) { renderProfile(); renderRules(); renderQuotes(); }
+    $("#adminForm").hidden = !(logged && isAdmin());
+    if (logged) { renderProfile(); renderRules(); renderQuotes(); if (isAdmin()) renderAdmin(); }
   }
 
   function initLogin() {
@@ -83,6 +96,7 @@
       window.scrollTo({ top: 0 });
     });
     $("#fillDemo").addEventListener("click", () => { $("#lgEmail").value = "demo@partner.com"; $("#lgPass").value = "demo1234"; });
+    $("#fillAdmin").addEventListener("click", () => { $("#lgEmail").value = "admin@greentravel.us"; $("#lgPass").value = "admin1234"; });
     $$("[data-b2b-logout]").forEach((b) => b.addEventListener("click", () => {
       store.del(KEY_SESSION); session = null;
       if (window.GTFlights) window.GTFlights.exit();
@@ -135,11 +149,55 @@
   /* ---------- Pricing rules card ---------- */
   function renderRules() {
     const c = pricing();
-    $("#ruleFlat").textContent = usd.format(c.flat);
-    $("#ruleThreshold").textContent = usd.format(c.threshold);
-    $("#rulePct").textContent = (c.pct * 100).toFixed(1).replace(/\.0$/, "") + "%";
+    const pct = (c.pct * 100).toFixed(1).replace(/\.0$/, "") + "%";
+    $("#rulesList").innerHTML = c.mode === "flat"
+      ? `<li><b dir="ltr">${usd.format(c.flatAll)}</b><span>${T("رسم ثابت على كل تذكرة مهما كان سعرها", "flat fee on every ticket, whatever the price")}</span></li>`
+      : `<li><b dir="ltr">${usd.format(c.flat)}</b><span>${T("رسم ثابت لكل تذكرة أقل من", "flat fee per ticket under")} <b dir="ltr">${usd.format(c.threshold)}</b></span></li>
+         <li><b dir="ltr">${pct}</b><span>${T("للتذاكر من هذا المبلغ فأكثر", "for tickets at or above that amount")}</span></li>`;
+    $("#ruleMode").textContent = c.mode === "flat" ? T("سعر ثابت", "Flat rate") : T("ثابت + نسبة", "Flat + percentage");
     const ex = [400, 1250, 3000].map((pub) => { const p = price(pub); return `<tr><td dir="ltr">${usd.format(pub)}</td><td dir="ltr">${usd.format(p.partner)}</td><td dir="ltr">${usd.format(p.fee)}</td><td dir="ltr">${usd.format(p.pub - p.partner)}</td></tr>`; });
     $("#ruleExamples").innerHTML = ex.join("");
+  }
+
+  /* ---------- Green Travel admin: pricing per partner ---------- */
+  function renderAdmin() {
+    const list = PARTNERS();
+    if (!adminTarget) adminTarget = (list[0] || {}).email;
+    $("#adPartner").innerHTML = list.map((a) => `<option value="${esc(a.email)}" ${a.email === adminTarget ? "selected" : ""}>${esc(a.agency)} · ${esc(a.email)}</option>`).join("");
+    const c = pricingFor(adminTarget);
+    $$('input[name="adMode"]').forEach((r) => (r.checked = r.value === c.mode));
+    $("#adFlatAll").value = c.flatAll;
+    $("#adFlat").value = c.flat;
+    $("#adThreshold").value = c.threshold;
+    $("#adPct").value = +(c.pct * 100).toFixed(2);
+    $("#adMarkup").value = +(c.publicMarkup * 100).toFixed(2);
+    toggleAdminFields();
+  }
+  function toggleAdminFields() {
+    const flat = ($('input[name="adMode"]:checked') || {}).value === "flat";
+    $("#adFlatFields").hidden = !flat;
+    $("#adHybridFields").hidden = flat;
+  }
+  function initAdmin() {
+    $("#adPartner").addEventListener("change", (e) => { adminTarget = e.target.value; renderAdmin(); renderRules(); });
+    $$('input[name="adMode"]').forEach((r) => r.addEventListener("change", toggleAdminFields));
+    $("#adminForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : d; };
+      const cfg = {
+        mode: ($('input[name="adMode"]:checked') || {}).value === "flat" ? "flat" : "hybrid",
+        flatAll: num("#adFlatAll", DEFAULT_PRICING.flatAll),
+        flat: num("#adFlat", DEFAULT_PRICING.flat),
+        threshold: num("#adThreshold", DEFAULT_PRICING.threshold),
+        pct: num("#adPct", DEFAULT_PRICING.pct * 100) / 100,
+        publicMarkup: num("#adMarkup", DEFAULT_PRICING.publicMarkup * 100) / 100,
+      };
+      store.set(KEY_PRICING + adminTarget, cfg);
+      renderRules();
+      toast(T("تم حفظ تسعير الشريك", "Partner pricing saved"));
+      if (document.body.classList.contains("is-results")) $("#search .search__panel.is-active").requestSubmit();
+    });
+    $("#adReset").addEventListener("click", () => { store.del(KEY_PRICING + adminTarget); renderAdmin(); renderRules(); toast(T("تمت إعادة التسعير الافتراضي", "Default pricing restored")); });
   }
 
   /* ---------- Quotes ---------- */
@@ -258,6 +316,7 @@
     initLogin();
     initProfile();
     initQuote();
+    initAdmin();
     showApp();
   });
 })();

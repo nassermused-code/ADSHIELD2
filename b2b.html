@@ -84,8 +84,9 @@
           <div class="demo-note">
             <b>نسخة تجريبية</b>
             <p>هذه الصفحة للعرض فقط، والبيانات تُحفظ في متصفحك. للاستخدام الفعلي مع شركاء حقيقيين يجب ربطها بخادم آمن.</p>
-            <p dir="ltr" class="demo-cred">demo@partner.com · demo1234</p>
-            <button type="button" class="btn btn--ghost btn--sm" id="fillDemo">تعبئة بيانات التجربة</button>
+            <p class="demo-cred"><span>حساب شريك:</span> <b dir="ltr">demo@partner.com · demo1234</b></p>
+            <p class="demo-cred"><span>حساب جرين ترافيل:</span> <b dir="ltr">admin@greentravel.us · admin1234</b></p>
+            <div class="demo-actions"><button type="button" class="btn btn--ghost btn--sm" id="fillDemo">دخول كشريك</button><button type="button" class="btn btn--ghost btn--sm" id="fillAdmin">دخول كجرين ترافيل</button></div>
           </div>
           <a href="#" class="link-arrow" data-whatsapp="مرحباً، نرغب في فتح حساب شريك (B2B) مع جرين ترافيل">اطلب حساب شريك<svg class="i"><use href="#i-arrow"/></svg></a>
         </form>
@@ -176,10 +177,8 @@
           <article class="b2b-card">
             <h3><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-tag"/></svg></span>طريقة احتساب سعرك</h3>
             <p class="muted">يحددها فريق جرين ترافيل لحسابك. سعرك دائماً أقل من سعر الموقع العام.</p>
-            <ul class="rules">
-              <li><b id="ruleFlat" dir="ltr">$20</b><span>رسم ثابت لكل تذكرة أقل من <b id="ruleThreshold" dir="ltr">$1,000</b></span></li>
-              <li><b id="rulePct" dir="ltr">2%</b><span>للتذاكر من هذا المبلغ فأكثر</span></li>
-            </ul>
+            <p class="rule-mode">نظام التسعير: <b id="ruleMode">ثابت + نسبة</b></p>
+            <ul class="rules" id="rulesList"></ul>
             <div class="table-wrap">
               <table class="mini-table">
                 <thead><tr><th>سعر الموقع</th><th>سعرك</th><th>رسم جرين ترافيل</th><th>الفرق لصالحك</th></tr></thead>
@@ -214,6 +213,33 @@
               <div class="field"><label for="pfMarkup">هامش ربحك المقترح %</label><input id="pfMarkup" type="number" min="0" max="30" step="0.5" dir="ltr"></div>
             </div>
             <button type="submit" class="btn btn--primary">حفظ البيانات</button>
+          </form>
+
+          <!-- Green Travel admin: pricing per partner (admin account only) -->
+          <form class="b2b-card b2b-card--wide b2b-card--admin" id="adminForm" novalidate>
+            <h3><span class="ic3d ic3d--ink"><svg class="i"><use href="#i-shield"/></svg></span>إعدادات جرين ترافيل: تسعير الشريك</h3>
+            <p class="muted">تظهر هذه اللوحة لحساب جرين ترافيل فقط. اختر الشريك ونظام التسعير الخاص به.</p>
+            <div class="form-row">
+              <div class="field"><label for="adPartner">الشريك</label><select id="adPartner"></select></div>
+              <div class="field"><label for="adMarkup">هامش موقعنا العام %</label><input id="adMarkup" type="number" min="0" max="50" step="0.5" dir="ltr"></div>
+            </div>
+            <div class="mode-pick" role="radiogroup" aria-label="نظام التسعير">
+              <label class="mode-opt"><input type="radio" name="adMode" value="hybrid"><span><b>ثابت + نسبة</b><small>رسم ثابت للتذاكر الأقل من حد معيّن، ونسبة مئوية للتذاكر الأغلى</small></span></label>
+              <label class="mode-opt"><input type="radio" name="adMode" value="flat"><span><b>سعر ثابت</b><small>نفس الرسم على كل تذكرة مهما كان سعرها</small></span></label>
+            </div>
+            <div class="form-row form-row--3" id="adHybridFields">
+              <div class="field"><label for="adFlat">الرسم الثابت (USD)</label><input id="adFlat" type="number" min="0" step="1" dir="ltr"></div>
+              <div class="field"><label for="adThreshold">حد التحويل إلى النسبة (USD)</label><input id="adThreshold" type="number" min="0" step="50" dir="ltr"></div>
+              <div class="field"><label for="adPct">النسبة للتذاكر الأغلى %</label><input id="adPct" type="number" min="0" max="20" step="0.25" dir="ltr"></div>
+            </div>
+            <div class="form-row" id="adFlatFields" hidden>
+              <div class="field"><label for="adFlatAll">الرسم الثابت لكل تذكرة (USD)</label><input id="adFlatAll" type="number" min="0" step="1" dir="ltr"></div>
+            </div>
+            <p class="muted">للحماية: إذا جعل الرسم سعر الشريك قريباً من سعر الموقع، يُخفَّض تلقائياً ليبقى سعر الشريك أقل دائماً.</p>
+            <div class="form-actions">
+              <button type="submit" class="btn btn--primary">حفظ التسعير</button>
+              <button type="button" class="btn btn--ghost" id="adReset">إعادة الافتراضي</button>
+            </div>
           </form>
 
           <!-- Quotes history -->
