@@ -642,3 +642,93 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   .msg-cta__inner { padding: 28px 22px; text-align: center; justify-content: center; }
 }
 @media (max-width: 420px) { .values { grid-template-columns: 1fr; } }
+
+/* =========================================================
+   3D icons: raised, lit tiles that float and tilt in 3D
+   ========================================================= */
+@keyframes float3d {
+  0%, 100% { transform: perspective(420px) rotateX(12deg) rotateY(-16deg) translateY(0); }
+  50% { transform: perspective(420px) rotateX(-8deg) rotateY(16deg) translateY(-6px); }
+}
+@keyframes spin3d {
+  from { transform: perspective(420px) rotateY(0) translateY(-4px); }
+  to { transform: perspective(420px) rotateY(360deg) translateY(-4px); }
+}
+@keyframes tilt3d {
+  0%, 100% { transform: perspective(140px) rotateY(-24deg) rotateX(8deg); }
+  50% { transform: perspective(140px) rotateY(24deg) rotateX(-8deg); }
+}
+
+/* Tile palettes */
+.service__icon, .step__icon, .contact__ic, .modal__icon { --t1: #f4f9ff; --t2: #cfe4ff; --t3: #94bdf0; --tc: var(--sky-500); }
+.perk__ic { --t1: #fff8e8; --t2: #ffdf9e; --t3: #e9a93a; --tc: #c77a00; }
+.value__ic, .hl__ic, .contact__ic--wa, .modal__icon--wa { --t1: #f3fcef; --t2: #c8ecb8; --t3: #7fc766; --tc: #26901a; }
+.about-card__ic { --t1: #3a78c9; --t2: #12305a; --t3: #050f1e; --tc: #fff; }
+.service:hover .service__icon, .step:hover .step__icon { --t1: #2f6bbd; --t2: #0b1f3a; --t3: #040b16; --tc: var(--accent); }
+
+.service__icon, .step__icon, .perk__ic, .value__ic, .about-card__ic, .hl__ic, .contact__ic, .modal__icon {
+  background: radial-gradient(120% 120% at 28% 18%, var(--t1) 0%, var(--t2) 62%);
+  color: var(--tc);
+  border: 0;
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, .85),
+    inset 0 -4px 8px rgba(0, 0, 0, .10),
+    0 5px 0 var(--t3),
+    0 14px 22px -8px rgba(11, 31, 58, .45);
+  transform-style: preserve-3d;
+  animation: float3d 5s ease-in-out infinite;
+  will-change: transform;
+  transition: background .3s, color .3s;
+}
+.service__icon .i, .step__icon .i, .perk__ic .i, .value__ic .i, .about-card__ic .i, .hl__ic .i, .contact__ic .i, .modal__icon .i {
+  filter: drop-shadow(0 2px 0 var(--t3)) drop-shadow(0 4px 4px rgba(0, 0, 0, .22));
+  transform: translateZ(20px) scale(1.05);
+}
+/* Desynchronise neighbours so the page feels alive */
+:is(.service, .perk, .value, .hl, .step, .about-card, .contact__list li):nth-child(2n) :is(.service__icon, .perk__ic, .value__ic, .hl__ic, .step__icon, .about-card__ic, .contact__ic) { animation-delay: -1.7s; }
+:is(.service, .perk, .value, .hl, .step, .about-card, .contact__list li):nth-child(3n) :is(.service__icon, .perk__ic, .value__ic, .hl__ic, .step__icon, .about-card__ic, .contact__ic) { animation-delay: -3.3s; }
+/* Hover: full 3D spin */
+.service:hover .service__icon, .perk:hover .perk__ic, .value:hover .value__ic, .hl:hover .hl__ic, .step:hover .step__icon, .about-card:hover .about-card__ic, .contact__list li:hover .contact__ic {
+  animation: spin3d .9s var(--ease) 1 both;
+}
+.value:hover .value__ic .i, .step:hover .step__icon .i { animation: none; }
+
+/* Umrah badge tile */
+.feature__card > .i {
+  background: radial-gradient(120% 120% at 28% 18%, #ffe4a8, var(--accent) 65%);
+  box-shadow: inset 0 2px 1px rgba(255, 255, 255, .8), 0 4px 0 #c47f08, 0 12px 18px -6px rgba(11, 31, 58, .4);
+  animation: float3d 5s ease-in-out infinite, glow 2.8s ease-in-out infinite;
+}
+
+/* Inline icons: depth + continuous 3D tilt */
+.hero__badges .i, .offer__meta .i, .topbar .i, .checks .i, .btn .i, .link-arrow .i, .price-note .i,
+.field__icon, .chip-btn .i, .wa-num .i, .search__tab .i, .eyebrow .i, .swap .i, .icon-btn .i, .to-top .i {
+  filter: drop-shadow(0 1.5px 0 rgba(0, 0, 0, .22)) drop-shadow(0 3px 3px rgba(0, 0, 0, .16));
+}
+.offer__meta .i, .topbar__social .i, .btn .i, .price-note .i, .field__icon, .chip-btn .i, .wa-num .i, .icon-btn .i {
+  animation: tilt3d 3.6s ease-in-out infinite;
+}
+.hero__badges .i { animation: draw 1.6s var(--ease) both, tilt3d 3.6s ease-in-out 1.6s infinite; }
+.search__tab .i { animation: draw 1.6s var(--ease) both, tilt3d 3.6s ease-in-out 1.6s infinite; }
+.reveal.is-in .offer__meta .i { animation: draw 1.6s var(--ease) both, tilt3d 3.6s ease-in-out 1.6s infinite; }
+.checks .i { animation: pop-in .5s var(--ease) both, tilt3d 3.6s ease-in-out .6s infinite; }
+.link-arrow .i { animation: tilt3d 3.6s ease-in-out infinite; }
+.hero__badges li:nth-child(2) .i, .offer__meta span:nth-child(2) .i, .checks li:nth-child(2) .i { animation-delay: 0s, -1.2s; }
+.hero__badges li:nth-child(3) .i, .checks li:nth-child(3) .i { animation-delay: 0s, -2.4s; }
+
+/* Airline logos tilt in 3D */
+.airline svg { filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .18)) drop-shadow(0 4px 4px rgba(0, 0, 0, .14)); animation: tilt3d 4s ease-in-out infinite; }
+.airline:nth-child(2n) svg { animation-delay: -1.3s; }
+.airline:nth-child(3n) svg { animation-delay: -2.6s; }
+
+/* Floating buttons: raised 3D */
+.fab-wa { box-shadow: inset 0 2px 1px rgba(255, 255, 255, .35), 0 5px 0 #169a48, 0 14px 26px -6px rgba(37, 211, 102, .6); }
+.fab-wa .i { filter: drop-shadow(0 2px 0 #169a48); }
+.to-top { box-shadow: inset 0 2px 1px rgba(255, 255, 255, .2), 0 4px 0 #040b16, 0 12px 22px -6px rgba(11, 31, 58, .5); }
+.logo__img { animation: tilt3d 6s ease-in-out infinite; filter: drop-shadow(0 4px 6px rgba(20, 90, 20, .3)); box-shadow: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .service__icon, .step__icon, .perk__ic, .value__ic, .about-card__ic, .hl__ic, .contact__ic, .modal__icon {
+    transform: perspective(420px) rotateX(10deg) rotateY(-12deg);
+  }
+}
