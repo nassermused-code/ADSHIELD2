@@ -260,7 +260,7 @@ function initSearch() {
           title = "طلب حجز طيران";
           rows = [
             ["المسار", `${d.from} ← ${d.to}`],
-            ["نوع الرحلة", `${tripNames[d.trip]} · ${d.scope === "domestic" ? "داخلي" : "دولي"}`],
+            ["نوع الرحلة", tripNames[d.trip]],
             ["المغادرة", toArabicDate(d.depart)],
             d.trip !== "oneway" && d.return ? ["العودة", toArabicDate(d.return)] : null,
             ["المسافرون", $("#paxLabel").textContent],
