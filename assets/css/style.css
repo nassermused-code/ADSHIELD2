@@ -1033,3 +1033,8 @@ body.is-results .hero__bg { inset-block-end: 60px; border-radius: 0 0 28px 28px;
 @media (max-width: 1180px) and (min-width: 961px) {
   .nav ul li:has(a[href="#destinations"]), .nav ul li:has(a[href="#umrah"]) { display: none; }
 }
+/* Slider arrows: keep their direction (the tilt animation would override the flip) */
+.icon-btn .i { animation: none; }
+.icon-btn .i.flip { transform: scaleX(-1); }
+[dir="ltr"] .icon-btn .i:not(.flip) { transform: scaleX(-1); }
+[dir="ltr"] .icon-btn .i.flip { transform: none; }
