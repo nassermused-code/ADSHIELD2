@@ -6,7 +6,7 @@
   <title>جرين ترافيل Green Travel | حجوزات طيران محلية ودولية</title>
   <meta name="description" content="جرين ترافيل (Green Travel): حجز تذاكر الطيران المحلية والدولية، الفنادق، التأشيرات وباقات العمرة بأفضل الأسعار وخدمة على مدار الساعة.">
   <meta name="keywords" content="حجز طيران, تذاكر طيران, وكالة سفر, رحلات دولية, رحلات داخلية, حجز فنادق, تأشيرات, عمرة">
-  <meta name="theme-color" content="#0b1f3a">
+  <meta name="theme-color" content="#07130e">
   <script>try{var l=new URLSearchParams(location.search).get("lang")||localStorage.getItem("gt-lang");if(l==="en"){var r=document.documentElement;r.lang="en";r.dir="ltr";r.classList.add("i18n-pending");}}catch(e){}</script>
   <style>.i18n-pending body{opacity:0}</style>
   <link rel="alternate" hreflang="ar" href="https://greentravel.us/?lang=ar">
@@ -28,8 +28,7 @@
   <link rel="apple-touch-icon" href="assets/img/logo-512.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Readex+Pro:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="preload" as="image" href="assets/img/hero.webp">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Readex+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/css/style.css">
 
   <script type="application/ld+json">
@@ -49,61 +48,67 @@
 </head>
 <body>
   <a class="skip-link" href="#main">تخطَّ إلى المحتوى</a>
+  <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
 
   <!-- ============ Top bar ============ -->
   <div class="topbar">
     <div class="container topbar__inner">
       <div class="topbar__info">
         <a href="tel:+17089632552" data-config="phone-link"><svg class="i"><use href="#i-phone"/></svg><span data-config="phone">+1 (708) 963-2552</span></a>
-        <a href="mailto:info@greentravel.us" data-config="email-link"><svg class="i"><use href="#i-mail"/></svg><span data-config="email">info@greentravel.us</span></a>
+        <a href="mailto:info@greentravel.us" data-config="email-link" class="hide-xs"><svg class="i"><use href="#i-mail"/></svg><span data-config="email">info@greentravel.us</span></a>
         <span class="hide-sm"><svg class="i"><use href="#i-clock"/></svg>دعم على مدار الساعة 24/7</span>
-        <span class="topbar__cur hide-sm"><b dir="ltr">$ USD</b> جميع الأسعار بالدولار الأمريكي</span>
       </div>
-      <div class="topbar__social">
-        <a href="#" aria-label="إنستغرام"><svg class="i"><use href="#i-instagram"/></svg></a>
-        <a href="#" aria-label="إكس"><svg class="i"><use href="#i-x"/></svg></a>
-        <a href="#" aria-label="فيسبوك"><svg class="i"><use href="#i-facebook"/></svg></a>
-        <a href="#" aria-label="سناب شات"><svg class="i"><use href="#i-snap"/></svg></a>
+      <div class="topbar__end">
+        <span class="topbar__cur"><b dir="ltr">$ USD</b><span class="hide-sm">جميع الأسعار بالدولار الأمريكي</span></span>
+        <div class="topbar__social hide-sm">
+          <a href="#" aria-label="إنستغرام"><svg class="i"><use href="#i-instagram"/></svg></a>
+          <a href="#" aria-label="إكس"><svg class="i"><use href="#i-x"/></svg></a>
+          <a href="#" aria-label="فيسبوك"><svg class="i"><use href="#i-facebook"/></svg></a>
+          <a href="#" aria-label="سناب شات"><svg class="i"><use href="#i-snap"/></svg></a>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ============ Header ============ -->
+  <!-- ============ Header (floating pill) ============ -->
   <header class="header" id="header">
-    <div class="container header__inner">
-      <a href="#top" class="logo" aria-label="جرين ترافيل - الرئيسية">
-        <img class="logo__img" src="assets/img/logo.png" alt="" width="58" height="58">
-        <span class="logo__text"><strong>جرين ترافيل</strong><small>Green Travel · للسفر والسياحة</small></span>
-      </a>
+    <div class="container">
+      <div class="header__inner">
+        <a href="#top" class="logo" aria-label="جرين ترافيل - الرئيسية">
+          <img class="logo__img" src="assets/img/logo.png" alt="" width="46" height="46">
+          <span class="logo__text"><strong>جرين ترافيل</strong><small>Green Travel · للسفر والسياحة</small></span>
+        </a>
 
-      <nav class="nav" id="nav" aria-label="القائمة الرئيسية">
-        <ul>
-          <li><a href="#top" class="is-active">الرئيسية</a></li>
-          <li><a href="#services">خدماتنا</a></li>
-          <li><a href="#destinations">الوجهات</a></li>
-          <li><a href="#umrah">العمرة</a></li>
-          <li><a href="#about">من نحن</a></li>
-          <li><a href="#faq">المساعدة</a></li>
-          <li><a href="#contact">تواصل معنا</a></li>
-        </ul>
-        <a href="#search" class="btn btn--accent nav__cta">احجز رحلتك</a>
-      </nav>
+        <nav class="nav" id="nav" aria-label="القائمة الرئيسية">
+          <ul>
+            <li><a href="#top" class="is-active">الرئيسية</a></li>
+            <li><a href="#services">خدماتنا</a></li>
+            <li><a href="#destinations">الوجهات</a></li>
+            <li><a href="#umrah">العمرة</a></li>
+            <li><a href="#about">من نحن</a></li>
+            <li><a href="#faq">المساعدة</a></li>
+            <li><a href="#contact">تواصل معنا</a></li>
+          </ul>
+          <a href="#search" class="btn btn--accent nav__cta">احجز رحلتك</a>
+        </nav>
 
-      <button type="button" class="lang-toggle" data-lang-toggle>English</button>
+        <button type="button" class="lang-toggle" data-lang-toggle>English</button>
 
-      <button class="burger" id="burger" aria-label="فتح القائمة" aria-expanded="false" aria-controls="nav">
-        <span></span><span></span><span></span>
-      </button>
+        <button class="burger" id="burger" aria-label="فتح القائمة" aria-expanded="false" aria-controls="nav">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
     </div>
   </header>
 
   <main id="main">
-    <!-- ============ Hero ============ -->
+    <!-- ============ Hero: live route map + boarding-pass search ============ -->
     <section class="hero" id="top">
-      <div class="hero__bg" aria-hidden="true"></div>
+      <canvas class="hero__map" id="routeMap" aria-hidden="true"></canvas>
+      <div class="hero__glow" aria-hidden="true"></div>
       <div class="container hero__content">
-        <span class="eyebrow eyebrow--light"><svg class="i"><use href="#i-plane"/></svg> وكيل معتمد لأكثر من 120 شركة طيران</span>
-        <h1>العالم أقرب مما تتخيّل<br><span class="text-accent">رحلتك تبدأ من هنا</span></h1>
+        <span class="live-chip"><i></i>ORD <svg class="i"><use href="#i-plane"/></svg> 190+ <span>وجهة حول العالم</span></span>
+        <h1>العالم أقرب مما تتخيّل<br><span class="text-grad">رحلتك تبدأ من هنا</span></h1>
         <p class="hero__lead">حجوزات طيران محلية ودولية، فنادق وتأشيرات مصممة لك — بأفضل الأسعار ودعم حقيقي على مدار الساعة.</p>
         <ul class="hero__badges">
           <li><svg class="i"><use href="#i-shield"/></svg> دفع آمن وموثّق</li>
@@ -112,8 +117,12 @@
         </ul>
       </div>
 
-      <!-- ============ Search widget ============ -->
-      <div class="container">
+      <div class="container hero__pass">
+        <div class="pass-head" aria-hidden="true">
+          <span class="pass-head__brand"><img src="assets/img/logo.png" alt="" width="22" height="22">BOARDING PASS</span>
+          <span class="pass-head__code" dir="ltr">GT · ORD <svg class="i"><use href="#i-plane"/></svg> WORLD</span>
+          <span class="barcode"></span>
+        </div>
         <div class="search" id="search">
           <div class="search__tabs" role="tablist" aria-label="نوع الحجز">
             <button class="search__tab is-active" role="tab" aria-selected="true" data-tab="flights"><svg class="i"><use href="#i-plane"/></svg>طيران</button>
@@ -202,9 +211,9 @@
       </div>
     </section>
 
-    <!-- ============ Airline partners ============ -->
+    <!-- ============ Airline logos ============ -->
     <section class="partners" aria-label="شركاء الطيران">
-      <div class="container">
+      <div class="container partners__head">
         <p class="partners__title">شركاء موثوقون مع كبرى شركات الطيران العالمية والإقليمية</p>
       </div>
       <div class="marquee">
@@ -229,62 +238,67 @@
     <!-- ============ Highlights ============ -->
     <section class="highlights" aria-label="مزايا الحجز معنا">
       <div class="container highlights__grid">
-        <div class="hl reveal"><span class="hl__ic"><svg class="i"><use href="#i-globe"/></svg></span><div><strong>وجهات حول العالم</strong><span>أوروبا وآسيا وأفريقيا والأمريكيتان والشرق الأوسط</span></div></div>
-        <div class="hl reveal"><span class="hl__ic"><svg class="i"><use href="#i-chat"/></svg></span><div><strong>دعم بشري حقيقي</strong><span>وكيل يرد عليك بالعربية والإنجليزية</span></div></div>
-        <div class="hl reveal"><span class="hl__ic"><svg class="i"><use href="#i-lock"/></svg></span><div><strong>حجز آمن</strong><span>لا نطلب بيانات الدفع عبر الموقع</span></div></div>
-        <div class="hl reveal"><span class="hl__ic"><svg class="i"><use href="#i-calendar"/></svg></span><div><strong>تعديل وإعادة إصدار</strong><span>نتابع أي تغيير في رحلتك مع شركة الطيران</span></div></div>
+        <div class="hl reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-globe"/></svg></span><div><strong>وجهات حول العالم</strong><span>أوروبا وآسيا وأفريقيا والأمريكيتان والشرق الأوسط</span></div></div>
+        <div class="hl reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-chat"/></svg></span><div><strong>دعم بشري حقيقي</strong><span>وكيل يرد عليك بالعربية والإنجليزية</span></div></div>
+        <div class="hl reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-lock"/></svg></span><div><strong>حجز آمن</strong><span>لا نطلب بيانات الدفع عبر الموقع</span></div></div>
+        <div class="hl reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-calendar"/></svg></span><div><strong>تعديل وإعادة إصدار</strong><span>نتابع أي تغيير في رحلتك مع شركة الطيران</span></div></div>
       </div>
     </section>
 
-
-    <!-- ============ Services ============ -->
+    <!-- ============ Services (bento) ============ -->
     <section class="section" id="services">
       <div class="container">
-        <header class="section__head reveal">
+        <header class="sec-head reveal">
           <span class="eyebrow">خدماتنا</span>
           <h2>كل ما تحتاجه لرحلتك… في مكان واحد</h2>
           <p>من لحظة التخطيط حتى عودتك بالسلامة، فريقنا يتولى التفاصيل لتستمتع أنت بالرحلة.</p>
         </header>
 
-        <div class="services">
-          <article class="service reveal">
-            <div class="service__icon"><svg class="i"><use href="#i-plane"/></svg></div>
-            <h3>تذاكر الطيران</h3>
-            <p>رحلات داخلية ودولية على أكثر من 120 شركة طيران، مع مقارنة فورية لأفضل الأسعار والمواعيد.</p>
-            <a href="#search" class="link-arrow">احجز الآن<svg class="i"><use href="#i-arrow"/></svg></a>
+        <div class="bento">
+          <article class="bento__card bento__card--hero reveal" style="--img:url('../img/airport.webp')">
+            <span class="ic3d ic3d--glass"><svg class="i"><use href="#i-plane"/></svg></span>
+            <div class="bento__body">
+              <h3>تذاكر الطيران</h3>
+              <p>رحلات داخلية ودولية على أكثر من 120 شركة طيران، مع مقارنة فورية لأفضل الأسعار والمواعيد.</p>
+              <a href="#search" class="btn btn--accent btn--sm">ابحث عن رحلة<svg class="i"><use href="#i-arrow"/></svg></a>
+            </div>
           </article>
-          <article class="service reveal">
-            <div class="service__icon"><svg class="i"><use href="#i-hotel"/></svg></div>
-            <h3>حجوزات الفنادق</h3>
-            <p>أكثر من 500 ألف فندق ومنتجع حول العالم بأسعار تعاقدية حصرية لعملائنا.</p>
-            <a href="#search" class="link-arrow" data-open-tab="hotels">ابحث عن فندق<svg class="i"><use href="#i-arrow"/></svg></a>
+          <article class="bento__card bento__card--photo reveal" style="--img:url('../img/hotel.webp')">
+            <span class="ic3d ic3d--glass"><svg class="i"><use href="#i-hotel"/></svg></span>
+            <div class="bento__body">
+              <h3>حجوزات الفنادق</h3>
+              <p>أكثر من 500 ألف فندق ومنتجع حول العالم بأسعار تعاقدية حصرية لعملائنا.</p>
+              <a href="#search" class="link-arrow" data-open-tab="hotels">ابحث عن فندق<svg class="i"><use href="#i-arrow"/></svg></a>
+            </div>
           </article>
-          <article class="service reveal">
-            <div class="service__icon"><svg class="i"><use href="#i-passport"/></svg></div>
+          <article class="bento__card reveal">
+            <span class="ic3d"><svg class="i"><use href="#i-passport"/></svg></span>
             <h3>التأشيرات</h3>
             <p>استخراج تأشيرات شنغن وبريطانيا وأمريكا وغيرها، مع تجهيز الملف ومتابعة المواعيد.</p>
             <a href="#search" class="link-arrow" data-open-tab="visa">قدّم طلبك<svg class="i"><use href="#i-arrow"/></svg></a>
           </article>
-          <article class="service reveal">
-            <div class="service__icon"><svg class="i"><use href="#i-kaaba"/></svg></div>
-            <h3>الحج والعمرة</h3>
-            <p>باقات عمرة متكاملة: طيران، فنادق قريبة من الحرم، نقل وتأشيرة، بإشراف مرشدين متخصصين.</p>
-            <a href="#umrah" class="link-arrow">اكتشف الباقات<svg class="i"><use href="#i-arrow"/></svg></a>
+          <article class="bento__card bento__card--photo reveal" style="--img:url('../img/madinah.webp')">
+            <span class="ic3d ic3d--glass"><svg class="i"><use href="#i-kaaba"/></svg></span>
+            <div class="bento__body">
+              <h3>الحج والعمرة</h3>
+              <p>باقات عمرة متكاملة: طيران، فنادق قريبة من الحرم، نقل وتأشيرة، بإشراف مرشدين متخصصين.</p>
+              <a href="#umrah" class="link-arrow">اكتشف الباقات<svg class="i"><use href="#i-arrow"/></svg></a>
+            </div>
           </article>
-          <article class="service reveal">
-            <div class="service__icon"><svg class="i"><use href="#i-briefcase"/></svg></div>
+          <article class="bento__card bento__card--dark reveal">
+            <span class="ic3d ic3d--amber"><svg class="i"><use href="#i-briefcase"/></svg></span>
             <h3>سفر الشركات</h3>
             <p>إدارة سفر الموظفين والوفود والمؤتمرات بحسابات ائتمانية وتقارير شهرية وأسعار خاصة.</p>
             <a href="#contact" class="link-arrow">اطلب عرضاً<svg class="i"><use href="#i-arrow"/></svg></a>
           </article>
-          <article class="service reveal">
-            <div class="service__icon"><svg class="i"><use href="#i-umbrella"/></svg></div>
+          <article class="bento__card reveal">
+            <span class="ic3d"><svg class="i"><use href="#i-umbrella"/></svg></span>
             <h3>التأمين على السفر</h3>
             <p>تأمين طبي وتأمين ضد إلغاء الرحلة وفقدان الأمتعة، معتمد لطلبات التأشيرة.</p>
             <a href="#contact" class="link-arrow">اعرف المزيد<svg class="i"><use href="#i-arrow"/></svg></a>
           </article>
-          <article class="service reveal">
-            <div class="service__icon"><svg class="i"><use href="#i-car"/></svg></div>
+          <article class="bento__card reveal">
+            <span class="ic3d"><svg class="i"><use href="#i-car"/></svg></span>
             <h3>النقل وتأجير السيارات</h3>
             <p>استقبال من المطار، سيارات خاصة مع سائق، وتأجير سيارات في أكثر من 160 دولة.</p>
             <a href="#contact" class="link-arrow">احجز نقلك<svg class="i"><use href="#i-arrow"/></svg></a>
@@ -293,54 +307,39 @@
       </div>
     </section>
 
-    <!-- ============ Stats band ============ -->
-    <section class="stats" aria-label="أرقامنا">
-      <div class="container stats__grid">
-        <div class="stat"><strong data-count="15">0</strong><span>+ عاماً من الخبرة</span></div>
-        <div class="stat"><strong data-count="85000">0</strong><span>+ مسافر سعيد</span></div>
-        <div class="stat"><strong data-count="120">0</strong><span>+ شركة طيران شريكة</span></div>
-        <div class="stat"><strong data-count="190">0</strong><span>+ وجهة حول العالم</span></div>
-      </div>
-    </section>
-
-    <!-- ============ Destinations ============ -->
-    <section class="section section--tint" id="destinations">
+    <!-- ============ Destinations as a departures board ============ -->
+    <section class="section section--board" id="destinations">
       <div class="container">
-        <header class="section__head section__head--row reveal">
+        <header class="sec-head sec-head--row reveal">
           <div>
-            <span class="eyebrow">الوجهات الأكثر طلباً</span>
+            <span class="eyebrow eyebrow--light">الوجهات الأكثر طلباً</span>
             <h2>إلى أين ستكون رحلتك القادمة؟</h2>
           </div>
-          <div class="slider-nav">
-            <button class="icon-btn" data-slide="prev" aria-label="السابق"><svg class="i flip"><use href="#i-arrow"/></svg></button>
-            <button class="icon-btn" data-slide="next" aria-label="التالي"><svg class="i"><use href="#i-arrow"/></svg></button>
-          </div>
+          <p class="board-clock"><span>شيكاغو</span> <b id="chicagoClock" dir="ltr">--:--</b></p>
         </header>
 
-        <div class="dest-track" id="destTrack">
-          <a class="dest reveal" href="#search" data-to="DXB"><img src="assets/img/dubai.webp" alt="أفق مدينة دبي عند الغروب" loading="lazy"><div class="dest__body"><span class="dest__tag">الإمارات</span><h3>دبي</h3></div></a>
-          <a class="dest reveal" href="#search" data-to="IST"><img src="assets/img/istanbul.webp" alt="المسجد الأزرق في إسطنبول" loading="lazy"><div class="dest__body"><span class="dest__tag">تركيا</span><h3>إسطنبول</h3></div></a>
-          <a class="dest reveal" href="#search" data-to="LHR"><img src="assets/img/london.webp" alt="نهر التايمز وجسر البرج في لندن" loading="lazy"><div class="dest__body"><span class="dest__tag">المملكة المتحدة</span><h3>لندن</h3></div></a>
-          <a class="dest reveal" href="#search" data-to="CDG"><img src="assets/img/paris.webp" alt="برج إيفل ونهر السين في باريس" loading="lazy"><div class="dest__body"><span class="dest__tag">فرنسا</span><h3>باريس</h3></div></a>
-          <a class="dest reveal" href="#search" data-to="MLE"><img src="assets/img/maldives.webp" alt="شاطئ فيروزي في جزر المالديف" loading="lazy"><div class="dest__body"><span class="dest__tag">المالديف</span><h3>جزر المالديف</h3></div></a>
-          <a class="dest reveal" href="#search" data-to="HND"><img src="assets/img/tokyo.webp" alt="شوارع طوكيو المضيئة" loading="lazy"><div class="dest__body"><span class="dest__tag">اليابان</span><h3>طوكيو</h3></div></a>
-          <a class="dest reveal" href="#search" data-to="BCN"><img src="assets/img/barcelona.webp" alt="منظر جوي لمدينة برشلونة" loading="lazy"><div class="dest__body"><span class="dest__tag">إسبانيا</span><h3>برشلونة</h3></div></a>
-          <a class="dest reveal" href="#search" data-to="DPS"><img src="assets/img/bali.webp" alt="منتجع استوائي في بالي" loading="lazy"><div class="dest__body"><span class="dest__tag">إندونيسيا</span><h3>بالي</h3></div></a>
+        <div class="board reveal" role="list">
+          <div class="board__head" aria-hidden="true"><span>الوجهة</span><span>الرمز</span><span>الحالة</span></div>
+          <button type="button" class="dest board__row" role="listitem" data-to="DXB"><img src="assets/img/dubai.webp" alt="أفق مدينة دبي عند الغروب" loading="lazy"><span class="board__city"><b>دبي</b><small>الإمارات</small></span><span class="flap" dir="ltr" data-flap="DXB">DXB</span><span class="board__status">احجز الآن</span><svg class="i board__go"><use href="#i-arrow"/></svg></button>
+          <button type="button" class="dest board__row" role="listitem" data-to="IST"><img src="assets/img/istanbul.webp" alt="المسجد الأزرق في إسطنبول" loading="lazy"><span class="board__city"><b>إسطنبول</b><small>تركيا</small></span><span class="flap" dir="ltr" data-flap="IST">IST</span><span class="board__status">احجز الآن</span><svg class="i board__go"><use href="#i-arrow"/></svg></button>
+          <button type="button" class="dest board__row" role="listitem" data-to="LHR"><img src="assets/img/london.webp" alt="نهر التايمز وجسر البرج في لندن" loading="lazy"><span class="board__city"><b>لندن</b><small>المملكة المتحدة</small></span><span class="flap" dir="ltr" data-flap="LHR">LHR</span><span class="board__status">احجز الآن</span><svg class="i board__go"><use href="#i-arrow"/></svg></button>
+          <button type="button" class="dest board__row" role="listitem" data-to="CDG"><img src="assets/img/paris.webp" alt="برج إيفل ونهر السين في باريس" loading="lazy"><span class="board__city"><b>باريس</b><small>فرنسا</small></span><span class="flap" dir="ltr" data-flap="CDG">CDG</span><span class="board__status">احجز الآن</span><svg class="i board__go"><use href="#i-arrow"/></svg></button>
+          <button type="button" class="dest board__row" role="listitem" data-to="MLE"><img src="assets/img/maldives.webp" alt="شاطئ فيروزي في جزر المالديف" loading="lazy"><span class="board__city"><b>جزر المالديف</b><small>المالديف</small></span><span class="flap" dir="ltr" data-flap="MLE">MLE</span><span class="board__status">احجز الآن</span><svg class="i board__go"><use href="#i-arrow"/></svg></button>
+          <button type="button" class="dest board__row" role="listitem" data-to="HND"><img src="assets/img/tokyo.webp" alt="شوارع طوكيو المضيئة" loading="lazy"><span class="board__city"><b>طوكيو</b><small>اليابان</small></span><span class="flap" dir="ltr" data-flap="HND">HND</span><span class="board__status">احجز الآن</span><svg class="i board__go"><use href="#i-arrow"/></svg></button>
+          <button type="button" class="dest board__row" role="listitem" data-to="BCN"><img src="assets/img/barcelona.webp" alt="منظر جوي لمدينة برشلونة" loading="lazy"><span class="board__city"><b>برشلونة</b><small>إسبانيا</small></span><span class="flap" dir="ltr" data-flap="BCN">BCN</span><span class="board__status">احجز الآن</span><svg class="i board__go"><use href="#i-arrow"/></svg></button>
+          <button type="button" class="dest board__row" role="listitem" data-to="DPS"><img src="assets/img/bali.webp" alt="منتجع استوائي في بالي" loading="lazy"><span class="board__city"><b>بالي</b><small>إندونيسيا</small></span><span class="flap" dir="ltr" data-flap="DPS">DPS</span><span class="board__status">احجز الآن</span><svg class="i board__go"><use href="#i-arrow"/></svg></button>
         </div>
       </div>
     </section>
 
-    <!-- ============ Umrah feature ============ -->
-    <section class="feature" id="umrah">
-      <div class="container feature__grid">
-        <div class="feature__media reveal">
-          <img src="assets/img/madinah.webp" alt="المسجد النبوي الشريف" loading="lazy">
-          <div class="feature__card">
-            <svg class="i"><use href="#i-kaaba"/></svg>
-            <div><strong>+12,000</strong><span>معتمر خدمناهم هذا العام</span></div>
-          </div>
+    <!-- ============ Umrah ============ -->
+    <section class="section umrah" id="umrah">
+      <div class="container umrah__grid">
+        <div class="umrah__media reveal">
+          <div class="arch"><img src="assets/img/madinah.webp" alt="المسجد النبوي الشريف" loading="lazy"></div>
+          <div class="umrah__badge"><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-kaaba"/></svg></span><div><strong>+12,000</strong><span>معتمر خدمناهم هذا العام</span></div></div>
         </div>
-        <div class="feature__text reveal">
+        <div class="umrah__text reveal">
           <span class="eyebrow">باقات العمرة</span>
           <h2>رحلة إيمانية بلا هموم، من بابك إلى الحرم</h2>
           <p>نتولى كل التفاصيل لتتفرغ لعبادتك: التأشيرة، الطيران، الفنادق القريبة من الحرمين، والتنقل المريح بين مكة والمدينة.</p>
@@ -359,56 +358,70 @@
       </div>
     </section>
 
-    <!-- ============ Why us ============ -->
-    <section class="section section--dark" id="why">
+    <!-- ============ Why us (sticky split) ============ -->
+    <section class="section section--soft" id="why">
       <div class="container why">
-        <div class="why__text reveal">
-          <span class="eyebrow eyebrow--light">لماذا جرين ترافيل؟</span>
+        <div class="why__intro reveal">
+          <span class="eyebrow">لماذا جرين ترافيل؟</span>
           <h2>لأن رحلتك تستحق أكثر من مجرد تذكرة</h2>
           <p>نجمع بين قوة أنظمة الحجز العالمية واللمسة الشخصية لمستشار سفر يعرفك ويهتم بتفاصيلك.</p>
-          <img src="assets/img/traveler.webp" alt="مسافر يستريح في صالة المطار" loading="lazy" class="why__img">
+          <div class="stats">
+            <div class="stat"><strong data-count="15">0</strong><span>+ عاماً من الخبرة</span></div>
+            <div class="stat"><strong data-count="85000">0</strong><span>+ مسافر سعيد</span></div>
+            <div class="stat"><strong data-count="120">0</strong><span>+ شركة طيران شريكة</span></div>
+            <div class="stat"><strong data-count="190">0</strong><span>+ وجهة حول العالم</span></div>
+          </div>
         </div>
-        <div class="why__list">
-          <div class="why__item reveal"><div class="why__num">01</div><div><h3>أفضل سعر مضمون</h3><p>إذا وجدت السعر نفسه أقل لدى جهة أخرى خلال 24 ساعة، نعيد لك الفرق.</p></div></div>
-          <div class="why__item reveal"><div class="why__num">02</div><div><h3>دعم 24/7 بالعربية</h3><p>فريق جاهز عبر الهاتف وواتساب لأي تغيير أو طارئ، في أي وقت ومن أي مكان.</p></div></div>
-          <div class="why__item reveal"><div class="why__num">03</div><div><h3>وكالة مرخّصة ومعتمدة</h3><p>معتمدون من الاتحاد الدولي للنقل الجوي IATA والجهات الرسمية للسياحة.</p></div></div>
-          <div class="why__item reveal"><div class="why__num">04</div><div><h3>دفع آمن ومرن</h3><p>يشرح لك الوكيل طرق الدفع المتاحة عند تأكيد الحجز، ولا نطلب أي بيانات دفع عبر الموقع.</p></div></div>
-          <div class="why__item reveal"><div class="why__num">05</div><div><h3>تعديل وإلغاء بسهولة</h3><p>نتولى التواصل مع شركة الطيران نيابة عنك لتعديل الحجز أو استرداد المبلغ.</p></div></div>
-        </div>
+        <ol class="why__list">
+          <li class="why__item reveal"><span class="why__num" dir="ltr">01</span><div><h3>أفضل سعر مضمون</h3><p>إذا وجدت السعر نفسه أقل لدى جهة أخرى خلال 24 ساعة، نعيد لك الفرق.</p></div></li>
+          <li class="why__item reveal"><span class="why__num" dir="ltr">02</span><div><h3>دعم 24/7 بالعربية</h3><p>فريق جاهز عبر الهاتف وواتساب لأي تغيير أو طارئ، في أي وقت ومن أي مكان.</p></div></li>
+          <li class="why__item reveal"><span class="why__num" dir="ltr">03</span><div><h3>وكالة مرخّصة ومعتمدة</h3><p>معتمدون من الاتحاد الدولي للنقل الجوي IATA والجهات الرسمية للسياحة.</p></div></li>
+          <li class="why__item reveal"><span class="why__num" dir="ltr">04</span><div><h3>دفع آمن ومرن</h3><p>يشرح لك الوكيل طرق الدفع المتاحة عند تأكيد الحجز، ولا نطلب أي بيانات دفع عبر الموقع.</p></div></li>
+          <li class="why__item reveal"><span class="why__num" dir="ltr">05</span><div><h3>تعديل وإلغاء بسهولة</h3><p>نتولى التواصل مع شركة الطيران نيابة عنك لتعديل الحجز أو استرداد المبلغ.</p></div></li>
+        </ol>
       </div>
     </section>
 
-    <!-- ============ Personal service perks ============ -->
+    <!-- ============ Personal service (horizontal cards) ============ -->
     <section class="section" id="perks">
       <div class="container">
-        <header class="section__head reveal">
-          <span class="eyebrow">لماذا Green Travel</span>
-          <h2>سفر أسهل، بخدمة شخصية</h2>
-          <p>نجمع سهولة مواقع الحجز العالمية مع وكيل حقيقي يعتني برحلتك.</p>
+        <header class="sec-head sec-head--row reveal">
+          <div>
+            <span class="eyebrow">لماذا Green Travel</span>
+            <h2>سفر أسهل، بخدمة شخصية</h2>
+            <p>نجمع سهولة مواقع الحجز العالمية مع وكيل حقيقي يعتني برحلتك.</p>
+          </div>
+          <div class="slider-nav">
+            <button type="button" class="icon-btn" data-perk="prev" aria-label="السابق"><svg class="i flip"><use href="#i-arrow"/></svg></button>
+            <button type="button" class="icon-btn" data-perk="next" aria-label="التالي"><svg class="i"><use href="#i-arrow"/></svg></button>
+          </div>
         </header>
-        <div class="perks">
-          <article class="perk reveal"><span class="perk__ic"><svg class="i"><use href="#i-plane"/></svg></span><h3>خيارات طيران واسعة</h3><p>رحلات مباشرة ورحلات ربط عبر أكبر المطارات، لنجد لك الأنسب في الوقت والسعر.</p></article>
-          <article class="perk reveal"><span class="perk__ic"><svg class="i"><use href="#i-users"/></svg></span><h3>عائلات ومجموعات</h3><p>مقاعد متجاورة، تذاكر الأطفال والرضّع، وأسعار المجموعات.</p></article>
-          <article class="perk reveal"><span class="perk__ic"><svg class="i"><use href="#i-briefcase"/></svg></span><h3>رحلات عمل</h3><p>حجوزات سريعة على درجة رجال الأعمال، ومتابعة لكل تغيير في الجدول.</p></article>
-          <article class="perk reveal"><span class="perk__ic"><svg class="i"><use href="#i-calendar"/></svg></span><h3>تعديل التواريخ</h3><p>تغيّرت خططك؟ نعيد إصدار تذكرتك وفق شروط شركة الطيران وبأقل رسوم ممكنة.</p></article>
-          <article class="perk reveal"><span class="perk__ic"><svg class="i"><use href="#i-route"/></svg></span><h3>وجهات متعددة</h3><p>تخطط لرحلة فيها أكثر من مدينة؟ أخبرنا ونرتبها لك في حجز واحد.</p></article>
-          <article class="perk reveal"><span class="perk__ic"><svg class="i"><use href="#i-chat"/></svg></span><h3>تواصل فوري</h3><p>واتساب وهاتف وبريد إلكتروني، ورد سريع من فريقنا.</p></article>
-        </div>
+      </div>
+      <div class="perks" id="perksTrack">
+        <article class="perk reveal"><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-plane"/></svg></span><h3>خيارات طيران واسعة</h3><p>رحلات مباشرة ورحلات ربط عبر أكبر المطارات، لنجد لك الأنسب في الوقت والسعر.</p></article>
+        <article class="perk reveal"><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-users"/></svg></span><h3>عائلات ومجموعات</h3><p>مقاعد متجاورة، تذاكر الأطفال والرضّع، وأسعار المجموعات.</p></article>
+        <article class="perk reveal"><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-briefcase"/></svg></span><h3>رحلات عمل</h3><p>حجوزات سريعة على درجة رجال الأعمال، ومتابعة لكل تغيير في الجدول.</p></article>
+        <article class="perk reveal"><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-calendar"/></svg></span><h3>تعديل التواريخ</h3><p>تغيّرت خططك؟ نعيد إصدار تذكرتك وفق شروط شركة الطيران وبأقل رسوم ممكنة.</p></article>
+        <article class="perk reveal"><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-route"/></svg></span><h3>وجهات متعددة</h3><p>تخطط لرحلة فيها أكثر من مدينة؟ أخبرنا ونرتبها لك في حجز واحد.</p></article>
+        <article class="perk reveal"><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-chat"/></svg></span><h3>تواصل فوري</h3><p>واتساب وهاتف وبريد إلكتروني، ورد سريع من فريقنا.</p></article>
       </div>
     </section>
 
-    <!-- ============ How it works ============ -->
-    <section class="section section--tint" id="how">
+    <!-- ============ How it works (flight path) ============ -->
+    <section class="section section--soft" id="how">
       <div class="container">
-        <header class="section__head reveal">
+        <header class="sec-head reveal">
           <span class="eyebrow">خطوات بسيطة</span>
           <h2>احجز رحلتك في 3 خطوات</h2>
         </header>
-        <ol class="steps">
-          <li class="step reveal"><div class="step__icon"><svg class="i"><use href="#i-search"/></svg></div><h3>ابحث</h3><p>أدخل وجهتك وتواريخك أو تواصل مع مستشارك.</p></li>
-          <li class="step reveal"><div class="step__icon"><svg class="i"><use href="#i-card"/></svg></div><h3>ادفع بأمان</h3><p>بوسيلة الدفع التي تناسبك.</p></li>
-          <li class="step reveal"><div class="step__icon"><svg class="i"><use href="#i-ticket"/></svg></div><h3>سافر</h3><p>تذكرتك الإلكترونية تصلك فوراً.</p></li>
-        </ol>
+        <div class="flightpath reveal" id="flightpath">
+          <svg class="flightpath__svg" viewBox="0 0 1000 120" preserveAspectRatio="none" aria-hidden="true"><path d="M20 100 C 250 -20, 750 -20, 980 100" pathLength="1"/></svg>
+          <ol class="steps">
+            <li class="step"><span class="ic3d"><svg class="i"><use href="#i-search"/></svg></span><b class="step__n" dir="ltr">01</b><h3>ابحث</h3><p>أدخل وجهتك وتواريخك أو تواصل مع مستشارك.</p></li>
+            <li class="step"><span class="ic3d"><svg class="i"><use href="#i-card"/></svg></span><b class="step__n" dir="ltr">02</b><h3>ادفع بأمان</h3><p>بوسيلة الدفع التي تناسبك.</p></li>
+            <li class="step"><span class="ic3d"><svg class="i"><use href="#i-ticket"/></svg></span><b class="step__n" dir="ltr">03</b><h3>سافر</h3><p>تذكرتك الإلكترونية تصلك فوراً.</p></li>
+          </ol>
+        </div>
       </div>
     </section>
 
@@ -422,27 +435,27 @@
           <a href="#values" class="link-arrow">قيمنا الأساسية<svg class="i"><use href="#i-arrow"/></svg></a>
         </div>
         <div class="about__cards">
-          <article class="about-card reveal"><span class="about-card__ic"><svg class="i"><use href="#i-target"/></svg></span><h3>رسالتنا</h3><p>أن نجعل حجز رحلات الطيران سهلاً وواضحاً لكل مسافر، مع وكيل يفهم احتياجاتك ويتحدث لغتك.</p></article>
-          <article class="about-card reveal"><span class="about-card__ic"><svg class="i"><use href="#i-eye"/></svg></span><h3>رؤيتنا</h3><p>أن نكون الوكالة التي يثق بها المسافرون العرب في الولايات المتحدة وحول العالم لكل رحلة.</p></article>
-          <article class="about-card reveal"><span class="about-card__ic"><svg class="i"><use href="#i-handshake"/></svg></span><h3>التزامنا</h3><p>سعر واضح يؤكده الوكيل قبل الإصدار، ومتابعة أي تغيير في رحلتك مع شركة الطيران حتى عودتك.</p></article>
+          <article class="about-card reveal"><span class="ic3d ic3d--ink"><svg class="i"><use href="#i-target"/></svg></span><div><h3>رسالتنا</h3><p>أن نجعل حجز رحلات الطيران سهلاً وواضحاً لكل مسافر، مع وكيل يفهم احتياجاتك ويتحدث لغتك.</p></div></article>
+          <article class="about-card reveal"><span class="ic3d ic3d--ink"><svg class="i"><use href="#i-eye"/></svg></span><div><h3>رؤيتنا</h3><p>أن نكون الوكالة التي يثق بها المسافرون العرب في الولايات المتحدة وحول العالم لكل رحلة.</p></div></article>
+          <article class="about-card reveal"><span class="ic3d ic3d--ink"><svg class="i"><use href="#i-handshake"/></svg></span><div><h3>التزامنا</h3><p>سعر واضح يؤكده الوكيل قبل الإصدار، ومتابعة أي تغيير في رحلتك مع شركة الطيران حتى عودتك.</p></div></article>
         </div>
       </div>
     </section>
 
     <!-- ============ Core values ============ -->
-    <section class="section section--tint" id="values">
+    <section class="section section--values" id="values">
       <div class="container">
-        <header class="section__head reveal">
-          <span class="eyebrow">GREEN TRAVEL</span>
+        <header class="sec-head reveal">
+          <span class="eyebrow eyebrow--light">GREEN TRAVEL</span>
           <h2>قيمنا الأساسية</h2>
           <p>خمس قيم توجّه كل حجز نقوم به، وكل تواصل مع عملائنا.</p>
         </header>
         <div class="values">
-          <article class="value reveal"><span class="value__ic"><svg class="i"><use href="#i-eye"/></svg></span><h3>الشفافية</h3><p>سعر واضح وشروط تذكرة مفهومة قبل أي التزام.</p></article>
-          <article class="value reveal"><span class="value__ic"><svg class="i"><use href="#i-lock"/></svg></span><h3>الأمان</h3><p>نحمي بياناتك، ولا نطلب بيانات الدفع عبر الموقع.</p></article>
-          <article class="value reveal"><span class="value__ic"><svg class="i"><use href="#i-heart"/></svg></span><h3>الاهتمام الشخصي</h3><p>وكيل حقيقي يعتني برحلتك بالعربية والإنجليزية.</p></article>
-          <article class="value reveal"><span class="value__ic"><svg class="i"><use href="#i-zap"/></svg></span><h3>سرعة الاستجابة</h3><p>رد سريع على واتساب والهاتف والبريد.</p></article>
-          <article class="value reveal"><span class="value__ic"><svg class="i"><use href="#i-handshake"/></svg></span><h3>الالتزام</h3><p>نتابع رحلتك من البحث حتى الإقلاع وما بعده.</p></article>
+          <article class="value reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-eye"/></svg></span><h3>الشفافية</h3><p>سعر واضح وشروط تذكرة مفهومة قبل أي التزام.</p></article>
+          <article class="value reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-lock"/></svg></span><h3>الأمان</h3><p>نحمي بياناتك، ولا نطلب بيانات الدفع عبر الموقع.</p></article>
+          <article class="value reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-heart"/></svg></span><h3>الاهتمام الشخصي</h3><p>وكيل حقيقي يعتني برحلتك بالعربية والإنجليزية.</p></article>
+          <article class="value reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-zap"/></svg></span><h3>سرعة الاستجابة</h3><p>رد سريع على واتساب والهاتف والبريد.</p></article>
+          <article class="value reveal"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-handshake"/></svg></span><h3>الالتزام</h3><p>نتابع رحلتك من البحث حتى الإقلاع وما بعده.</p></article>
         </div>
       </div>
     </section>
@@ -450,7 +463,7 @@
     <!-- ============ FAQ ============ -->
     <section class="section" id="faq">
       <div class="container faq-wrap">
-        <header class="section__head section__head--start reveal">
+        <header class="sec-head sec-head--start reveal">
           <span class="eyebrow">الأسئلة الشائعة</span>
           <h2>لديك سؤال؟ لدينا الإجابة</h2>
           <p>لم تجد ما تبحث عنه؟ فريقنا جاهز للرد عليك عبر واتساب خلال دقائق.</p>
@@ -493,32 +506,28 @@
       </div>
     </section>
 
-    <!-- ============ Message CTA ============ -->
-    <section class="msg-cta">
-      <div class="container msg-cta__inner reveal">
-        <div>
-          <h2>رحلتك القادمة تبدأ برسالة واحدة</h2>
-          <p>أرسل لنا وجهتك وتواريخك، ونتولى الباقي.</p>
+    <!-- ============ CTA: message + newsletter ============ -->
+    <section class="section section--cta">
+      <div class="container">
+        <div class="cta-band reveal">
+          <div class="cta-band__main">
+            <h2>رحلتك القادمة تبدأ برسالة واحدة</h2>
+            <p>أرسل لنا وجهتك وتواريخك، ونتولى الباقي.</p>
+            <div class="cta-band__actions">
+              <a href="#search" class="btn btn--accent"><svg class="i"><use href="#i-search"/></svg>ابحث عن رحلة</a>
+              <a href="#" class="btn btn--light" data-whatsapp="مرحباً، أرغب في حجز رحلة"><svg class="i"><use href="#i-whatsapp"/></svg>واتساب</a>
+            </div>
+          </div>
+          <div class="cta-band__news">
+            <h3>لا تفوّت عروض الطيران القادمة</h3>
+            <p>اشترك واحصل على أفضل العروض الحصرية قبل الجميع، مرة واحدة أسبوعياً فقط.</p>
+            <form class="cta__form" id="newsletter" novalidate>
+              <label class="sr-only" for="nlEmail">البريد الإلكتروني</label>
+              <input id="nlEmail" type="email" placeholder="بريدك الإلكتروني" required dir="ltr">
+              <button class="btn btn--accent" type="submit">اشترك</button>
+            </form>
+          </div>
         </div>
-        <div class="msg-cta__actions">
-          <a href="#search" class="btn btn--accent"><svg class="i"><use href="#i-search"/></svg>ابحث عن رحلة</a>
-          <a href="#" class="btn btn--whatsapp" data-whatsapp="مرحباً، أرغب في حجز رحلة"><svg class="i"><use href="#i-whatsapp"/></svg>واتساب</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- ============ Newsletter CTA ============ -->
-    <section class="cta">
-      <div class="container cta__inner reveal">
-        <div>
-          <h2>لا تفوّت عروض الطيران القادمة</h2>
-          <p>اشترك واحصل على أفضل العروض الحصرية قبل الجميع، مرة واحدة أسبوعياً فقط.</p>
-        </div>
-        <form class="cta__form" id="newsletter" novalidate>
-          <label class="sr-only" for="nlEmail">البريد الإلكتروني</label>
-          <input id="nlEmail" type="email" placeholder="بريدك الإلكتروني" required>
-          <button class="btn btn--accent" type="submit">اشترك</button>
-        </form>
       </div>
     </section>
 
@@ -530,12 +539,13 @@
           <h2>مستشارو السفر بانتظارك</h2>
           <p>أرسل طلبك وسنعود إليك بأفضل الخيارات والأسعار خلال 30 دقيقة في أوقات العمل.</p>
           <ul class="contact__list">
-            <li class="contact__nums"><span class="contact__ic contact__ic--wa"><svg class="i"><use href="#i-whatsapp"/></svg></span><div><small>اتصال وواتساب على جميع الأرقام</small><div class="num-list" id="numbersList"><div class="num-row"><a class="num-row__tel" href="tel:+17089632552" dir="ltr">+1 (708) 963-2552</a></div><div class="num-row"><a class="num-row__tel" href="tel:+17089402929" dir="ltr">+1 (708) 940-2929</a></div><div class="num-row"><a class="num-row__tel" href="tel:+13312133768" dir="ltr">+1 (331) 213-3768</a></div><div class="num-row"><a class="num-row__tel" href="tel:+17089532244" dir="ltr">+1 (708) 953-2244</a></div></div></div></li>
-            <li><span class="contact__ic"><svg class="i"><use href="#i-mail"/></svg></span><div><small>البريد الإلكتروني</small><a href="mailto:info@greentravel.us" data-config="email-link"><span data-config="email">info@greentravel.us</span></a></div></li>
+            <li class="contact__nums"><span class="ic3d ic3d--green"><svg class="i"><use href="#i-whatsapp"/></svg></span><div><small>اتصال وواتساب على جميع الأرقام</small><div class="num-list" id="numbersList"><div class="num-row"><a class="num-row__tel" href="tel:+17089632552" dir="ltr">+1 (708) 963-2552</a></div><div class="num-row"><a class="num-row__tel" href="tel:+17089402929" dir="ltr">+1 (708) 940-2929</a></div><div class="num-row"><a class="num-row__tel" href="tel:+13312133768" dir="ltr">+1 (331) 213-3768</a></div><div class="num-row"><a class="num-row__tel" href="tel:+17089532244" dir="ltr">+1 (708) 953-2244</a></div></div></div></li>
+            <li><span class="ic3d"><svg class="i"><use href="#i-mail"/></svg></span><div><small>البريد الإلكتروني</small><a href="mailto:info@greentravel.us" data-config="email-link"><span data-config="email">info@greentravel.us</span></a></div></li>
           </ul>
         </div>
 
         <form class="contact__form reveal" id="contactForm" novalidate>
+          <div class="pass-head pass-head--form" aria-hidden="true"><span class="pass-head__brand"><img src="assets/img/logo.png" alt="" width="20" height="20">GREEN TRAVEL</span><span class="barcode"></span></div>
           <h3>طلب حجز أو استفسار</h3>
           <div class="form-row">
             <div class="field"><label for="cName">الاسم الكامل</label><input id="cName" name="name" required autocomplete="name"></div>
@@ -564,11 +574,12 @@
     <div class="container footer__grid">
       <div class="footer__brand">
         <a href="#top" class="logo logo--light">
-          <img class="logo__img" src="assets/img/logo.png" alt="" width="58" height="58">
+          <img class="logo__img" src="assets/img/logo.png" alt="" width="46" height="46">
           <span class="logo__text"><strong>جرين ترافيل</strong><small>Green Travel · للسفر والسياحة</small></span>
         </a>
         <p>وكالة سفر تحجز رحلات الطيران إلى كل مكان في العالم، بخدمة شخصية بالعربية والإنجليزية.</p>
-        <p class="footer__site"><a href="https://www.greentravel.us" dir="ltr">www.greentravel.us</a> · <a href="mailto:info@greentravel.us" dir="ltr">info@greentravel.us</a></p>      </div>
+        <p class="footer__site"><a href="https://www.greentravel.us" dir="ltr">www.greentravel.us</a> · <a href="mailto:info@greentravel.us" dir="ltr">info@greentravel.us</a></p>
+      </div>
       <div>
         <h4>الشركة</h4>
         <ul><li><a href="#about">من نحن</a></li><li><a href="#values">قيمنا الأساسية</a></li><li><a href="#perks">لماذا Green Travel</a></li><li><a href="#how">كيف نحجز</a></li><li><a href="#faq">المساعدة</a></li><li><a href="/erp/">دخول الموظفين</a></li></ul>
@@ -583,6 +594,7 @@
         <div class="pay"><span>VISA</span><span>Mastercard</span><span>American Express</span><span>Apple Pay</span></div>
       </div>
     </div>
+    <div class="footer__word" aria-hidden="true" dir="ltr">GREEN TRAVEL</div>
     <div class="footer__bottom">
       <div class="container footer__bottom-inner">
         <p>© <span id="year"></span> World Services dba Green Travel. جميع الحقوق محفوظة · جميع الحجوزات تخضع للتوفر وتأكيد الوكيل.</p>
@@ -677,5 +689,6 @@
   <script src="assets/js/main.js" defer></script>
   <script src="assets/js/flights.js" defer></script>
   <script src="assets/js/datepicker.js" defer></script>
+  <script src="assets/js/experience.js" defer></script>
 </body>
 </html>
