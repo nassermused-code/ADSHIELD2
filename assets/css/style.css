@@ -877,3 +877,48 @@ body.is-results .hero__bg { inset-block-end: 60px; border-radius: 0 0 28px 28px;
 .fl__logo { width: 52px; height: 52px; overflow: hidden; padding: 4px; }
 .fl__logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 10px; display: block; }
 .fl__air b { font-size: 1rem; }
+
+/* =========================================================
+   Date-range calendar
+   ========================================================= */
+.date-btn { width: 100%; min-height: 52px; display: flex; align-items: center; gap: 8px; padding: .8em 1em; border: 1.5px solid var(--line); border-radius: 12px; background: #fff; text-align: start; font-weight: 600; color: var(--ink); transition: border-color .2s, box-shadow .2s; white-space: nowrap; overflow: hidden; }
+.date-btn .i { color: var(--sky-500); flex: none; }
+.date-btn.is-empty { color: var(--ink-3); font-weight: 400; }
+.date-btn:hover { border-color: #b9c6d8; }
+.date-btn.is-open, .date-btn:focus-visible { outline: none; border-color: var(--sky-500); box-shadow: 0 0 0 4px rgba(42, 139, 242, .14); }
+.date-btn:disabled { opacity: .5; cursor: not-allowed; }
+.field.is-invalid .date-btn { border-color: #e5484d; box-shadow: 0 0 0 4px rgba(229, 72, 77, .12); }
+.date-btn__v { overflow: hidden; text-overflow: ellipsis; }
+
+.dp { position: absolute; z-index: 150; width: min(720px, calc(100vw - 16px)); background: #fff; border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-lg); padding: 16px 18px 14px; animation: pop .25s var(--ease); }
+.dp--single { width: min(380px, calc(100vw - 16px)); }
+.dp__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.dp__hint { font-weight: 600; color: var(--navy-800); font-size: .92rem; text-align: center; }
+.dp__nav { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: #fff; display: grid; place-items: center; color: var(--navy-800); transition: .2s; }
+.dp__nav:hover:not(:disabled) { background: var(--navy-800); color: #fff; }
+.dp__nav:disabled { opacity: .3; cursor: not-allowed; }
+.dp__nav .i { animation: none; filter: none; }
+.dp__months { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+.dp--single .dp__months { grid-template-columns: 1fr; }
+.dp__month h4 { text-align: center; font-size: 1rem; margin: 4px 0 10px; color: var(--ink); }
+.dp__grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 3px; }
+.dp__wd { text-align: center; font-size: .72rem; font-weight: 600; color: var(--ink-3); padding-bottom: 6px; }
+.dp__day { position: relative; border: 0; background: none; height: 46px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; border-radius: 12px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; transition: background .15s, color .15s; }
+.dp__day:hover:not(:disabled) { background: var(--sky-100); }
+.dp__day:focus-visible { outline: 2px solid var(--sky-500); outline-offset: -2px; }
+.dp__day:disabled { color: #c3ccd8; cursor: not-allowed; font-weight: 400; }
+.dp__day.is-today .dp__n { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+.dp__day.is-in, .dp__day.is-hover { background: var(--sky-100); border-radius: 0; }
+.dp__day.is-start, .dp__day.is-end { background: var(--navy-800); color: #fff; box-shadow: 0 3px 0 #050f1e; border-radius: 12px; }
+.dp__day.is-start .dp__p, .dp__day.is-end .dp__p { color: var(--accent); }
+.dp__p { font-size: .62rem; font-weight: 600; color: var(--ink-3); line-height: 1.1; }
+.dp__p.is-low { color: #26901a; }
+.dp__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+.dp__sel { margin: 0; font-size: .9rem; color: var(--ink-2); }
+.dp__sel b { color: var(--navy-800); }
+.dp__actions { display: flex; gap: 8px; }
+@media (max-width: 720px) { .dp { padding: 14px 12px 12px; } .dp__day { height: 44px; } }
+.date-btn__v { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.date-btn__v b { flex: none; font-weight: 600; }
+.date-btn__v small { color: var(--ink-3); font-weight: 400; font-size: .8rem; overflow: hidden; text-overflow: ellipsis; }
+.dp--single { width: min(380px, calc(100vw - 32px)); }

@@ -428,6 +428,7 @@
       if (state.ret) state.ret = addDays(state.ret, shift);
       $("#depart").value = state.depart;
       if (state.ret) $("#return").value = state.ret;
+      window.GTDate && window.GTDate.refresh();
       run(true);
     });
     $("#resList", sec).addEventListener("click", (e) => {
@@ -568,7 +569,26 @@
   }
 
   /* ---------- Public API ---------- */
+  const dayCache = {};
   window.GTFlights = {
+    // Cheapest estimated one-way fare per person for each day in [fromIso, toIso], for the route in the form
+    dayPrices(fromIso, toIso) {
+      if (!DB) return null;
+      const o = resolveAirport($("#from")), d = resolveAirport($("#to"));
+      if (!o || !d || o.code === d.code) return null;
+      const cabin = ($('select[name="cabin"]') || {}).value || "economy";
+      const q = { o, d, cabin, pax: { adults: 1, children: 0, infants: 0 } };
+      const out = {};
+      for (let iso = fromIso; iso <= toIso; iso = addDays(iso, 1)) {
+        const key = `${o.code}-${d.code}-${cabin}-${iso}`;
+        if (!(key in dayCache)) {
+          const res = generate(q, iso, null);
+          dayCache[key] = res.length ? Math.min(...res.map((r) => r.per)) : null;
+        }
+        out[iso] = dayCache[key];
+      }
+      return out;
+    },
     search(d, pax) {
       const fromEl = $("#from"), toEl = $("#to");
       if (!DB) {
