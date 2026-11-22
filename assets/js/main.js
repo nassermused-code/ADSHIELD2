@@ -153,7 +153,6 @@ function initSearch() {
   const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const todayIso = iso(today);
   $$('input[type="date"]').forEach((i) => (i.min = todayIso));
-  $("#pmonth").min = todayIso.slice(0, 7);
   const linkDates = (a, b) => {
     a.addEventListener("change", () => {
       b.min = a.value || todayIso;
@@ -258,10 +257,6 @@ function initSearch() {
         case "hotels":
           title = "طلب حجز فندق";
           rows = [["الوجهة", d.city], ["الوصول", toArabicDate(d.checkin)], ["المغادرة", toArabicDate(d.checkout)], ["الغرف", d.rooms]];
-          break;
-        case "packages":
-          title = "طلب باقة سياحية";
-          rows = [["الوجهة", d.destination], ["الموعد", toArabicDate(d.month)], ["المدة", d.duration], ["الميزانية", d.budget]];
           break;
         case "visa":
           title = "طلب تأشيرة";
