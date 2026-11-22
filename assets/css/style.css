@@ -292,8 +292,8 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .why__item p { margin: 0; font-size: .95rem; }
 
 /* ---------- Steps ---------- */
-.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; counter-reset: step; position: relative; }
-.steps::before { content: ""; position: absolute; top: 36px; inset-inline: 12%; border-top: 2px dashed var(--line); }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; counter-reset: step; position: relative; }
+.steps::before { content: ""; position: absolute; top: 36px; inset-inline: 17%; border-top: 2px dashed var(--line); }
 .step { text-align: center; position: relative; }
 .step__icon { width: 72px; height: 72px; border-radius: 50%; margin: 0 auto 18px; display: grid; place-items: center; background: #fff; border: 2px solid var(--line); color: var(--navy-800); font-size: 1.6rem; position: relative; transition: .3s; }
 .step__icon::after { counter-increment: step; content: counter(step); position: absolute; top: -6px; inset-inline-end: -6px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--navy-900); font-size: .8rem; font-weight: 700; display: grid; place-items: center; }
@@ -437,7 +437,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   .feature__card { inset-inline-end: 12px; }
   .cta__inner { flex-direction: column; align-items: stretch; text-align: center; padding: 40px 28px; }
   .stats__grid { grid-template-columns: repeat(2, 1fr); gap: 32px 16px; }
-  .steps { grid-template-columns: repeat(2, 1fr); gap: 36px 20px; }
+  .steps { grid-template-columns: 1fr; gap: 36px 20px; }
   .steps::before { display: none; }
 }
 
