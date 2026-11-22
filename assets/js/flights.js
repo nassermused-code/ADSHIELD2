@@ -750,12 +750,59 @@
     exit: exitResults,
   };
 
+  /* ---------- Home origin, sample fares and popular routes ---------- */
+  const HOME = "ORD"; // Chicago O'Hare — the agency's home airport
+  function setAirport(sel, code) {
+    const el = $(sel);
+    if (!el) return;
+    const a = BY[code];
+    if (a) { el.value = label(a); el.dataset.code = a.code; }
+    else { el.value = code; delete el.dataset.code; }
+    el.closest(".field").classList.remove("is-invalid");
+  }
+  window.GTFlights.setAirport = (sel, code) => (DB ? setAirport(sel, code) : loadAirports().then(() => setAirport(sel, code)).catch(() => setAirport(sel, code)));
+
+  // Lowest estimated round-trip economy fare per person from Chicago, ~30 days out, for every [data-fare]
+  function fillFares() {
+    const o = BY[HOME];
+    if (!o) return;
+    const dep = addDays(todayIso(), 30), ret = addDays(todayIso(), 44);
+    $$("[data-fare]").forEach((el) => {
+      const d = BY[el.dataset.fare];
+      if (!d) return;
+      const res = generate({ o, d, cabin: "economy", pax: { adults: 1, children: 0, infants: 0 } }, dep, ret);
+      if (res.length) el.textContent = usd.format(Math.min(...res.map((r) => r.per)));
+    });
+  }
+
+  function searchRoute(code) {
+    const form = $('.search__panel[data-panel="flights"]');
+    $('.search__tab[data-tab="flights"]') && $('.search__tab[data-tab="flights"]').click();
+    setAirport("#from", HOME);
+    setAirport("#to", code);
+    const round = $('input[name="trip"][value="round"]');
+    if (round && !round.checked) { round.checked = true; round.dispatchEvent(new Event("change", { bubbles: true })); }
+    const dep = $("#depart"), ret = $("#return");
+    if (!dep.value || dep.value < todayIso()) dep.value = addDays(todayIso(), 30);
+    if (!ret.value || ret.value < dep.value) ret.value = addDays(dep.value, 14);
+    dep.dispatchEvent(new Event("change", { bubbles: true }));
+    window.GTDate && window.GTDate.refresh();
+    form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event("submit", { cancelable: true }));
+  }
+
   /* ---------- Boot ---------- */
   document.addEventListener("DOMContentLoaded", () => {
     ["#from", "#to"].forEach((s) => $(s) && attachAutocomplete($(s)));
-    // Warm the airport list in the background so the first search is instant
-    const warm = () => loadAirports().catch(() => {});
-    "requestIdleCallback" in window ? requestIdleCallback(warm, { timeout: 2500 }) : setTimeout(warm, 1200);
+    $$("[data-route]").forEach((b) => b.addEventListener("click", () => {
+      loadAirports().then(() => searchRoute(b.dataset.route)).catch(() => toast("تعذّر تحميل قائمة المطارات، حاول مجدداً"));
+    }));
+    // Load the airport list, pre-fill Chicago as the origin and price the sample routes
+    const warm = () => loadAirports().then(() => {
+      const from = $("#from");
+      if (from && !from.value.trim() && document.activeElement !== from) setAirport("#from", HOME);
+      fillFares();
+    }).catch(() => {});
+    "requestIdleCallback" in window ? requestIdleCallback(warm, { timeout: 1500 }) : setTimeout(warm, 800);
     window.addEventListener("hashchange", () => { if (location.hash !== "#results") exitResults(); });
     window.addEventListener("popstate", () => { if (location.hash !== "#results") exitResults(); });
   });

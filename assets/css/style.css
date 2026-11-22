@@ -961,3 +961,28 @@ body.is-results .hero__bg { inset-block-end: 60px; border-radius: 0 0 28px 28px;
 .mail-btn:hover { transform: translateY(-2px); }
 .mail-btn .i { width: 20px; height: 20px; }
 .modal__actions > .wa-list, .modal__actions > .call-list, .modal__actions > .mail-opt { flex: 1 0 100%; width: 100%; }
+
+/* =========================================================
+   Popular routes from Chicago
+   ========================================================= */
+.section--routes { padding-top: 40px; }
+.routes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.route { display: grid; gap: 10px; text-align: start; padding: 18px 18px 16px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); transition: transform .3s var(--ease), box-shadow .3s, border-color .3s; }
+.route:hover { transform: translateY(-4px); box-shadow: var(--shadow); border-color: var(--navy-800); }
+.route__codes { display: flex; align-items: center; gap: 10px; direction: ltr; }
+.route__codes b { font-family: var(--font-display); font-size: 1.15rem; color: var(--navy-800); letter-spacing: .04em; }
+.route__line { position: relative; flex: 1; height: 18px; }
+.route__line::before { content: ""; position: absolute; inset: 50% 0 auto; border-top: 2px dashed var(--line); }
+.route__line .i { position: absolute; top: 0; left: 0; width: 18px; height: 18px; color: var(--sky-500); background: #fff; transform: rotate(45deg); filter: none; animation: route-fly 3.2s ease-in-out infinite; }
+.route:nth-child(2n) .route__line .i { animation-delay: -1s; }
+.route:nth-child(3n) .route__line .i { animation-delay: -2s; }
+@keyframes route-fly { 0% { left: 0; } 50% { left: calc(100% - 18px); } 100% { left: 0; } }
+.route__city { font-weight: 700; font-size: 1.05rem; color: var(--ink); display: flex; align-items: baseline; gap: 6px; }
+.route__city small { font-weight: 400; font-size: .82rem; color: var(--ink-3); }
+.route__price { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.route__price small { color: var(--ink-3); font-size: .8rem; }
+.route__price b { font-family: var(--font-display); font-size: 1.3rem; color: #26901a; }
+.dest p b[data-fare] { color: var(--accent); }
+.tier b small { font-weight: 400; color: var(--ink-3); font-size: .78rem; }
+@media (max-width: 1100px) { .routes { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px) { .routes { grid-template-columns: 1fr; } }

@@ -234,9 +234,9 @@ function initSearch() {
   $$(".dest[data-to]").forEach((card) =>
     card.addEventListener("click", () => {
       openTab("flights");
-      $("#to").value = card.dataset.to;
-      delete $("#to").dataset.code;
-      setTimeout(() => $("#from").focus({ preventScroll: true }), 600);
+      if (window.GTFlights) window.GTFlights.setAirport("#to", card.dataset.to);
+      else { $("#to").value = card.dataset.to; delete $("#to").dataset.code; }
+      setTimeout(() => $("#departBtn") && $("#departBtn").focus({ preventScroll: true }), 600);
     })
   );
 

@@ -74,6 +74,7 @@
         <ul>
           <li><a href="#top" class="is-active">الرئيسية</a></li>
           <li><a href="#services">خدماتنا</a></li>
+          <li><a href="#routes">رحلات شائعة</a></li>
           <li><a href="#destinations">الوجهات</a></li>
           <li><a href="#umrah">العمرة</a></li>
           <li><a href="#about">من نحن</a></li>
@@ -228,6 +229,61 @@
       </div>
     </section>
 
+    <!-- ============ Popular routes from Chicago ============ -->
+    <section class="section section--routes" id="routes">
+      <div class="container">
+        <header class="section__head section__head--row reveal">
+          <div>
+            <span class="eyebrow">رحلات شائعة من شيكاغو</span>
+            <h2>أكثر الوجهات طلباً من عملائنا</h2>
+            <p>أسعار تقديرية للفرد ذهاب وعودة بالدرجة السياحية، تتغير حسب التاريخ والتوفر. اضغط على أي وجهة لعرض الرحلات.</p>
+          </div>
+        </header>
+        <div class="routes">
+          <button type="button" class="route reveal" data-route="AMM">
+            <span class="route__codes"><b dir="ltr">ORD</b><span class="route__line"><svg class="i"><use href="#i-plane"/></svg></span><b dir="ltr">AMM</b></span>
+            <span class="route__city">عمّان<small>الأردن</small></span>
+            <span class="route__price"><small>ذهاب وعودة من</small><b data-fare="AMM">$1,254</b></span>
+          </button>
+          <button type="button" class="route reveal" data-route="CAI">
+            <span class="route__codes"><b dir="ltr">ORD</b><span class="route__line"><svg class="i"><use href="#i-plane"/></svg></span><b dir="ltr">CAI</b></span>
+            <span class="route__city">القاهرة<small>مصر</small></span>
+            <span class="route__price"><small>ذهاب وعودة من</small><b data-fare="CAI">$1,260</b></span>
+          </button>
+          <button type="button" class="route reveal" data-route="DXB">
+            <span class="route__codes"><b dir="ltr">ORD</b><span class="route__line"><svg class="i"><use href="#i-plane"/></svg></span><b dir="ltr">DXB</b></span>
+            <span class="route__city">دبي<small>الإمارات</small></span>
+            <span class="route__price"><small>ذهاب وعودة من</small><b data-fare="DXB">$1,407</b></span>
+          </button>
+          <button type="button" class="route reveal" data-route="IST">
+            <span class="route__codes"><b dir="ltr">ORD</b><span class="route__line"><svg class="i"><use href="#i-plane"/></svg></span><b dir="ltr">IST</b></span>
+            <span class="route__city">إسطنبول<small>تركيا</small></span>
+            <span class="route__price"><small>ذهاب وعودة من</small><b data-fare="IST">$1,063</b></span>
+          </button>
+          <button type="button" class="route reveal" data-route="JED">
+            <span class="route__codes"><b dir="ltr">ORD</b><span class="route__line"><svg class="i"><use href="#i-plane"/></svg></span><b dir="ltr">JED</b></span>
+            <span class="route__city">جدة<small>السعودية</small></span>
+            <span class="route__price"><small>ذهاب وعودة من</small><b data-fare="JED">$1,404</b></span>
+          </button>
+          <button type="button" class="route reveal" data-route="BEY">
+            <span class="route__codes"><b dir="ltr">ORD</b><span class="route__line"><svg class="i"><use href="#i-plane"/></svg></span><b dir="ltr">BEY</b></span>
+            <span class="route__city">بيروت<small>لبنان</small></span>
+            <span class="route__price"><small>ذهاب وعودة من</small><b data-fare="BEY">$1,227</b></span>
+          </button>
+          <button type="button" class="route reveal" data-route="BGW">
+            <span class="route__codes"><b dir="ltr">ORD</b><span class="route__line"><svg class="i"><use href="#i-plane"/></svg></span><b dir="ltr">BGW</b></span>
+            <span class="route__city">بغداد<small>العراق</small></span>
+            <span class="route__price"><small>ذهاب وعودة من</small><b data-fare="BGW">$1,259</b></span>
+          </button>
+          <button type="button" class="route reveal" data-route="DOH">
+            <span class="route__codes"><b dir="ltr">ORD</b><span class="route__line"><svg class="i"><use href="#i-plane"/></svg></span><b dir="ltr">DOH</b></span>
+            <span class="route__city">الدوحة<small>قطر</small></span>
+            <span class="route__price"><small>ذهاب وعودة من</small><b data-fare="DOH">$1,327</b></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ Services ============ -->
     <section class="section" id="services">
       <div class="container">
@@ -309,14 +365,14 @@
         </header>
 
         <div class="dest-track" id="destTrack">
-          <a class="dest reveal" href="#search" data-to="دبي (DXB)"><img src="assets/img/dubai.webp" alt="أفق مدينة دبي عند الغروب" loading="lazy"><div class="dest__body"><span class="dest__tag">الإمارات</span><h3>دبي</h3><p>رحلات يومية · من <b>899</b> ر.س</p></div></a>
-          <a class="dest reveal" href="#search" data-to="إسطنبول (IST)"><img src="assets/img/istanbul.webp" alt="المسجد الأزرق في إسطنبول" loading="lazy"><div class="dest__body"><span class="dest__tag">تركيا</span><h3>إسطنبول</h3><p>رحلات مباشرة · من <b>1,450</b> ر.س</p></div></a>
-          <a class="dest reveal" href="#search" data-to="لندن (LHR)"><img src="assets/img/london.webp" alt="نهر التايمز وجسر البرج في لندن" loading="lazy"><div class="dest__body"><span class="dest__tag">المملكة المتحدة</span><h3>لندن</h3><p>درجة سياحية · من <b>2,890</b> ر.س</p></div></a>
-          <a class="dest reveal" href="#search" data-to="باريس (CDG)"><img src="assets/img/paris.webp" alt="برج إيفل ونهر السين في باريس" loading="lazy"><div class="dest__body"><span class="dest__tag">فرنسا</span><h3>باريس</h3><p>درجة سياحية · من <b>2,650</b> ر.س</p></div></a>
-          <a class="dest reveal" href="#search" data-to="ماليه (MLE)"><img src="assets/img/maldives.webp" alt="شاطئ فيروزي في جزر المالديف" loading="lazy"><div class="dest__body"><span class="dest__tag">المالديف</span><h3>جزر المالديف</h3><p>شهر عسل · من <b>3,200</b> ر.س</p></div></a>
-          <a class="dest reveal" href="#search" data-to="طوكيو (HND)"><img src="assets/img/tokyo.webp" alt="شوارع طوكيو المضيئة" loading="lazy"><div class="dest__body"><span class="dest__tag">اليابان</span><h3>طوكيو</h3><p>عبر الدوحة أو دبي · من <b>4,100</b> ر.س</p></div></a>
-          <a class="dest reveal" href="#search" data-to="برشلونة (BCN)"><img src="assets/img/barcelona.webp" alt="منظر جوي لمدينة برشلونة" loading="lazy"><div class="dest__body"><span class="dest__tag">إسبانيا</span><h3>برشلونة</h3><p>درجة سياحية · من <b>2,480</b> ر.س</p></div></a>
-          <a class="dest reveal" href="#search" data-to="دنباسار - بالي (DPS)"><img src="assets/img/bali.webp" alt="منتجع استوائي في بالي" loading="lazy"><div class="dest__body"><span class="dest__tag">إندونيسيا</span><h3>بالي</h3><p>عبر الدوحة أو دبي · من <b>1,950</b> ر.س</p></div></a>
+          <a class="dest reveal" href="#search" data-to="DXB"><img src="assets/img/dubai.webp" alt="أفق مدينة دبي عند الغروب" loading="lazy"><div class="dest__body"><span class="dest__tag">الإمارات</span><h3>دبي</h3><p>ذهاب وعودة من شيكاغو · من <b data-fare="DXB">$1,407</b></p></div></a>
+          <a class="dest reveal" href="#search" data-to="IST"><img src="assets/img/istanbul.webp" alt="المسجد الأزرق في إسطنبول" loading="lazy"><div class="dest__body"><span class="dest__tag">تركيا</span><h3>إسطنبول</h3><p>ذهاب وعودة من شيكاغو · من <b data-fare="IST">$1,063</b></p></div></a>
+          <a class="dest reveal" href="#search" data-to="LHR"><img src="assets/img/london.webp" alt="نهر التايمز وجسر البرج في لندن" loading="lazy"><div class="dest__body"><span class="dest__tag">المملكة المتحدة</span><h3>لندن</h3><p>ذهاب وعودة من شيكاغو · من <b data-fare="LHR">$902</b></p></div></a>
+          <a class="dest reveal" href="#search" data-to="CDG"><img src="assets/img/paris.webp" alt="برج إيفل ونهر السين في باريس" loading="lazy"><div class="dest__body"><span class="dest__tag">فرنسا</span><h3>باريس</h3><p>ذهاب وعودة من شيكاغو · من <b data-fare="CDG">$951</b></p></div></a>
+          <a class="dest reveal" href="#search" data-to="MLE"><img src="assets/img/maldives.webp" alt="شاطئ فيروزي في جزر المالديف" loading="lazy"><div class="dest__body"><span class="dest__tag">المالديف</span><h3>جزر المالديف</h3><p>ذهاب وعودة من شيكاغو · من <b data-fare="MLE">$1,536</b></p></div></a>
+          <a class="dest reveal" href="#search" data-to="HND"><img src="assets/img/tokyo.webp" alt="شوارع طوكيو المضيئة" loading="lazy"><div class="dest__body"><span class="dest__tag">اليابان</span><h3>طوكيو</h3><p>ذهاب وعودة من شيكاغو · من <b data-fare="HND">$1,329</b></p></div></a>
+          <a class="dest reveal" href="#search" data-to="BCN"><img src="assets/img/barcelona.webp" alt="منظر جوي لمدينة برشلونة" loading="lazy"><div class="dest__body"><span class="dest__tag">إسبانيا</span><h3>برشلونة</h3><p>ذهاب وعودة من شيكاغو · من <b data-fare="BCN">$930</b></p></div></a>
+          <a class="dest reveal" href="#search" data-to="DPS"><img src="assets/img/bali.webp" alt="منتجع استوائي في بالي" loading="lazy"><div class="dest__body"><span class="dest__tag">إندونيسيا</span><h3>بالي</h3><p>ذهاب وعودة من شيكاغو · من <b data-fare="DPS">$1,836</b></p></div></a>
         </div>
       </div>
     </section>
@@ -336,9 +392,9 @@
           <h2>رحلة إيمانية بلا هموم، من بابك إلى الحرم</h2>
           <p>نتولى كل التفاصيل لتتفرغ لعبادتك: التأشيرة، الطيران، الفنادق القريبة من الحرمين، والتنقل المريح بين مكة والمدينة.</p>
           <div class="tiers">
-            <div class="tier"><h4>الاقتصادية</h4><p>فنادق 3 نجوم · حافلات جماعية</p><b>من 2,990 ر.س</b></div>
-            <div class="tier tier--featured"><span class="tier__flag">الأكثر طلباً</span><h4>الذهبية</h4><p>فنادق 4 نجوم · 500م من الحرم</p><b>من 4,450 ر.س</b></div>
-            <div class="tier"><h4>VIP</h4><p>5 نجوم مطلة · سيارة خاصة</p><b>من 7,900 ر.س</b></div>
+            <div class="tier"><h4>الاقتصادية</h4><p>فنادق 3 نجوم · حافلات جماعية</p><b>من $1,890 <small>للفرد</small></b></div>
+            <div class="tier tier--featured"><span class="tier__flag">الأكثر طلباً</span><h4>الذهبية</h4><p>فنادق 4 نجوم · 500م من الحرم</p><b>من $2,490 <small>للفرد</small></b></div>
+            <div class="tier"><h4>VIP</h4><p>5 نجوم مطلة · سيارة خاصة</p><b>من $3,990 <small>للفرد</small></b></div>
           </div>
           <ul class="checks">
             <li><svg class="i"><use href="#i-check"/></svg>مرشد ديني مرافق طوال الرحلة</li>
@@ -571,7 +627,7 @@
       <div>
         <h4>الدعم</h4>
         <ul><li><a href="#contact">تواصل معنا</a></li><li><a href="#faq">سياسة الإلغاء والاسترداد</a></li><li><a href="#faq">الشروط والأحكام</a></li><li><a href="#faq">سياسة الخصوصية</a></li></ul>
-        <div class="pay"><span>mada</span><span>VISA</span><span>Mastercard</span><span>Apple Pay</span></div>
+        <div class="pay"><span>VISA</span><span>Mastercard</span><span>American Express</span><span>Apple Pay</span></div>
       </div>
     </div>
     <div class="footer__bottom">
