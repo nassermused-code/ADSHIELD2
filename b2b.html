@@ -224,13 +224,17 @@
               <div class="field"><label for="adMarkup">هامش موقعنا العام %</label><input id="adMarkup" type="number" min="0" max="50" step="0.5" dir="ltr"></div>
             </div>
             <div class="mode-pick" role="radiogroup" aria-label="نظام التسعير">
-              <label class="mode-opt"><input type="radio" name="adMode" value="hybrid"><span><b>ثابت + نسبة</b><small>رسم ثابت للتذاكر الأقل من حد معيّن، ونسبة مئوية للتذاكر الأغلى</small></span></label>
               <label class="mode-opt"><input type="radio" name="adMode" value="flat"><span><b>سعر ثابت</b><small>نفس الرسم على كل تذكرة مهما كان سعرها</small></span></label>
+              <label class="mode-opt"><input type="radio" name="adMode" value="percent"><span><b>نسبة مئوية</b><small>نسبة ثابتة من سعر كل تذكرة</small></span></label>
+              <label class="mode-opt"><input type="radio" name="adMode" value="hybrid"><span><b>ثابت + نسبة</b><small>رسم ثابت للتذاكر الأقل من حد معيّن، ونسبة مئوية للتذاكر الأغلى</small></span></label>
             </div>
             <div class="form-row form-row--3" id="adHybridFields">
               <div class="field"><label for="adFlat">الرسم الثابت (USD)</label><input id="adFlat" type="number" min="0" step="1" dir="ltr"></div>
               <div class="field"><label for="adThreshold">حد التحويل إلى النسبة (USD)</label><input id="adThreshold" type="number" min="0" step="50" dir="ltr"></div>
               <div class="field"><label for="adPct">النسبة للتذاكر الأغلى %</label><input id="adPct" type="number" min="0" max="20" step="0.25" dir="ltr"></div>
+            </div>
+            <div class="form-row" id="adPctFields" hidden>
+              <div class="field"><label for="adPctAll">النسبة من سعر كل تذكرة %</label><input id="adPctAll" type="number" min="0" max="20" step="0.25" dir="ltr"></div>
             </div>
             <div class="form-row" id="adFlatFields" hidden>
               <div class="field"><label for="adFlatAll">الرسم الثابت لكل تذكرة (USD)</label><input id="adFlatAll" type="number" min="0" step="1" dir="ltr"></div>

@@ -409,4 +409,7 @@ window.I18N_EN = {
   "حساب جرين ترافيل:": "Green Travel account:",
   "دخول كشريك": "Log in as partner",
   "دخول كجرين ترافيل": "Log in as Green Travel",
+  "نسبة مئوية": "Percentage",
+  "نسبة ثابتة من سعر كل تذكرة": "A fixed percentage of every ticket's price",
+  "النسبة من سعر كل تذكرة %": "Percentage of every ticket %",
 };

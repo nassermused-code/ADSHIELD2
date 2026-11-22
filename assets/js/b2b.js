@@ -10,6 +10,7 @@
      our cost (net)  = public website fare / (1 + publicMarkup)
      mode "hybrid":  fee = flat (if net < threshold), net × pct (if net ≥ threshold)
      mode "flat":    fee = flatAll on every ticket
+     mode "percent": fee = net × pctAll on every ticket
      partner price   = net + fee   — always kept below the public fare
      suggested sell  = partner price × (1 + partner's own markup), capped at the public fare
    ========================================================= */
@@ -21,8 +22,9 @@
 
   /* ---------- Green Travel settings ---------- */
   const DEFAULT_PRICING = {
-    mode: "hybrid",     // "hybrid" (flat under the threshold, % above) or "flat" (same fee on every ticket)
+    mode: "hybrid",     // "hybrid" (flat under the threshold, % above), "flat" (same fee per ticket) or "percent" (same % per ticket)
     flatAll: 20,        // fee per ticket in "flat" mode
+    pctAll: 0.02,       // percentage per ticket in "percent" mode
     publicMarkup: 0.08, // Green Travel's markup on the public website (used to back out our cost)
     flat: 20,           // flat fee per ticket for tickets below the threshold
     threshold: 1000,    // USD, on our cost
@@ -62,7 +64,7 @@
   function price(pub) {
     const c = pricing();
     const net = pub / (1 + c.publicMarkup);
-    let fee = c.mode === "flat" ? c.flatAll : net < c.threshold ? c.flat : net * c.pct;
+    let fee = c.mode === "flat" ? c.flatAll : c.mode === "percent" ? net * c.pctAll : net < c.threshold ? c.flat : net * c.pct;
     fee = Math.min(fee, (pub - net) * 0.6); // safety: the partner always pays less than the public fare
     const partner = Math.round(net + fee);
     const pr = profile();
@@ -150,11 +152,14 @@
   function renderRules() {
     const c = pricing();
     const pct = (c.pct * 100).toFixed(1).replace(/\.0$/, "") + "%";
+    const pctAll = (c.pctAll * 100).toFixed(2).replace(/\.?0+$/, "") + "%";
     $("#rulesList").innerHTML = c.mode === "flat"
       ? `<li><b dir="ltr">${usd.format(c.flatAll)}</b><span>${T("رسم ثابت على كل تذكرة مهما كان سعرها", "flat fee on every ticket, whatever the price")}</span></li>`
+      : c.mode === "percent"
+      ? `<li><b dir="ltr">${pctAll}</b><span>${T("من سعر كل تذكرة", "of every ticket's price")}</span></li>`
       : `<li><b dir="ltr">${usd.format(c.flat)}</b><span>${T("رسم ثابت لكل تذكرة أقل من", "flat fee per ticket under")} <b dir="ltr">${usd.format(c.threshold)}</b></span></li>
          <li><b dir="ltr">${pct}</b><span>${T("للتذاكر من هذا المبلغ فأكثر", "for tickets at or above that amount")}</span></li>`;
-    $("#ruleMode").textContent = c.mode === "flat" ? T("سعر ثابت", "Flat rate") : T("ثابت + نسبة", "Flat + percentage");
+    $("#ruleMode").textContent = c.mode === "flat" ? T("سعر ثابت", "Flat rate") : c.mode === "percent" ? T("نسبة مئوية", "Percentage") : T("ثابت + نسبة", "Flat + percentage");
     const ex = [400, 1250, 3000].map((pub) => { const p = price(pub); return `<tr><td dir="ltr">${usd.format(pub)}</td><td dir="ltr">${usd.format(p.partner)}</td><td dir="ltr">${usd.format(p.fee)}</td><td dir="ltr">${usd.format(p.pub - p.partner)}</td></tr>`; });
     $("#ruleExamples").innerHTML = ex.join("");
   }
@@ -167,6 +172,7 @@
     const c = pricingFor(adminTarget);
     $$('input[name="adMode"]').forEach((r) => (r.checked = r.value === c.mode));
     $("#adFlatAll").value = c.flatAll;
+    $("#adPctAll").value = +(c.pctAll * 100).toFixed(2);
     $("#adFlat").value = c.flat;
     $("#adThreshold").value = c.threshold;
     $("#adPct").value = +(c.pct * 100).toFixed(2);
@@ -174,9 +180,10 @@
     toggleAdminFields();
   }
   function toggleAdminFields() {
-    const flat = ($('input[name="adMode"]:checked') || {}).value === "flat";
-    $("#adFlatFields").hidden = !flat;
-    $("#adHybridFields").hidden = flat;
+    const mode = ($('input[name="adMode"]:checked') || {}).value || "hybrid";
+    $("#adFlatFields").hidden = mode !== "flat";
+    $("#adPctFields").hidden = mode !== "percent";
+    $("#adHybridFields").hidden = mode !== "hybrid";
   }
   function initAdmin() {
     $("#adPartner").addEventListener("change", (e) => { adminTarget = e.target.value; renderAdmin(); renderRules(); });
@@ -185,7 +192,8 @@
       e.preventDefault();
       const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : d; };
       const cfg = {
-        mode: ($('input[name="adMode"]:checked') || {}).value === "flat" ? "flat" : "hybrid",
+        mode: ["flat", "percent"].includes(($('input[name="adMode"]:checked') || {}).value) ? $('input[name="adMode"]:checked').value : "hybrid",
+        pctAll: num("#adPctAll", DEFAULT_PRICING.pctAll * 100) / 100,
         flatAll: num("#adFlatAll", DEFAULT_PRICING.flatAll),
         flat: num("#adFlat", DEFAULT_PRICING.flat),
         threshold: num("#adThreshold", DEFAULT_PRICING.threshold),

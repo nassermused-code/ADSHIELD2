@@ -1024,7 +1024,7 @@ body.is-results .hero__map { height: 100%; }
 .b2b-card--admin { border: 1.5px solid var(--g-800); box-shadow: 0 0 0 4px var(--g-100), var(--shadow); }
 .rule-mode { margin: 0; font-size: .9rem; color: var(--ink-2); }
 .rule-mode b { color: var(--g-600); }
-.mode-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mode-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .mode-opt { position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; border-radius: var(--radius); border: 1.5px solid var(--line); cursor: pointer; transition: border-color .2s, background .2s; }
 .mode-opt input { margin-top: 5px; accent-color: var(--g-600); width: 18px; height: 18px; flex: none; }
 .mode-opt b { display: block; font-family: var(--font-display); }
