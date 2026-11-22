@@ -867,3 +867,8 @@ body.is-results .hero__bg { inset-block-end: 60px; border-radius: 0 0 28px 28px;
   .res-sort__btn { padding: 10px 4px; font-size: .9rem; }
   .ac { min-width: 0; }
 }
+
+/* Keep the search widget (and its dropdowns) above the 3D icons and logo strip below it */
+.hero { z-index: 3; }
+.search { z-index: 20; }
+.ac, .pax { z-index: 60; }

@@ -141,7 +141,7 @@
             <b class="ac__code">${a.code}</b>
             <span class="ac__text"><span class="ac__city">${esc(a.ar || a.city || a.name)}${a.ar && a.city ? ` <small dir="ltr">${esc(a.city)}</small>` : ""}</span>
             <small class="ac__sub"><span dir="ltr">${esc(a.name)}</span> · ${esc(a.car)}</small></span>
-            ${a.rank === 0 ? '<span class="ac__tag">رئيسي</span>' : ""}</li>`).join("")}</ul>`;
+            ${isMajor(a.code) ? '<span class="ac__tag">رئيسي</span>' : ""}</li>`).join("")}</ul>`;
       }
       box.hidden = false;
       input.setAttribute("aria-expanded", "true");
