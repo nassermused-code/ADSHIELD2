@@ -37,6 +37,17 @@ const waButtons = (text) =>
   CONFIG.numbers
     .map((n) => `<a class="wa-num" href="${waLink(text, n.intl)}" target="_blank" rel="noopener">${waIcon}<span dir="ltr">${n.display}</span></a>`)
     .join("");
+// Email option shown next to WhatsApp/phone; opens the visitor's mail app with the request pre-filled
+const mailLink = (subject, body) => `mailto:${CONFIG.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+const mailBlock = (id, subject, body) =>
+  `<div class="mail-opt" id="${id}"><p class="call-list__t">أو راسلنا على البريد الإلكتروني</p>
+    <a class="mail-btn" href="${mailLink(subject, body)}"><svg class="i"><use href="#i-mail"/></svg><span dir="ltr">${CONFIG.email}</span></a></div>`;
+const putMail = (afterEl, id, subject, body) => {
+  const old = document.getElementById(id);
+  if (old) old.remove();
+  const anchor = afterEl.parentNode.querySelector("#modalCallList") || afterEl;
+  anchor.insertAdjacentHTML("afterend", mailBlock(id, subject, body));
+};
 const toArabicDate = (v) => {
   if (!v) return "";
   const d = new Date(v.length === 7 ? v + "-01" : v);
@@ -304,6 +315,7 @@ function openModal(title, rows) {
   const note = $("#modal .modal__note");
   note.dataset.default = note.dataset.default || note.textContent;
   note.textContent = note.dataset.default;
+  putMail($("#modalWaList"), "modalMail", `${title} — Green Travel`, msg);
   $("#modalForm").onclick = () => {
     $("#cMsg").value = rows.map(([k, v]) => `${k}: ${v}`).join("\n");
   };
@@ -322,6 +334,7 @@ function openWaPicker(text) {
   const p = $("#waPicker");
   pickerFocus = document.activeElement;
   $("#waPickerList").innerHTML = waButtons(text);
+  putMail($("#waPickerList"), "pickerMail", "استفسار — Green Travel", text);
   p.hidden = false;
   document.body.style.overflow = "hidden";
   $(".wa-num", p).focus();

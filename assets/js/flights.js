@@ -573,12 +573,15 @@
   // Option 2 — talk to an agent: WhatsApp (message pre-filled) or a phone call, on any of the numbers
   function bookViaAgent(r) {
     if (!r || typeof openModal !== "function") return;
-    openModal("احجز عبر الوكيل", flightRows(r));
+    openModal("حجز رحلة طيران", flightRows(r));
+    $("#modalTitle").textContent = "احجز عبر الوكيل";
     const numbers = (typeof CONFIG !== "undefined" && CONFIG.numbers) || [];
     const list = $("#modalWaList");
     list.insertAdjacentHTML("afterend", `<div class="call-list" id="modalCallList"><p class="call-list__t">أو اتصل بالوكيل مباشرة</p>${numbers
       .map((x) => `<a class="call-num" href="tel:+${x.intl}"><svg class="i"><use href="#i-phone"/></svg><span dir="ltr">${x.display}</span></a>`).join("")}</div>`);
-    $(".modal__note").textContent = "تحدث مع وكيلنا على واتساب أو بالهاتف، وسيؤكد لك التوفر والسعر النهائي ويكمل الحجز معك خطوة بخطوة.";
+    $(".modal__note").textContent = "تحدث مع وكيلنا على واتساب أو بالهاتف أو البريد الإلكتروني، وسيؤكد لك التوفر والسعر النهائي ويكمل الحجز معك خطوة بخطوة.";
+    const mail = $("#modalMail");
+    if (mail) $("#modalCallList").after(mail);
   }
 
   // Option 1 — book online: the customer enters the passengers and contact details, gets a reference
@@ -697,8 +700,9 @@
     $("#bkDoneTitle").textContent = sent ? "تم إرسال طلب حجزك" : "طلبك جاهز، أرسله للوكيل";
     $("#bkDoneNote").textContent = sent
       ? "وصل طلبك إلى فريقنا. سيتواصل معك الوكيل قريباً لتأكيد السعر النهائي وطريقة الدفع ثم إصدار التذكرة."
-      : "خطوة أخيرة: أرسل الطلب إلى وكيلنا على واتساب بضغطة واحدة (التفاصيل جاهزة في الرسالة)، وسيؤكد لك السعر النهائي ويصدر التذكرة.";
+      : "خطوة أخيرة: أرسل الطلب إلى وكيلنا على واتساب أو البريد الإلكتروني بضغطة واحدة (التفاصيل جاهزة في الرسالة)، وسيؤكد لك السعر النهائي ويصدر التذكرة.";
     $("#bkWaList").innerHTML = typeof waButtons === "function" ? waButtons(msg) : "";
+    if (typeof putMail === "function") putMail($("#bkWaList"), "bkMail", `طلب حجز ${ref} — Green Travel`, msg);
     $('[data-step="form"]', bookingModal).hidden = true;
     $('[data-step="done"]', bookingModal).hidden = false;
     $(".modal__dialog", bookingModal).scrollTop = 0;
