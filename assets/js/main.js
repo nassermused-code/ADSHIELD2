@@ -134,9 +134,6 @@ function initHeader() {
 
 /* ---------- Search widget ---------- */
 function initSearch() {
-  // Airports datalist
-  $("#airports").innerHTML = AIRPORTS.map((a) => `<option value="${a}">`).join("");
-
   // Tabs
   const tabs = $$(".search__tab");
   const panels = $$(".search__panel");
@@ -181,6 +178,9 @@ function initSearch() {
   $("#swap").addEventListener("click", () => {
     const f = $("#from"), t = $("#to");
     [f.value, t.value] = [t.value, f.value];
+    [f.dataset.code, t.dataset.code] = [t.dataset.code || "", f.dataset.code || ""];
+    if (!f.dataset.code) delete f.dataset.code;
+    if (!t.dataset.code) delete t.dataset.code;
   });
 
   // Passengers
@@ -223,6 +223,7 @@ function initSearch() {
     card.addEventListener("click", () => {
       openTab("flights");
       $("#to").value = card.dataset.to;
+      delete $("#to").dataset.code;
       setTimeout(() => $("#from").focus({ preventScroll: true }), 600);
     })
   );
@@ -239,6 +240,10 @@ function initSearch() {
       let title, rows;
       switch (form.dataset.panel) {
         case "flights":
+          if (window.GTFlights) {
+            window.GTFlights.search(d, pax);
+            return;
+          }
           if (d.from && d.from === d.to) return toast("مدينة المغادرة والوصول متطابقتان");
           title = "طلب حجز طيران";
           rows = [
