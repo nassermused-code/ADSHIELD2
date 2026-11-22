@@ -75,7 +75,6 @@
           <li><a href="#top" class="is-active">الرئيسية</a></li>
           <li><a href="#services">خدماتنا</a></li>
           <li><a href="#destinations">الوجهات</a></li>
-          <li><a href="#offers">العروض</a></li>
           <li><a href="#umrah">العمرة</a></li>
           <li><a href="#about">من نحن</a></li>
           <li><a href="#faq">المساعدة</a></li>
@@ -291,7 +290,7 @@
             <div class="service__icon"><svg class="i"><use href="#i-suitcase"/></svg></div>
             <h3>الباقات السياحية</h3>
             <p>رحلات عائلية وشهر عسل وجولات جماعية مصممة حسب ميزانيتك واهتماماتك.</p>
-            <a href="#offers" class="link-arrow">تصفّح العروض<svg class="i"><use href="#i-arrow"/></svg></a>
+            <a href="#contact" class="link-arrow">اطلب باقتك<svg class="i"><use href="#i-arrow"/></svg></a>
           </article>
           <article class="service reveal">
             <div class="service__icon"><svg class="i"><use href="#i-briefcase"/></svg></div>
@@ -349,88 +348,6 @@
           <a class="dest reveal" href="#search" data-to="برشلونة (BCN)"><img src="assets/img/barcelona.webp" alt="منظر جوي لمدينة برشلونة" loading="lazy"><div class="dest__body"><span class="dest__tag">إسبانيا</span><h3>برشلونة</h3><p>درجة سياحية · من <b>2,480</b> ر.س</p></div></a>
           <a class="dest reveal" href="#search" data-to="دنباسار - بالي (DPS)"><img src="assets/img/bali.webp" alt="منتجع استوائي في بالي" loading="lazy"><div class="dest__body"><span class="dest__tag">إندونيسيا</span><h3>بالي</h3><p>باقة 7 ليالٍ · من <b>4,750</b> ر.س</p></div></a>
         </div>
-      </div>
-    </section>
-
-    <!-- ============ Offers ============ -->
-    <section class="section" id="offers">
-      <div class="container">
-        <header class="section__head reveal">
-          <span class="eyebrow">عروض حصرية</span>
-          <h2>عروض هذا الموسم</h2>
-          <p>أسعار محدودة المقاعد — تُحدَّث أسبوعياً بالتعاون مع شركائنا من شركات الطيران والفنادق.</p>
-        </header>
-
-        <div class="filters" role="tablist" aria-label="تصفية العروض">
-          <button class="chip is-active" data-filter="all">الكل</button>
-          <button class="chip" data-filter="intl">دولية</button>
-          <button class="chip" data-filter="domestic">داخلية</button>
-          <button class="chip" data-filter="package">باقات</button>
-          <button class="chip" data-filter="umrah">عمرة</button>
-        </div>
-
-        <div class="offers" id="offersGrid">
-          <article class="offer reveal" data-cat="package intl">
-            <div class="offer__media"><img src="assets/img/galata.webp" alt="برج غلطة في إسطنبول" loading="lazy"><span class="badge badge--hot">الأكثر مبيعاً</span></div>
-            <div class="offer__body">
-              <div class="offer__meta"><span><svg class="i"><use href="#i-moon"/></svg>6 ليالٍ</span><span><svg class="i"><use href="#i-star"/></svg>فندق 4 نجوم</span></div>
-              <h3>إسطنبول وبورصة</h3>
-              <ul class="offer__incl"><li>طيران ذهاب وعودة</li><li>إفطار يومي</li><li>جولات وتنقلات</li></ul>
-              <div class="offer__foot"><div class="price"><small>يبدأ من</small><b>3,299</b><span>ر.س / للفرد</span></div><button class="btn btn--primary btn--sm" data-book="باقة إسطنبول وبورصة - 6 ليالٍ">احجز</button></div>
-            </div>
-          </article>
-
-          <article class="offer reveal" data-cat="package intl">
-            <div class="offer__media"><img src="assets/img/maldives.webp" alt="جزر المالديف" loading="lazy"><span class="badge">شهر عسل</span></div>
-            <div class="offer__body">
-              <div class="offer__meta"><span><svg class="i"><use href="#i-moon"/></svg>5 ليالٍ</span><span><svg class="i"><use href="#i-star"/></svg>فيلا فوق الماء</span></div>
-              <h3>المالديف الفاخرة</h3>
-              <ul class="offer__incl"><li>طيران + طائرة مائية</li><li>إقامة شاملة كلياً</li><li>عشاء رومانسي</li></ul>
-              <div class="offer__foot"><div class="price"><small>يبدأ من</small><b>8,950</b><span>ر.س / للفرد</span></div><button class="btn btn--primary btn--sm" data-book="باقة المالديف الفاخرة - 5 ليالٍ">احجز</button></div>
-            </div>
-          </article>
-
-          <article class="offer reveal" data-cat="intl">
-            <div class="offer__media"><img src="assets/img/london.webp" alt="لندن" loading="lazy"><span class="badge badge--sale">خصم 20%</span></div>
-            <div class="offer__body">
-              <div class="offer__meta"><span><svg class="i"><use href="#i-plane"/></svg>رحلة مباشرة</span><span><svg class="i"><use href="#i-bag"/></svg>2 × 23 كغ</span></div>
-              <h3>تذكرة إلى لندن</h3>
-              <ul class="offer__incl"><li>ذهاب وعودة</li><li>وجبات على متن الطائرة</li><li>تعديل مجاني مرة واحدة</li></ul>
-              <div class="offer__foot"><div class="price"><small>بدلاً من <s>3,600</s></small><b>2,890</b><span>ر.س</span></div><button class="btn btn--primary btn--sm" data-book="تذكرة طيران إلى لندن - ذهاب وعودة">احجز</button></div>
-            </div>
-          </article>
-
-          <article class="offer reveal" data-cat="domestic">
-            <div class="offer__media"><img src="assets/img/airport.webp" alt="طائرة على مدرج المطار" loading="lazy"><span class="badge">رحلات داخلية</span></div>
-            <div class="offer__body">
-              <div class="offer__meta"><span><svg class="i"><use href="#i-clock"/></svg>رحلات يومية</span><span><svg class="i"><use href="#i-bag"/></svg>حقيبة 23 كغ</span></div>
-              <h3>عروض الرحلات الداخلية</h3>
-              <ul class="offer__incl"><li>بين جميع المدن الرئيسية</li><li>إلغاء مرن</li><li>اختيار المقعد مجاناً</li></ul>
-              <div class="offer__foot"><div class="price"><small>يبدأ من</small><b>249</b><span>ر.س / اتجاه</span></div><button class="btn btn--primary btn--sm" data-book="رحلة داخلية">احجز</button></div>
-            </div>
-          </article>
-
-          <article class="offer reveal" data-cat="umrah">
-            <div class="offer__media"><img src="assets/img/madinah.webp" alt="المسجد النبوي في المدينة المنورة" loading="lazy"><span class="badge badge--hot">مقاعد محدودة</span></div>
-            <div class="offer__body">
-              <div class="offer__meta"><span><svg class="i"><use href="#i-moon"/></svg>7 ليالٍ</span><span><svg class="i"><use href="#i-star"/></svg>5 نجوم قرب الحرم</span></div>
-              <h3>عمرة مكة والمدينة</h3>
-              <ul class="offer__incl"><li>طيران + تأشيرة</li><li>نقل بين المدينتين</li><li>مرشد ديني</li></ul>
-              <div class="offer__foot"><div class="price"><small>يبدأ من</small><b>4,450</b><span>ر.س / للفرد</span></div><button class="btn btn--primary btn--sm" data-book="باقة عمرة مكة والمدينة - 7 ليالٍ">احجز</button></div>
-            </div>
-          </article>
-
-          <article class="offer reveal" data-cat="package intl">
-            <div class="offer__media"><img src="assets/img/dubai.webp" alt="دبي" loading="lazy"><span class="badge">عائلية</span></div>
-            <div class="offer__body">
-              <div class="offer__meta"><span><svg class="i"><use href="#i-moon"/></svg>4 ليالٍ</span><span><svg class="i"><use href="#i-star"/></svg>فندق 5 نجوم</span></div>
-              <h3>دبي للعائلات</h3>
-              <ul class="offer__incl"><li>طيران + فندق</li><li>تذاكر حدائق ترفيهية</li><li>رحلة سفاري</li></ul>
-              <div class="offer__foot"><div class="price"><small>يبدأ من</small><b>2,750</b><span>ر.س / للفرد</span></div><button class="btn btn--primary btn--sm" data-book="باقة دبي للعائلات - 4 ليالٍ">احجز</button></div>
-            </div>
-          </article>
-        </div>
-        <p class="price-note"><svg class="i"><use href="#i-tag"/></svg>الأسعار تقديرية وتتغير حسب التوفر وتاريخ الحجز. يؤكد وكيلنا السعر النهائي قبل إصدار التذكرة.</p>
       </div>
     </section>
 
