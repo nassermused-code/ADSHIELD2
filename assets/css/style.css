@@ -567,3 +567,78 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .wa-num span { white-space: nowrap; }
 .modal__icon--wa { background: #e4f9ec; color: #1aa356; }
 @media (max-width: 420px) { .wa-list { grid-template-columns: 1fr; } }
+
+/* =========================================================
+   Sections from the Green Travel brief
+   ========================================================= */
+/* Highlights strip */
+.highlights { padding: 8px 0 32px; }
+.highlights__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.hl { display: flex; gap: 14px; align-items: flex-start; padding: 18px; border-radius: var(--radius); background: var(--bg-tint); }
+.hl > div { min-width: 0; }
+.hl strong { display: block; font-family: var(--font-display); color: var(--navy-800); margin-bottom: 2px; }
+.hl span:not(.hl__ic) { font-size: .88rem; color: var(--ink-2); }
+.hl__ic { width: 46px; height: 46px; border-radius: 14px; flex: none; display: grid; place-items: center; background: #e6f6e1; color: #2f9e1f; font-size: 1.3rem; }
+
+/* Perks */
+.perks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.perk { padding: 26px 24px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; transition: transform .3s var(--ease), box-shadow .3s, border-color .3s; }
+.perk:hover { transform: translateY(-5px); box-shadow: var(--shadow); border-color: transparent; }
+.perk__ic { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-50); color: var(--accent-600); font-size: 1.4rem; margin-bottom: 16px; animation: bob 4.5s ease-in-out infinite; }
+.perk:nth-child(2n) .perk__ic { animation-delay: -1.5s; }
+.perk:nth-child(3n) .perk__ic { animation-delay: -3s; }
+.perk:hover .perk__ic { animation: wiggle .5s ease-in-out; background: var(--accent); color: var(--navy-900); }
+.perk h3 { font-size: 1.12rem; }
+.perk p { color: var(--ink-2); font-size: .95rem; margin: 0; }
+
+/* About */
+.about { display: grid; grid-template-columns: 1fr 1.25fr; gap: 56px; align-items: center; }
+.about__intro h2 { font-size: clamp(1.7rem, 3vw, 2.4rem); text-wrap: balance; }
+.about__intro p { color: var(--ink-2); font-size: 1.05rem; }
+.about__cards { display: grid; gap: 14px; }
+.about-card { display: grid; grid-template-columns: auto 1fr; column-gap: 18px; align-items: start; padding: 22px 24px; border-radius: var(--radius); border: 1px solid var(--line); background: #fff; transition: box-shadow .3s, transform .3s var(--ease); }
+.about-card:hover { box-shadow: var(--shadow); transform: translateX(-6px); }
+.about-card__ic { grid-row: span 2; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; background: linear-gradient(135deg, var(--navy-800), var(--sky-500)); color: #fff; font-size: 1.35rem; }
+.about-card h3 { font-size: 1.15rem; margin: 0 0 .2em; }
+.about-card p { margin: 0; color: var(--ink-2); font-size: .95rem; }
+
+/* Values */
+.values { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+.value { text-align: center; padding: 26px 18px; border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-sm); border: 1px solid var(--line); transition: transform .3s var(--ease), box-shadow .3s; }
+.value:hover { transform: translateY(-6px); box-shadow: var(--shadow); }
+.value__ic { width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center; background: #e6f6e1; color: #2f9e1f; font-size: 1.5rem; }
+.value:hover .value__ic .i { animation: spin-y .8s var(--ease); }
+.value h3 { font-size: 1.05rem; margin-bottom: .3em; }
+.value p { margin: 0; color: var(--ink-2); font-size: .9rem; }
+.reveal.is-in .hl__ic .i, .reveal.is-in .perk__ic .i, .reveal.is-in .about-card__ic .i, .reveal.is-in .value__ic .i { stroke-dasharray: 1; animation: draw 1.6s var(--ease) both; }
+
+/* Price note */
+.price-note { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 28px auto 0; max-width: 760px; text-align: center; color: var(--ink-3); font-size: .9rem; }
+.price-note .i { color: var(--accent-600); }
+
+/* Message CTA */
+.msg-cta { padding: 0 0 40px; }
+.msg-cta__inner { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; padding: 36px 44px; border-radius: var(--radius-lg); background: linear-gradient(120deg, #1d7d14, #43b02a); color: #fff; }
+.msg-cta h2 { font-size: clamp(1.4rem, 2.4vw, 1.9rem); margin-bottom: .25em; }
+.msg-cta p { margin: 0; color: rgba(255, 255, 255, .88); }
+.msg-cta__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.msg-cta .btn--whatsapp { background: #fff; color: #1d7d14; box-shadow: none; }
+
+/* Footer extras */
+.footer__site { font-size: .9rem; margin-top: -8px; }
+.footer__site a:hover { color: var(--accent); }
+
+@media (max-width: 1100px) {
+  .values { grid-template-columns: repeat(3, 1fr); }
+  .highlights__grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 960px) {
+  .about { grid-template-columns: 1fr; gap: 32px; }
+  .perks { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .highlights__grid, .perks { grid-template-columns: 1fr; }
+  .values { grid-template-columns: 1fr 1fr; }
+  .msg-cta__inner { padding: 28px 22px; text-align: center; justify-content: center; }
+}
+@media (max-width: 420px) { .values { grid-template-columns: 1fr; } }
