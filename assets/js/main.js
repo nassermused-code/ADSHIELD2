@@ -6,7 +6,7 @@ const CONFIG = {
   phone: "+000000000000",          // رقم الهاتف بالصيغة الدولية بدون مسافات
   phoneDisplay: "+000 000 000 000",
   whatsapp: "000000000000",        // رقم واتساب بالصيغة الدولية بدون + أو أصفار بادئة
-  email: "info@example.com",
+  email: "info@greentravel.us",
   address: "الشارع الرئيسي، المدينة",
 };
 
