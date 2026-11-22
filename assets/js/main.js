@@ -12,6 +12,8 @@ const CONFIG = {
     { intl: "17089532244", display: "+1 (708) 953-2244" },
   ],
   email: "info@greentravel.us",
+  // اختياري: رابط يستقبل طلبات "احجز الآن" (مثل Formspree أو نموذج Netlify). إن تُرك فارغاً تُرسل الطلبات عبر واتساب.
+  bookingEndpoint: "",
 };
 
 const AIRPORTS = [
@@ -296,6 +298,12 @@ function openModal(title, rows) {
   $("#modalSummary").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v || "—")}</dd>`).join("");
   const msg = `مرحباً، أرغب في ${title}:\n` + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n");
   $("#modalWaList").innerHTML = waButtons(msg);
+  // Reset extras that "book via agent" may have added on a previous opening
+  const extra = $("#modalCallList");
+  if (extra) extra.remove();
+  const note = $("#modal .modal__note");
+  note.dataset.default = note.dataset.default || note.textContent;
+  note.textContent = note.dataset.default;
   $("#modalForm").onclick = () => {
     $("#cMsg").value = rows.map(([k, v]) => `${k}: ${v}`).join("\n");
   };

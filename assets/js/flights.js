@@ -433,7 +433,9 @@
     });
     $("#resList", sec).addEventListener("click", (e) => {
       const b = e.target.closest("[data-book-flight]");
-      if (b) book(state.results.find((r) => r.id === b.dataset.bookFlight));
+      if (b) bookOnline(state.results.find((r) => r.id === b.dataset.bookFlight));
+      const a = e.target.closest("[data-book-agent]");
+      if (a) bookViaAgent(state.results.find((r) => r.id === a.dataset.bookAgent));
     });
     return sec;
   }
@@ -495,7 +497,8 @@
           <div class="fl__air">${logoHtml(r.cr)}<div><b>${esc(r.cr.n)}</b><small>${CABIN_AR[state.cabin]}${r.cr.type === "low" ? " · منخفض التكلفة" : ""}</small></div></div>
           <div class="fl__legs">${r.legs.map((l, j) => legHtml(l, r.legs.length > 1 ? (j ? "العودة" : "الذهاب") : "الذهاب")).join("")}</div>
           <div class="fl__price"><small>تقديري للفرد</small><b dir="ltr">${usd.format(r.per)}</b><small>${n > 1 ? `الإجمالي <span dir="ltr">${usd.format(r.total)}</span> · ${n} مسافرين` : r.legs.length > 1 ? "ذهاب وعودة" : "ذهاب فقط"}</small>
-            <button type="button" class="btn btn--accent btn--sm" data-book-flight="${r.id}">احجز الآن</button></div>
+            <button type="button" class="btn btn--accent btn--sm" data-book-flight="${r.id}"><svg class="i"><use href="#i-ticket"/></svg>احجز الآن</button>
+            <button type="button" class="btn btn--agent btn--sm" data-book-agent="${r.id}"><svg class="i"><use href="#i-headset"/></svg>احجز عبر الوكيل</button></div>
         </article>`).join("")
       : `<div class="res-empty"><svg class="i"><use href="#i-search"/></svg><h3>لا توجد نتائج مطابقة للفلاتر</h3><p>غيّر الفلاتر أو أعد ضبطها لرؤية كل الخيارات.</p></div>`;
   }
@@ -552,11 +555,11 @@
     if (sec) sec.hidden = true;
   }
 
-  function book(r) {
-    if (!r) return;
+  /* ---------- Booking: two options ---------- */
+  function flightRows(r) {
     const n = state.pax.adults + state.pax.children + state.pax.infants;
     const legTxt = (l) => `${dateAr(l.dateIso, { weekday: "short", day: "numeric", month: "long" })} · ${hm(l.dep)} ${l.from.code} ← ${hm(l.arr)}${l.plus ? "(+" + l.plus + ")" : ""} ${l.to.code} · ${l.via ? "توقف في " + l.via.code : "مباشر"}`;
-    const rows = [
+    return [
       ["المسار", `${cityName(state.o)} (${state.o.code}) ← ${cityName(state.d)} (${state.d.code})`],
       ["شركة الطيران", r.cr.n],
       ["الذهاب", legTxt(r.legs[0])],
@@ -565,7 +568,140 @@
       ["الدرجة", CABIN_AR[state.cabin]],
       ["السعر التقديري", `${usd.format(r.per)} للفرد${n > 1 ? ` · ${usd.format(r.total)} إجمالي` : ""}`],
     ].filter(Boolean);
-    if (typeof openModal === "function") openModal("طلب حجز رحلة", rows);
+  }
+
+  // Option 2 — talk to an agent: WhatsApp (message pre-filled) or a phone call, on any of the numbers
+  function bookViaAgent(r) {
+    if (!r || typeof openModal !== "function") return;
+    openModal("احجز عبر الوكيل", flightRows(r));
+    const numbers = (typeof CONFIG !== "undefined" && CONFIG.numbers) || [];
+    const list = $("#modalWaList");
+    list.insertAdjacentHTML("afterend", `<div class="call-list" id="modalCallList"><p class="call-list__t">أو اتصل بالوكيل مباشرة</p>${numbers
+      .map((x) => `<a class="call-num" href="tel:+${x.intl}"><svg class="i"><use href="#i-phone"/></svg><span dir="ltr">${x.display}</span></a>`).join("")}</div>`);
+    $(".modal__note").textContent = "تحدث مع وكيلنا على واتساب أو بالهاتف، وسيؤكد لك التوفر والسعر النهائي ويكمل الحجز معك خطوة بخطوة.";
+  }
+
+  // Option 1 — book online: the customer enters the passengers and contact details, gets a reference
+  let bookingModal, currentBooking = null;
+  function ensureBookingModal() {
+    if (bookingModal) return bookingModal;
+    bookingModal = document.createElement("div");
+    bookingModal.className = "modal";
+    bookingModal.id = "bookModal";
+    bookingModal.hidden = true;
+    bookingModal.innerHTML = `
+      <div class="modal__backdrop" data-close></div>
+      <div class="modal__dialog modal__dialog--form" role="dialog" aria-modal="true" aria-labelledby="bkTitle">
+        <button class="modal__close" data-close aria-label="إغلاق">×</button>
+        <div class="bk-step" data-step="form">
+          <div class="modal__icon"><svg class="i"><use href="#i-ticket"/></svg></div>
+          <h3 id="bkTitle">احجز الآن</h3>
+          <p class="modal__note">أدخل بيانات المسافرين كما في جواز السفر. لا نطلب أي بيانات دفع عبر الموقع.</p>
+          <div class="bk-flight" id="bkFlight"></div>
+          <form id="bkForm" novalidate>
+            <div id="bkPax" class="bk-pax"></div>
+            <h4 class="bk-h">بيانات التواصل</h4>
+            <div class="form-row">
+              <div class="field"><label for="bkPhone">رقم الجوال (واتساب)</label><input id="bkPhone" name="phone" type="tel" dir="ltr" autocomplete="tel" placeholder="+1 (000) 000-0000" required></div>
+              <div class="field"><label for="bkEmail">البريد الإلكتروني</label><input id="bkEmail" name="email" type="email" dir="ltr" autocomplete="email" placeholder="name@example.com" required></div>
+            </div>
+            <div class="field"><label for="bkNotes">ملاحظات (اختياري)</label><textarea id="bkNotes" name="notes" rows="2" placeholder="وجبة خاصة، كرسي متحرك، مقاعد متجاورة…"></textarea></div>
+            <label class="consent"><input type="checkbox" id="bkConsent" required> أؤكد صحة البيانات وأوافق على أن يتواصل معي الوكيل لتأكيد السعر وإصدار التذكرة.</label>
+            <button type="submit" class="btn btn--accent btn--block"><svg class="i"><use href="#i-check"/></svg>تأكيد طلب الحجز</button>
+          </form>
+        </div>
+        <div class="bk-step" data-step="done" hidden>
+          <div class="modal__icon modal__icon--wa"><svg class="i"><use href="#i-check"/></svg></div>
+          <h3 id="bkDoneTitle">تم تسجيل طلب حجزك</h3>
+          <p class="bk-ref">رقم الطلب <b id="bkRef" dir="ltr"></b></p>
+          <p class="modal__note" id="bkDoneNote"></p>
+          <div class="wa-list" id="bkWaList"></div>
+          <button type="button" class="btn btn--ghost btn--block" data-close>إغلاق</button>
+        </div>
+      </div>`;
+    document.body.appendChild(bookingModal);
+    $$("[data-close]", bookingModal).forEach((el) => el.addEventListener("click", closeBooking));
+    bookingModal.addEventListener("keydown", (e) => e.key === "Escape" && closeBooking());
+    bookingModal.addEventListener("input", (e) => { const w = e.target.closest(".is-invalid"); w && w.classList.remove("is-invalid"); });
+    $("#bkForm", bookingModal).addEventListener("submit", submitBooking);
+    return bookingModal;
+  }
+
+  function paxFields() {
+    const groups = [["adults", "بالغ"], ["children", "طفل"], ["infants", "رضيع"]];
+    let i = 0, html = "";
+    groups.forEach(([k, lab]) => {
+      for (let j = 1; j <= state.pax[k]; j++) {
+        i++;
+        html += `<fieldset class="bk-person"><legend>المسافر ${i} · ${lab}</legend>
+          <div class="form-row form-row--3">
+            <div class="field"><label for="bkFirst${i}">الاسم الأول (بالإنجليزية)</label><input id="bkFirst${i}" name="first${i}" dir="ltr" autocomplete="${i === 1 ? "given-name" : "off"}" required></div>
+            <div class="field"><label for="bkLast${i}">اسم العائلة (بالإنجليزية)</label><input id="bkLast${i}" name="last${i}" dir="ltr" autocomplete="${i === 1 ? "family-name" : "off"}" required></div>
+            <div class="field"><label for="bkDob${i}">تاريخ الميلاد</label><input id="bkDob${i}" name="dob${i}" type="date" max="${todayIso()}" required></div>
+          </div><input type="hidden" name="type${i}" value="${lab}"></fieldset>`;
+      }
+    });
+    return html;
+  }
+
+  function bookOnline(r) {
+    if (!r) return;
+    const m = ensureBookingModal();
+    currentBooking = r;
+    $('[data-step="form"]', m).hidden = false;
+    $('[data-step="done"]', m).hidden = true;
+    $("#bkFlight").innerHTML = `${logoHtml(r.cr)}<div><b>${esc(r.cr.n)}</b><small>${r.legs.map((l) => `<span dir="ltr">${l.from.code} ${hm(l.dep)} → ${l.to.code} ${hm(l.arr)}${l.plus ? "+" + l.plus : ""}</span>`).join(" · ")}</small><small>${dateAr(r.legs[0].dateIso, { day: "numeric", month: "long" })}${r.legs[1] ? " – " + dateAr(r.legs[1].dateIso, { day: "numeric", month: "long" }) : ""} · ${CABIN_AR[state.cabin]}</small></div><strong dir="ltr">${usd.format(r.total)}</strong>`;
+    $("#bkPax").innerHTML = paxFields();
+    $("#bkForm").reset();
+    bookingModal.lastFocus = document.activeElement;
+    m.hidden = false;
+    document.body.style.overflow = "hidden";
+    setTimeout(() => $("#bkFirst1") && $("#bkFirst1").focus(), 50);
+  }
+
+  function closeBooking() {
+    if (!bookingModal || bookingModal.hidden) return;
+    bookingModal.hidden = true;
+    document.body.style.overflow = "";
+    bookingModal.lastFocus && bookingModal.lastFocus.focus({ preventScroll: true });
+  }
+
+  async function submitBooking(e) {
+    e.preventDefault();
+    const form = e.target;
+    if (typeof validate === "function" && !validate(form)) { toast("يرجى إكمال الحقول المطلوبة"); return; }
+    const d = Object.fromEntries(new FormData(form));
+    const r = currentBooking;
+    const ref = "GT-" + todayIso().slice(2).replace(/-/g, "") + "-" + String(hash(r.id + Date.now()) % 9000 + 1000);
+    const people = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => {
+      const i = k.slice(5);
+      return `${i}. ${d["first" + i]} ${d["last" + i]} (${d["type" + i]}، ${d["dob" + i]})`;
+    });
+    const rows = flightRows(r);
+    const msg = `طلب حجز جديد عبر الموقع — رقم ${ref}\n` + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n") +
+      `\n\nالمسافرون:\n${people.join("\n")}\n\nالجوال: ${d.phone}\nالبريد: ${d.email}${d.notes ? `\nملاحظات: ${d.notes}` : ""}`;
+
+    // If a form endpoint is configured (e.g. Formspree or a Netlify form), send the request there as well
+    const endpoint = typeof CONFIG !== "undefined" && CONFIG.bookingEndpoint;
+    let sent = false;
+    const btn = $('button[type="submit"]', form);
+    if (endpoint) {
+      btn.disabled = true;
+      try {
+        const res = await fetch(endpoint, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify({ ref, message: msg, phone: d.phone, email: d.email }) });
+        sent = res.ok;
+      } catch (err) { sent = false; }
+      btn.disabled = false;
+    }
+    $("#bkRef").textContent = ref;
+    $("#bkDoneTitle").textContent = sent ? "تم إرسال طلب حجزك" : "طلبك جاهز، أرسله للوكيل";
+    $("#bkDoneNote").textContent = sent
+      ? "وصل طلبك إلى فريقنا. سيتواصل معك الوكيل قريباً لتأكيد السعر النهائي وطريقة الدفع ثم إصدار التذكرة."
+      : "خطوة أخيرة: أرسل الطلب إلى وكيلنا على واتساب بضغطة واحدة (التفاصيل جاهزة في الرسالة)، وسيؤكد لك السعر النهائي ويصدر التذكرة.";
+    $("#bkWaList").innerHTML = typeof waButtons === "function" ? waButtons(msg) : "";
+    $('[data-step="form"]', bookingModal).hidden = true;
+    $('[data-step="done"]', bookingModal).hidden = false;
+    $(".modal__dialog", bookingModal).scrollTop = 0;
   }
 
   /* ---------- Public API ---------- */
