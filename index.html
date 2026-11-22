@@ -7,6 +7,11 @@
   <meta name="description" content="جرين ترافيل (Green Travel): حجز تذاكر الطيران المحلية والدولية، الفنادق، التأشيرات وباقات العمرة بأفضل الأسعار وخدمة على مدار الساعة.">
   <meta name="keywords" content="حجز طيران, تذاكر طيران, وكالة سفر, رحلات دولية, رحلات داخلية, حجز فنادق, تأشيرات, عمرة">
   <meta name="theme-color" content="#0b1f3a">
+  <script>try{var l=new URLSearchParams(location.search).get("lang")||localStorage.getItem("gt-lang");if(l==="en"){var r=document.documentElement;r.lang="en";r.dir="ltr";r.classList.add("i18n-pending");}}catch(e){}</script>
+  <style>.i18n-pending body{opacity:0}</style>
+  <link rel="alternate" hreflang="ar" href="https://greentravel.us/?lang=ar">
+  <link rel="alternate" hreflang="en" href="https://greentravel.us/?lang=en">
+  <link rel="alternate" hreflang="x-default" href="https://greentravel.us/">
   <link rel="canonical" href="https://greentravel.us/">
 
   <!-- Open Graph -->
@@ -52,6 +57,7 @@
         <a href="tel:+17089632552" data-config="phone-link"><svg class="i"><use href="#i-phone"/></svg><span data-config="phone">+1 (708) 963-2552</span></a>
         <a href="mailto:info@greentravel.us" data-config="email-link"><svg class="i"><use href="#i-mail"/></svg><span data-config="email">info@greentravel.us</span></a>
         <span class="hide-sm"><svg class="i"><use href="#i-clock"/></svg>دعم على مدار الساعة 24/7</span>
+        <span class="topbar__cur hide-sm"><b dir="ltr">$ USD</b> جميع الأسعار بالدولار الأمريكي</span>
       </div>
       <div class="topbar__social">
         <a href="#" aria-label="إنستغرام"><svg class="i"><use href="#i-instagram"/></svg></a>
@@ -83,6 +89,8 @@
         </ul>
         <a href="#search" class="btn btn--accent nav__cta">احجز رحلتك</a>
       </nav>
+
+      <button type="button" class="lang-toggle" data-lang-toggle>English</button>
 
       <button class="burger" id="burger" aria-label="فتح القائمة" aria-expanded="false" aria-controls="nav">
         <span></span><span></span><span></span>
@@ -719,6 +727,8 @@
     <symbol id="i-zap" viewBox="0 0 24 24"><path fill="none" pathLength="1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
   </svg>
 
+  <script src="assets/js/i18n-en.js" defer></script>
+  <script src="assets/js/i18n.js" defer></script>
   <script src="assets/js/main.js" defer></script>
   <script src="assets/js/flights.js" defer></script>
   <script src="assets/js/datepicker.js" defer></script>

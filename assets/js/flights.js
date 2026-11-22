@@ -74,7 +74,10 @@
     }
     return loading;
   }
-  const label = (a) => `${a.ar || a.city || a.name} (${a.code})`;
+  const EN = !!(window.I18N && I18N.en);
+  const cname = (a) => (EN ? a.city || a.name : a.ar || a.city || a.name);
+  const country = (a) => (EN ? a.cen : a.car);
+  const label = (a) => `${cname(a)} (${a.code})`;
   const POPULAR = ["ORD", "JFK", "DTW", "IAD", "LAX", "IAH", "DFW", "DXB", "DOH", "IST", "CAI", "AMM", "JED", "RUH", "MED", "LHR", "CDG", "KRT", "BGW", "BEY"];
 
   // Main international gateways in North America (foreign carriers fly long-haul only to these)
@@ -87,7 +90,7 @@
 
   function searchAirports(q) {
     const qn = norm(q).trim();
-    if (!qn) return { title: "وجهات شائعة", list: POPULAR.map((c) => BY[c]).filter(Boolean) };
+    if (!qn) return { title: T("وجهات شائعة", "Popular destinations"), list: POPULAR.map((c) => BY[c]).filter(Boolean) };
     const words = qn.split(/\s+/);
     const scored = [];
     for (const a of DB) {
@@ -103,7 +106,7 @@
     scored.sort((x, y) => y[0] - x[0]);
     const list = scored.slice(0, 40).map((x) => x[1]);
     const countryHit = list.length && scored[0][0] < 400 && scored[0][0] >= 230;
-    return { title: countryHit ? `مطارات ${list[0].car}` : "", list };
+    return { title: countryHit ? T(`مطارات ${list[0].car}`, `Airports in ${list[0].cen}`) : "", list };
   }
 
   /* ---------- Autocomplete widget ---------- */
@@ -134,14 +137,14 @@
       items = list;
       active = list.length ? 0 : -1;
       if (!list.length) {
-        box.innerHTML = `<p class="ac__empty">لم نجد مطاراً بهذا الاسم. جرّب اسم المدينة أو الدولة أو رمز المطار (مثل ORD)، أو اكتب لنا على واتساب ونحجز لك.</p>`;
+        box.innerHTML = `<p class="ac__empty">${T("لم نجد مطاراً بهذا الاسم. جرّب اسم المدينة أو الدولة أو رمز المطار (مثل ORD)، أو اكتب لنا على واتساب ونحجز لك.", "No airport found. Try a city, country or airport code (e.g. ORD), or message us on WhatsApp and we'll book it for you.")}</p>`;
       } else {
         box.innerHTML = (title ? `<p class="ac__title">${esc(title)}</p>` : "") +
           `<ul>${list.map((a, i) => `<li role="option" id="${box.id}-${i}" data-i="${i}" class="${i === 0 ? "is-active" : ""}" aria-selected="${i === 0}">
             <b class="ac__code">${a.code}</b>
-            <span class="ac__text"><span class="ac__city">${esc(a.ar || a.city || a.name)}${a.ar && a.city ? ` <small dir="ltr">${esc(a.city)}</small>` : ""}</span>
-            <small class="ac__sub"><span dir="ltr">${esc(a.name)}</span> · ${esc(a.car)}</small></span>
-            ${isMajor(a.code) ? '<span class="ac__tag">رئيسي</span>' : ""}</li>`).join("")}</ul>`;
+            <span class="ac__text"><span class="ac__city">${esc(cname(a))}${!EN && a.ar && a.city ? ` <small dir="ltr">${esc(a.city)}</small>` : ""}</span>
+            <small class="ac__sub"><span dir="ltr">${esc(a.name)}</span> · ${esc(country(a))}</small></span>
+            ${isMajor(a.code) ? `<span class="ac__tag">${T("رئيسي", "Major")}</span>` : ""}</li>`).join("")}</ul>`;
       }
       box.hidden = false;
       input.setAttribute("aria-expanded", "true");
@@ -160,7 +163,7 @@
     };
     const open = () => {
       loadAirports().then(render).catch(() => {
-        box.innerHTML = '<p class="ac__empty">تعذّر تحميل قائمة المطارات. اكتب رمز المطار المكوّن من 3 أحرف (مثل ORD).</p>';
+        box.innerHTML = `<p class="ac__empty">${T("تعذّر تحميل قائمة المطارات. اكتب رمز المطار المكوّن من 3 أحرف (مثل ORD).", "Couldn't load the airport list. Type the 3-letter airport code (e.g. ORD).")}</p>`;
         box.hidden = false;
       });
     };
@@ -195,6 +198,14 @@
   }
 
   /* ---------- Fare engine (estimates) ---------- */
+  const AIRLINE_EN = {
+    EK: "Emirates", QR: "Qatar Airways", EY: "Etihad Airways", TK: "Turkish Airlines", SV: "Saudia", XY: "flynas", FZ: "flydubai",
+    MS: "EgyptAir", RJ: "Royal Jordanian", GF: "Gulf Air", WY: "Oman Air", KU: "Kuwait Airways", ME: "Middle East Airlines",
+    AT: "Royal Air Maroc", TU: "Tunisair", AH: "Air Algérie", PC: "Pegasus Airlines", LH: "Lufthansa", AF: "Air France", KL: "KLM",
+    BA: "British Airways", IB: "Iberia", LX: "SWISS", OS: "Austrian Airlines", AA: "American Airlines", UA: "United Airlines",
+    DL: "Delta Air Lines", WN: "Southwest Airlines", AC: "Air Canada", SQ: "Singapore Airlines", CX: "Cathay Pacific", QF: "Qantas",
+    AI: "Air India", ET: "Ethiopian Airlines", KQ: "Kenya Airways", PK: "PIA",
+  };
   const CARRIERS = [
     ["EK", "طيران الإمارات", "AE", ["DXB"], "#D71921", 1.12, "full"], ["QR", "الخطوط القطرية", "QA", ["DOH"], "#5C0D34", 1.1, "full"],
     ["EY", "الاتحاد للطيران", "AE", ["AUH"], "#BD8B13", 1.05, "full"], ["TK", "الخطوط التركية", "TR", ["IST"], "#C70A0C", 0.98, "full"],
@@ -216,7 +227,7 @@
     ["QF", "كانتاس", "AU", ["SYD", "MEL"], "#E40000", 1.08, "full"], ["AI", "طيران الهند", "IN", ["DEL", "BOM"], "#DA0E29", 0.88, "full"],
     ["ET", "الخطوط الإثيوبية", "ET", ["ADD"], "#078930", 0.9, "full"], ["KQ", "الخطوط الكينية", "KE", ["NBO"], "#B5121B", 0.95, "full"],
     ["PK", "الخطوط الباكستانية", "PK", ["KHI", "ISB", "LHE"], "#006A4E", 0.85, "full"],
-  ].map(([c, n, cc, hubs, col, tier, type]) => ({ c, n, cc, hubs, col, tier, type }));
+  ].map(([c, n, cc, hubs, col, tier, type]) => ({ c, n: EN && AIRLINE_EN[c] ? AIRLINE_EN[c] : n, cc, hubs, col, tier, type }));
 
   // Continents each airline flies to (OurAirports codes: NA, SA, EU, AF, AS, OC)
   const REACH = {
@@ -250,7 +261,7 @@
   const legMinutes = (km) => Math.round((km / 830) * 60 + 32);
   const baseFare = (km) => (km < 3000 ? 45 + 0.1 * km : 345 + 0.068 * (km - 3000));
   const CABIN = { economy: 1, premium: 1.65, business: 3.3, first: 5.4 };
-  const CABIN_AR = { economy: "الدرجة السياحية", premium: "السياحية الممتازة", business: "درجة رجال الأعمال", first: "الدرجة الأولى" };
+  const CABIN_AR = { economy: T("الدرجة السياحية", "Economy"), premium: T("السياحية الممتازة", "Premium economy"), business: T("درجة رجال الأعمال", "Business"), first: T("الدرجة الأولى", "First") };
 
   function routeOptions(o, d) {
     const km = dist(o, d);
@@ -278,7 +289,7 @@
       if (best && !(directOk && cr.type === "low")) out.push({ cr, via: best.h, km, legs: [best.a1, best.a2] });
     }
     if (!out.length) {
-      const generic = { c: "", n: domestic ? "شركة طيران محلية" : "شركة طيران شريكة", cc: o.cc, hubs: [], col: "#5b6b82", tier: 1, type: "full" };
+      const generic = { c: "", n: domestic ? T("شركة طيران محلية", "Local airline") : T("شركة طيران شريكة", "Partner airline"), cc: o.cc, hubs: [], col: "#5b6b82", tier: 1, type: "full" };
       out.push({ cr: generic, via: null, km, legs: [km] });
       if (!domestic) {
         const hubs = ["DXB", "DOH", "IST", "FRA", "CDG", "LHR", "AMS"].map((c) => BY[c]).filter(Boolean);
@@ -341,11 +352,11 @@
   /* ---------- Formatting ---------- */
   const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const hm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-  const durAr = (m) => `${Math.floor(m / 60)}س ${String(m % 60).padStart(2, "0")}د`;
-  const dateAr = (iso, opts = { weekday: "short", day: "numeric", month: "short" }) => new Date(iso + "T12:00:00").toLocaleDateString("ar", opts);
+  const durAr = (m) => T(`${Math.floor(m / 60)}س ${String(m % 60).padStart(2, "0")}د`, `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`);
+  const dateAr = (iso, opts = { weekday: "short", day: "numeric", month: "short" }) => new Date(iso + "T12:00:00").toLocaleDateString(I18N.locale, opts);
   const addDays = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   const todayIso = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
-  const cityName = (a) => a.ar || a.city || a.name;
+  const cityName = cname;
 
   // Airline logos live in assets/img/airlines/<IATA code>.webp; a lettered tile is the fallback
   function logoHtml(cr) {
@@ -371,28 +382,28 @@
         <div class="res-head">
           <div class="res-head__route" id="resRoute"></div>
           <div class="res-head__actions">
-            <button type="button" class="btn btn--ghost btn--sm" id="resEdit"><svg class="i"><use href="#i-search"/></svg>تعديل البحث</button>
-            <button type="button" class="btn btn--ghost btn--sm res-filter-toggle" id="resFilterToggle" aria-expanded="false" aria-controls="resFilters"><svg class="i"><use href="#i-list"/></svg>الفلاتر</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="resEdit"><svg class="i"><use href="#i-search"/></svg>${T("تعديل البحث", "Modify search")}</button>
+            <button type="button" class="btn btn--ghost btn--sm res-filter-toggle" id="resFilterToggle" aria-expanded="false" aria-controls="resFilters"><svg class="i"><use href="#i-list"/></svg>${T("الفلاتر", "Filters")}</button>
           </div>
         </div>
-        <div class="date-strip" id="resDates" role="tablist" aria-label="تواريخ قريبة"></div>
+        <div class="date-strip" id="resDates" role="tablist" aria-label="${T("تواريخ قريبة", "Nearby dates")}"></div>
         <div class="res-body">
-          <aside class="res-filters" id="resFilters" aria-label="الفلاتر">
-            <div class="rf"><h4>عدد التوقفات</h4><div id="fStops"></div></div>
-            <div class="rf"><h4>وقت المغادرة</h4><div id="fTimes"></div></div>
-            <div class="rf"><h4>السعر الأقصى للفرد</h4><input type="range" id="fPrice" min="0" max="100" step="1"><div class="rf__range"><span id="fPriceMin"></span><b id="fPriceVal"></b></div></div>
-            <div class="rf"><h4>شركات الطيران</h4><div id="fAir"></div></div>
-            <button type="button" class="btn btn--ghost btn--sm btn--block" id="fReset">إعادة ضبط الفلاتر</button>
+          <aside class="res-filters" id="resFilters" aria-label="${T("الفلاتر", "Filters")}">
+            <div class="rf"><h4>${T("عدد التوقفات", "Stops")}</h4><div id="fStops"></div></div>
+            <div class="rf"><h4>${T("وقت المغادرة", "Departure time")}</h4><div id="fTimes"></div></div>
+            <div class="rf"><h4>${T("السعر الأقصى للفرد", "Max price per person")}</h4><input type="range" id="fPrice" min="0" max="100" step="1"><div class="rf__range"><span id="fPriceMin"></span><b id="fPriceVal"></b></div></div>
+            <div class="rf"><h4>${T("شركات الطيران", "Airlines")}</h4><div id="fAir"></div></div>
+            <button type="button" class="btn btn--ghost btn--sm btn--block" id="fReset">${T("إعادة ضبط الفلاتر", "Reset filters")}</button>
           </aside>
           <div class="res-main">
-            <div class="res-sort" role="tablist" aria-label="ترتيب النتائج">
-              <button type="button" class="res-sort__btn is-active" data-sort="cheap"><span>الأرخص</span><b id="sCheap" dir="ltr"></b></button>
-              <button type="button" class="res-sort__btn" data-sort="fast"><span>الأسرع</span><b id="sFast"></b></button>
-              <button type="button" class="res-sort__btn" data-sort="best"><span>الأفضل</span><b id="sBest" dir="ltr"></b></button>
+            <div class="res-sort" role="tablist" aria-label="${T("ترتيب النتائج", "Sort results")}">
+              <button type="button" class="res-sort__btn is-active" data-sort="cheap"><span>${T("الأرخص", "Cheapest")}</span><b id="sCheap" dir="ltr"></b></button>
+              <button type="button" class="res-sort__btn" data-sort="fast"><span>${T("الأسرع", "Fastest")}</span><b id="sFast"></b></button>
+              <button type="button" class="res-sort__btn" data-sort="best"><span>${T("الأفضل", "Best")}</span><b id="sBest" dir="ltr"></b></button>
             </div>
             <p class="res-count" id="resCount" aria-live="polite"></p>
             <div class="res-list" id="resList"></div>
-            <p class="price-note"><svg class="i"><use href="#i-tag"/></svg>الأسعار تقديرية وتتغير حسب التوفر وتاريخ الحجز. يؤكد وكيلنا السعر النهائي قبل إصدار التذكرة.</p>
+            <p class="price-note"><svg class="i"><use href="#i-tag"/></svg>${T("الأسعار تقديرية وتتغير حسب التوفر وتاريخ الحجز. يؤكد وكيلنا السعر النهائي قبل إصدار التذكرة.", "Fares are estimates in US dollars and change with availability and booking date. Your agent confirms the final price before ticketing.")}</p>
           </div>
         </div>
       </div>`;
@@ -440,7 +451,7 @@
     return sec;
   }
 
-  const TIME_BUCKETS = [["فجراً", "00–06", 0, 360], ["صباحاً", "06–12", 360, 720], ["ظهراً", "12–18", 720, 1080], ["مساءً", "18–24", 1080, 1440]];
+  const TIME_BUCKETS = [[T("فجراً", "Night"), "00–06", 0, 360], [T("صباحاً", "Morning"), "06–12", 360, 720], [T("ظهراً", "Afternoon"), "12–18", 720, 1080], [T("مساءً", "Evening"), "18–24", 1080, 1440]];
   const airName = (cr) => cr.n;
 
   function initFilters() {
@@ -449,7 +460,7 @@
     const min = Math.min(...prices), max = Math.max(...prices);
     state.f = { stops: [0, 1], times: [0, 1, 2, 3], air: [...new Set(res.map((r) => airName(r.cr)))], max };
     const cheapest = (fn) => { const l = res.filter(fn); return l.length ? usd.format(Math.min(...l.map((r) => r.per))) : "—"; };
-    $("#fStops").innerHTML = [[0, "مباشر"], [1, "توقف واحد"]].map(([v, t]) => `<label class="rf__opt"><input type="checkbox" name="fStop" value="${v}" checked ${res.some((r) => r.stops === v) ? "" : "disabled"}><span>${t}</span><small>${cheapest((r) => r.stops === v)}</small></label>`).join("");
+    $("#fStops").innerHTML = [[0, T("مباشر", "Nonstop")], [1, T("توقف واحد", "1 stop")]].map(([v, t]) => `<label class="rf__opt"><input type="checkbox" name="fStop" value="${v}" checked ${res.some((r) => r.stops === v) ? "" : "disabled"}><span>${t}</span><small>${cheapest((r) => r.stops === v)}</small></label>`).join("");
     $("#fTimes").innerHTML = TIME_BUCKETS.map(([t, h], i) => `<label class="rf__opt"><input type="checkbox" name="fTime" value="${i}" checked><span>${t} <small dir="ltr">${h}</small></span></label>`).join("");
     const airs = [...new Set(res.map((r) => airName(r.cr)))].map((n) => [n, Math.min(...res.filter((r) => airName(r.cr) === n).map((r) => r.per))]).sort((a, b) => a[1] - b[1]);
     $("#fAir").innerHTML = airs.map(([n, p]) => `<label class="rf__opt"><input type="checkbox" name="fAir" value="${esc(n)}" checked><span>${esc(n)}</span><small>${usd.format(p)}</small></label>`).join("");
@@ -470,7 +481,7 @@
   const score = (r, minP, minD) => r.per / minP + (r.dur / minD) * 0.8;
 
   function legHtml(l, label) {
-    const stopTxt = l.via ? `توقف في <b dir="ltr">${l.via.code}</b> · ${durAr(l.layover)}` : "مباشر";
+    const stopTxt = l.via ? `${T("توقف في", "Stop in")} <b dir="ltr">${l.via.code}</b> · ${durAr(l.layover)}` : T("مباشر", "Nonstop");
     return `<div class="leg">
       <span class="leg__tag">${label}<small>${dateAr(l.dateIso)}</small></span>
       <div class="leg__pt"><b dir="ltr">${hm(l.dep)}</b><span dir="ltr">${l.from.code}</span><small>${esc(cityName(l.from))}</small></div>
@@ -490,17 +501,17 @@
     $("#sBest").textContent = usd.format(byBest.per);
     list.sort(sorters[state.sort]);
     const n = state.pax.adults + state.pax.children + state.pax.infants;
-    $("#resCount").textContent = list.length ? `${list.length} خيار من ${all.length} · الأسعار بالدولار الأمريكي` : "";
+    $("#resCount").textContent = list.length ? T(`${list.length} خيار من ${all.length} · الأسعار بالدولار الأمريكي`, `${list.length} of ${all.length} options · prices in US dollars`) : "";
     $("#resList").innerHTML = list.length
       ? list.map((r, i) => `<article class="fl" style="--d:${Math.min(i, 8) * 60}ms">
-          ${r.id === byCheap.id ? '<span class="fl__badge">الأرخص</span>' : r.id === byFast.id ? '<span class="fl__badge fl__badge--fast">الأسرع</span>' : ""}
-          <div class="fl__air">${logoHtml(r.cr)}<div><b>${esc(r.cr.n)}</b><small>${CABIN_AR[state.cabin]}${r.cr.type === "low" ? " · منخفض التكلفة" : ""}</small></div></div>
-          <div class="fl__legs">${r.legs.map((l, j) => legHtml(l, r.legs.length > 1 ? (j ? "العودة" : "الذهاب") : "الذهاب")).join("")}</div>
-          <div class="fl__price"><small>تقديري للفرد</small><b dir="ltr">${usd.format(r.per)}</b><small>${n > 1 ? `الإجمالي <span dir="ltr">${usd.format(r.total)}</span> · ${n} مسافرين` : r.legs.length > 1 ? "ذهاب وعودة" : "ذهاب فقط"}</small>
-            <button type="button" class="btn btn--accent btn--sm" data-book-flight="${r.id}"><svg class="i"><use href="#i-ticket"/></svg>احجز الآن</button>
-            <button type="button" class="btn btn--agent btn--sm" data-book-agent="${r.id}"><svg class="i"><use href="#i-headset"/></svg>احجز عبر الوكيل</button></div>
+          ${r.id === byCheap.id ? `<span class="fl__badge">${T("الأرخص", "Cheapest")}</span>` : r.id === byFast.id ? `<span class="fl__badge fl__badge--fast">${T("الأسرع", "Fastest")}</span>` : ""}
+          <div class="fl__air">${logoHtml(r.cr)}<div><b>${esc(r.cr.n)}</b><small>${CABIN_AR[state.cabin]}${r.cr.type === "low" ? T(" · منخفض التكلفة", " · Low-cost") : ""}</small></div></div>
+          <div class="fl__legs">${r.legs.map((l, j) => legHtml(l, r.legs.length > 1 ? (j ? T("العودة", "Return") : T("الذهاب", "Depart")) : T("الذهاب", "Depart"))).join("")}</div>
+          <div class="fl__price"><small>${T("تقديري للفرد", "Est. per person")}</small><b dir="ltr">${usd.format(r.per)}</b><small>${n > 1 ? `${T("الإجمالي", "Total")} <span dir="ltr">${usd.format(r.total)}</span> · ${n} ${T("مسافرين", "travelers")}` : r.legs.length > 1 ? T("ذهاب وعودة", "Round trip") : T("ذهاب فقط", "One way")}</small>
+            <button type="button" class="btn btn--accent btn--sm" data-book-flight="${r.id}"><svg class="i"><use href="#i-ticket"/></svg>${T("احجز الآن", "Book now")}</button>
+            <button type="button" class="btn btn--agent btn--sm" data-book-agent="${r.id}"><svg class="i"><use href="#i-headset"/></svg>${T("احجز عبر الوكيل", "Book with an agent")}</button></div>
         </article>`).join("")
-      : `<div class="res-empty"><svg class="i"><use href="#i-search"/></svg><h3>لا توجد نتائج مطابقة للفلاتر</h3><p>غيّر الفلاتر أو أعد ضبطها لرؤية كل الخيارات.</p></div>`;
+      : `<div class="res-empty"><svg class="i"><use href="#i-search"/></svg><h3>${T("لا توجد نتائج مطابقة للفلاتر", "No flights match your filters")}</h3><p>${T("غيّر الفلاتر أو أعد ضبطها لرؤية كل الخيارات.", "Change or reset the filters to see all options.")}</p></div>`;
   }
 
   function renderDates() {
@@ -522,11 +533,11 @@
     const s = state;
     const n = s.pax.adults + s.pax.children + s.pax.infants;
     $("#resRoute").innerHTML = `<h2><span>${esc(cityName(s.o))} <small dir="ltr">${s.o.code}</small></span><svg class="i"><use href="#i-${s.ret ? "swap" : "arrow"}"/></svg><span>${esc(cityName(s.d))} <small dir="ltr">${s.d.code}</small></span></h2>
-      <p>${dateAr(s.depart, { weekday: "long", day: "numeric", month: "long" })}${s.ret ? ` – ${dateAr(s.ret, { weekday: "long", day: "numeric", month: "long" })}` : ""} · ${n} ${n === 1 ? "مسافر" : "مسافرين"} · ${CABIN_AR[s.cabin]} · ${s.o.cc === s.d.cc ? "رحلة داخلية" : "رحلة دولية"} · <span dir="ltr">${Math.round(dist(s.o, s.d)).toLocaleString("en-US")} km</span></p>`;
+      <p>${dateAr(s.depart, { weekday: "long", day: "numeric", month: "long" })}${s.ret ? ` – ${dateAr(s.ret, { weekday: "long", day: "numeric", month: "long" })}` : ""} · ${n} ${n === 1 ? T("مسافر", "traveler") : T("مسافرين", "travelers")} · ${CABIN_AR[s.cabin]} · ${s.o.cc === s.d.cc ? T("رحلة داخلية", "Domestic") : T("رحلة دولية", "International")} · <span dir="ltr">${Math.round(dist(s.o, s.d)).toLocaleString("en-US")} km</span></p>`;
   }
 
   function showLoading() {
-    $("#resList").innerHTML = `<div class="res-loading"><div class="res-loading__bar"><svg class="i"><use href="#i-plane"/></svg></div><p>نبحث في رحلات أكثر من 35 شركة طيران…</p></div>` +
+    $("#resList").innerHTML = `<div class="res-loading"><div class="res-loading__bar"><svg class="i"><use href="#i-plane"/></svg></div><p>${T("نبحث في رحلات أكثر من 35 شركة طيران…", "Searching flights on 35+ airlines…")}</p></div>` +
       Array.from({ length: 3 }, () => '<div class="fl fl--skel"><i></i><i></i><i></i></div>').join("");
     $("#resCount").textContent = "";
   }
@@ -558,28 +569,28 @@
   /* ---------- Booking: two options ---------- */
   function flightRows(r) {
     const n = state.pax.adults + state.pax.children + state.pax.infants;
-    const legTxt = (l) => `${dateAr(l.dateIso, { weekday: "short", day: "numeric", month: "long" })} · ${hm(l.dep)} ${l.from.code} ← ${hm(l.arr)}${l.plus ? "(+" + l.plus + ")" : ""} ${l.to.code} · ${l.via ? "توقف في " + l.via.code : "مباشر"}`;
+    const legTxt = (l) => `${dateAr(l.dateIso, { weekday: "short", day: "numeric", month: "long" })} · ${hm(l.dep)} ${l.from.code} ${T("←", "→")} ${hm(l.arr)}${l.plus ? "(+" + l.plus + ")" : ""} ${l.to.code} · ${l.via ? T("توقف في ", "stop in ") + l.via.code : T("مباشر", "nonstop")}`;
     return [
-      ["المسار", `${cityName(state.o)} (${state.o.code}) ← ${cityName(state.d)} (${state.d.code})`],
-      ["شركة الطيران", r.cr.n],
-      ["الذهاب", legTxt(r.legs[0])],
-      r.legs[1] ? ["العودة", legTxt(r.legs[1])] : null,
-      ["المسافرون", $("#paxLabel") ? $("#paxLabel").textContent : String(n)],
-      ["الدرجة", CABIN_AR[state.cabin]],
-      ["السعر التقديري", `${usd.format(r.per)} للفرد${n > 1 ? ` · ${usd.format(r.total)} إجمالي` : ""}`],
+      [T("المسار", "Route"), `${cityName(state.o)} (${state.o.code}) ${T("←", "→")} ${cityName(state.d)} (${state.d.code})`],
+      [T("شركة الطيران", "Airline"), r.cr.n],
+      [T("الذهاب", "Outbound"), legTxt(r.legs[0])],
+      r.legs[1] ? [T("العودة", "Return"), legTxt(r.legs[1])] : null,
+      [T("المسافرون", "Travelers"), $("#paxLabel") ? $("#paxLabel").textContent : String(n)],
+      [T("الدرجة", "Cabin"), CABIN_AR[state.cabin]],
+      [T("السعر التقديري", "Estimated fare"), `${usd.format(r.per)} ${T("للفرد", "per person")}${n > 1 ? ` · ${usd.format(r.total)} ${T("إجمالي", "total")}` : ""}`],
     ].filter(Boolean);
   }
 
   // Option 2 — talk to an agent: WhatsApp (message pre-filled) or a phone call, on any of the numbers
   function bookViaAgent(r) {
     if (!r || typeof openModal !== "function") return;
-    openModal("حجز رحلة طيران", flightRows(r));
-    $("#modalTitle").textContent = "احجز عبر الوكيل";
+    openModal(T("حجز رحلة طيران", "Flight booking"), flightRows(r));
+    $("#modalTitle").textContent = T("احجز عبر الوكيل", "Book with an agent");
     const numbers = (typeof CONFIG !== "undefined" && CONFIG.numbers) || [];
     const list = $("#modalWaList");
-    list.insertAdjacentHTML("afterend", `<div class="call-list" id="modalCallList"><p class="call-list__t">أو اتصل بالوكيل مباشرة</p>${numbers
+    list.insertAdjacentHTML("afterend", `<div class="call-list" id="modalCallList"><p class="call-list__t">${T("أو اتصل بالوكيل مباشرة", "Or call an agent directly")}</p>${numbers
       .map((x) => `<a class="call-num" href="tel:+${x.intl}"><svg class="i"><use href="#i-phone"/></svg><span dir="ltr">${x.display}</span></a>`).join("")}</div>`);
-    $(".modal__note").textContent = "تحدث مع وكيلنا على واتساب أو بالهاتف أو البريد الإلكتروني، وسيؤكد لك التوفر والسعر النهائي ويكمل الحجز معك خطوة بخطوة.";
+    $(".modal__note").textContent = T("تحدث مع وكيلنا على واتساب أو بالهاتف أو البريد الإلكتروني، وسيؤكد لك التوفر والسعر النهائي ويكمل الحجز معك خطوة بخطوة.", "Talk to our agent on WhatsApp, by phone or by email. They'll confirm availability and the final price and complete the booking with you step by step.");
     const mail = $("#modalMail");
     if (mail) $("#modalCallList").after(mail);
   }
@@ -595,31 +606,31 @@
     bookingModal.innerHTML = `
       <div class="modal__backdrop" data-close></div>
       <div class="modal__dialog modal__dialog--form" role="dialog" aria-modal="true" aria-labelledby="bkTitle">
-        <button class="modal__close" data-close aria-label="إغلاق">×</button>
+        <button class="modal__close" data-close aria-label="${T("إغلاق", "Close")}">×</button>
         <div class="bk-step" data-step="form">
           <div class="modal__icon"><svg class="i"><use href="#i-ticket"/></svg></div>
-          <h3 id="bkTitle">احجز الآن</h3>
-          <p class="modal__note">أدخل بيانات المسافرين كما في جواز السفر. لا نطلب أي بيانات دفع عبر الموقع.</p>
+          <h3 id="bkTitle">${T("احجز الآن", "Book now")}</h3>
+          <p class="modal__note">${T("أدخل بيانات المسافرين كما في جواز السفر. لا نطلب أي بيانات دفع عبر الموقع.", "Enter traveler details exactly as on the passport. We never ask for payment details on the website.")}</p>
           <div class="bk-flight" id="bkFlight"></div>
           <form id="bkForm" novalidate>
             <div id="bkPax" class="bk-pax"></div>
-            <h4 class="bk-h">بيانات التواصل</h4>
+            <h4 class="bk-h">${T("بيانات التواصل", "Contact details")}</h4>
             <div class="form-row">
-              <div class="field"><label for="bkPhone">رقم الجوال (واتساب)</label><input id="bkPhone" name="phone" type="tel" dir="ltr" autocomplete="tel" placeholder="+1 (000) 000-0000" required></div>
-              <div class="field"><label for="bkEmail">البريد الإلكتروني</label><input id="bkEmail" name="email" type="email" dir="ltr" autocomplete="email" placeholder="name@example.com" required></div>
+              <div class="field"><label for="bkPhone">${T("رقم الجوال (واتساب)", "Mobile (WhatsApp)")}</label><input id="bkPhone" name="phone" type="tel" dir="ltr" autocomplete="tel" placeholder="+1 (000) 000-0000" required></div>
+              <div class="field"><label for="bkEmail">${T("البريد الإلكتروني", "Email")}</label><input id="bkEmail" name="email" type="email" dir="ltr" autocomplete="email" placeholder="name@example.com" required></div>
             </div>
-            <div class="field"><label for="bkNotes">ملاحظات (اختياري)</label><textarea id="bkNotes" name="notes" rows="2" placeholder="وجبة خاصة، كرسي متحرك، مقاعد متجاورة…"></textarea></div>
-            <label class="consent"><input type="checkbox" id="bkConsent" required> أؤكد صحة البيانات وأوافق على أن يتواصل معي الوكيل لتأكيد السعر وإصدار التذكرة.</label>
-            <button type="submit" class="btn btn--accent btn--block"><svg class="i"><use href="#i-check"/></svg>تأكيد طلب الحجز</button>
+            <div class="field"><label for="bkNotes">${T("ملاحظات (اختياري)", "Notes (optional)")}</label><textarea id="bkNotes" name="notes" rows="2" placeholder="${T("وجبة خاصة، كرسي متحرك، مقاعد متجاورة…", "Special meal, wheelchair, seats together…")}"></textarea></div>
+            <label class="consent"><input type="checkbox" id="bkConsent" required> ${T("أؤكد صحة البيانات وأوافق على أن يتواصل معي الوكيل لتأكيد السعر وإصدار التذكرة.", "I confirm these details are correct and agree to be contacted by an agent to confirm the price and issue the ticket.")}</label>
+            <button type="submit" class="btn btn--accent btn--block"><svg class="i"><use href="#i-check"/></svg>${T("تأكيد طلب الحجز", "Confirm booking request")}</button>
           </form>
         </div>
         <div class="bk-step" data-step="done" hidden>
           <div class="modal__icon modal__icon--wa"><svg class="i"><use href="#i-check"/></svg></div>
-          <h3 id="bkDoneTitle">تم تسجيل طلب حجزك</h3>
-          <p class="bk-ref">رقم الطلب <b id="bkRef" dir="ltr"></b></p>
+          <h3 id="bkDoneTitle"></h3>
+          <p class="bk-ref">${T("رقم الطلب", "Request number")} <b id="bkRef" dir="ltr"></b></p>
           <p class="modal__note" id="bkDoneNote"></p>
           <div class="wa-list" id="bkWaList"></div>
-          <button type="button" class="btn btn--ghost btn--block" data-close>إغلاق</button>
+          <button type="button" class="btn btn--ghost btn--block" data-close>${T("إغلاق", "Close")}</button>
         </div>
       </div>`;
     document.body.appendChild(bookingModal);
@@ -631,16 +642,16 @@
   }
 
   function paxFields() {
-    const groups = [["adults", "بالغ"], ["children", "طفل"], ["infants", "رضيع"]];
+    const groups = [["adults", T("بالغ", "Adult")], ["children", T("طفل", "Child")], ["infants", T("رضيع", "Infant")]];
     let i = 0, html = "";
     groups.forEach(([k, lab]) => {
       for (let j = 1; j <= state.pax[k]; j++) {
         i++;
-        html += `<fieldset class="bk-person"><legend>المسافر ${i} · ${lab}</legend>
+        html += `<fieldset class="bk-person"><legend>${T("المسافر", "Traveler")} ${i} · ${lab}</legend>
           <div class="form-row form-row--3">
-            <div class="field"><label for="bkFirst${i}">الاسم الأول (بالإنجليزية)</label><input id="bkFirst${i}" name="first${i}" dir="ltr" autocomplete="${i === 1 ? "given-name" : "off"}" required></div>
-            <div class="field"><label for="bkLast${i}">اسم العائلة (بالإنجليزية)</label><input id="bkLast${i}" name="last${i}" dir="ltr" autocomplete="${i === 1 ? "family-name" : "off"}" required></div>
-            <div class="field"><label for="bkDob${i}">تاريخ الميلاد</label><input id="bkDob${i}" name="dob${i}" type="date" max="${todayIso()}" required></div>
+            <div class="field"><label for="bkFirst${i}">${T("الاسم الأول (بالإنجليزية)", "First name")}</label><input id="bkFirst${i}" name="first${i}" dir="ltr" autocomplete="${i === 1 ? "given-name" : "off"}" required></div>
+            <div class="field"><label for="bkLast${i}">${T("اسم العائلة (بالإنجليزية)", "Last name")}</label><input id="bkLast${i}" name="last${i}" dir="ltr" autocomplete="${i === 1 ? "family-name" : "off"}" required></div>
+            <div class="field"><label for="bkDob${i}">${T("تاريخ الميلاد", "Date of birth")}</label><input id="bkDob${i}" name="dob${i}" type="date" max="${todayIso()}" required></div>
           </div><input type="hidden" name="type${i}" value="${lab}"></fieldset>`;
       }
     });
@@ -672,17 +683,17 @@
   async function submitBooking(e) {
     e.preventDefault();
     const form = e.target;
-    if (typeof validate === "function" && !validate(form)) { toast("يرجى إكمال الحقول المطلوبة"); return; }
+    if (typeof validate === "function" && !validate(form)) { toast(T("يرجى إكمال الحقول المطلوبة", "Please complete the required fields")); return; }
     const d = Object.fromEntries(new FormData(form));
     const r = currentBooking;
     const ref = "GT-" + todayIso().slice(2).replace(/-/g, "") + "-" + String(hash(r.id + Date.now()) % 9000 + 1000);
     const people = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => {
       const i = k.slice(5);
-      return `${i}. ${d["first" + i]} ${d["last" + i]} (${d["type" + i]}، ${d["dob" + i]})`;
+      return `${i}. ${d["first" + i]} ${d["last" + i]} (${d["type" + i]}${T("، ", ", ")}${d["dob" + i]})`;
     });
     const rows = flightRows(r);
-    const msg = `طلب حجز جديد عبر الموقع — رقم ${ref}\n` + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n") +
-      `\n\nالمسافرون:\n${people.join("\n")}\n\nالجوال: ${d.phone}\nالبريد: ${d.email}${d.notes ? `\nملاحظات: ${d.notes}` : ""}`;
+    const msg = T(`طلب حجز جديد عبر الموقع — رقم ${ref}\n`, `New booking request from the website — ref ${ref}\n`) + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n") +
+      T(`\n\nالمسافرون:\n${people.join("\n")}\n\nالجوال: ${d.phone}\nالبريد: ${d.email}${d.notes ? `\nملاحظات: ${d.notes}` : ""}`, `\n\nTravelers:\n${people.join("\n")}\n\nMobile: ${d.phone}\nEmail: ${d.email}${d.notes ? `\nNotes: ${d.notes}` : ""}`);
 
     // If a form endpoint is configured (e.g. Formspree or a Netlify form), send the request there as well
     const endpoint = typeof CONFIG !== "undefined" && CONFIG.bookingEndpoint;
@@ -697,12 +708,12 @@
       btn.disabled = false;
     }
     $("#bkRef").textContent = ref;
-    $("#bkDoneTitle").textContent = sent ? "تم إرسال طلب حجزك" : "طلبك جاهز، أرسله للوكيل";
+    $("#bkDoneTitle").textContent = sent ? T("تم إرسال طلب حجزك", "Your booking request was sent") : T("طلبك جاهز، أرسله للوكيل", "Your request is ready, send it to an agent");
     $("#bkDoneNote").textContent = sent
-      ? "وصل طلبك إلى فريقنا. سيتواصل معك الوكيل قريباً لتأكيد السعر النهائي وطريقة الدفع ثم إصدار التذكرة."
-      : "خطوة أخيرة: أرسل الطلب إلى وكيلنا على واتساب أو البريد الإلكتروني بضغطة واحدة (التفاصيل جاهزة في الرسالة)، وسيؤكد لك السعر النهائي ويصدر التذكرة.";
+      ? T("وصل طلبك إلى فريقنا. سيتواصل معك الوكيل قريباً لتأكيد السعر النهائي وطريقة الدفع ثم إصدار التذكرة.", "Our team has your request. An agent will contact you shortly to confirm the final price and payment, then issue your ticket.")
+      : T("خطوة أخيرة: أرسل الطلب إلى وكيلنا على واتساب أو البريد الإلكتروني بضغطة واحدة (التفاصيل جاهزة في الرسالة)، وسيؤكد لك السعر النهائي ويصدر التذكرة.", "Last step: send the request to our agent on WhatsApp or by email with one tap (the details are already in the message). They'll confirm the final price and issue your ticket.");
     $("#bkWaList").innerHTML = typeof waButtons === "function" ? waButtons(msg) : "";
-    if (typeof putMail === "function") putMail($("#bkWaList"), "bkMail", `طلب حجز ${ref} — Green Travel`, msg);
+    if (typeof putMail === "function") putMail($("#bkWaList"), "bkMail", T(`طلب حجز ${ref}`, `Booking request ${ref}`) + " — Green Travel", msg);
     $('[data-step="form"]', bookingModal).hidden = true;
     $('[data-step="done"]', bookingModal).hidden = false;
     $(".modal__dialog", bookingModal).scrollTop = 0;
@@ -732,14 +743,14 @@
     search(d, pax) {
       const fromEl = $("#from"), toEl = $("#to");
       if (!DB) {
-        loadAirports().then(() => window.GTFlights.search(d, pax)).catch(() => toast && toast("تعذّر تحميل قائمة المطارات، حاول مجدداً"));
+        loadAirports().then(() => window.GTFlights.search(d, pax)).catch(() => toast && toast(T("تعذّر تحميل قائمة المطارات، حاول مجدداً", "Couldn't load the airport list, please try again")));
         return true;
       }
       const o = resolveAirport(fromEl), dd = resolveAirport(toEl);
       fromEl.closest(".field").classList.toggle("is-invalid", !o);
       toEl.closest(".field").classList.toggle("is-invalid", !dd);
-      if (!o || !dd) { (o ? toEl : fromEl).focus(); toast("اختر مطار المغادرة والوصول من القائمة"); return true; }
-      if (o.code === dd.code) { toast("مطار المغادرة والوصول متطابقان"); return true; }
+      if (!o || !dd) { (o ? toEl : fromEl).focus(); toast(T("اختر مطار المغادرة والوصول من القائمة", "Choose the origin and destination airports from the list")); return true; }
+      if (o.code === dd.code) { toast(T("مطار المغادرة والوصول متطابقان", "Origin and destination are the same")); return true; }
       fromEl.value = label(o); fromEl.dataset.code = o.code;
       toEl.value = label(dd); toEl.dataset.code = dd.code;
       const ret = d.trip === "round" && d.return ? d.return : null;
@@ -794,7 +805,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     ["#from", "#to"].forEach((s) => $(s) && attachAutocomplete($(s)));
     $$("[data-route]").forEach((b) => b.addEventListener("click", () => {
-      loadAirports().then(() => searchRoute(b.dataset.route)).catch(() => toast("تعذّر تحميل قائمة المطارات، حاول مجدداً"));
+      loadAirports().then(() => searchRoute(b.dataset.route)).catch(() => toast(T("تعذّر تحميل قائمة المطارات، حاول مجدداً", "Couldn't load the airport list, please try again")));
     }));
     // Load the airport list, pre-fill Chicago as the origin and price the sample routes
     const warm = () => loadAirports().then(() => {

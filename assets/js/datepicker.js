@@ -11,15 +11,15 @@
   const isoOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   const parse = (iso) => { const [y, m, d] = iso.split("-").map(Number); return new Date(y, m - 1, d, 12); };
   const todayIso = () => isoOf(new Date());
-  const fmtBtn = (iso) => parse(iso).toLocaleDateString("ar", { weekday: "short", day: "numeric", month: "short" });
-  const fmtMonth = (d) => d.toLocaleDateString("ar", { month: "long", year: "numeric" });
-  const WEEK = ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
+  const fmtBtn = (iso) => parse(iso).toLocaleDateString(I18N.locale, { weekday: "short", day: "numeric", month: "short" });
+  const fmtMonth = (d) => d.toLocaleDateString(I18N.locale, { month: "long", year: "numeric" });
+  const WEEK = I18N.en ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] : ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
   const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
   // Pairs of [start, end] inputs; `round` says whether the end date is in use
   const PAIRS = [
-    { start: "#depart", end: "#return", prices: true, words: ["اختر تاريخ الذهاب", "اختر تاريخ العودة"], round: () => !!$('input[name="trip"][value="round"]:checked') },
-    { start: "#hin", end: "#hout", prices: false, words: ["اختر تاريخ الوصول", "اختر تاريخ المغادرة"], round: () => true },
+    { start: "#depart", end: "#return", prices: true, words: [T("اختر تاريخ الذهاب", "Choose your departure date"), T("اختر تاريخ العودة", "Choose your return date")], round: () => !!$('input[name="trip"][value="round"]:checked') },
+    { start: "#hin", end: "#hout", prices: false, words: [T("اختر تاريخ الوصول", "Choose check-in date"), T("اختر تاريخ المغادرة", "Choose check-out date")], round: () => true },
   ];
 
   let pop, ctx = null, view = null, hoverIso = null;
@@ -29,19 +29,19 @@
     pop.className = "dp";
     pop.hidden = true;
     pop.setAttribute("role", "dialog");
-    pop.setAttribute("aria-label", "اختر التاريخ");
+    pop.setAttribute("aria-label", T("اختر التاريخ", "Choose a date"));
     pop.innerHTML = `
       <div class="dp__head">
-        <button type="button" class="dp__nav" data-nav="-1" aria-label="الشهر السابق"><svg class="i flip"><use href="#i-arrow"/></svg></button>
+        <button type="button" class="dp__nav" data-nav="-1" aria-label="${T("الشهر السابق", "Previous month")}"><svg class="i flip"><use href="#i-arrow"/></svg></button>
         <div class="dp__hint" aria-live="polite"></div>
-        <button type="button" class="dp__nav" data-nav="1" aria-label="الشهر التالي"><svg class="i"><use href="#i-arrow"/></svg></button>
+        <button type="button" class="dp__nav" data-nav="1" aria-label="${T("الشهر التالي", "Next month")}"><svg class="i"><use href="#i-arrow"/></svg></button>
       </div>
       <div class="dp__months"></div>
       <div class="dp__foot">
         <p class="dp__sel"></p>
         <div class="dp__actions">
-          <button type="button" class="btn btn--ghost btn--sm" data-act="clear">مسح</button>
-          <button type="button" class="btn btn--primary btn--sm" data-act="done">تم</button>
+          <button type="button" class="btn btn--ghost btn--sm" data-act="clear">${T("مسح", "Clear")}</button>
+          <button type="button" class="btn btn--primary btn--sm" data-act="done">${T("تم", "Done")}</button>
         </div>
       </div>`;
     document.body.appendChild(pop);
@@ -64,7 +64,8 @@
       if (e.key === "Escape") { e.stopPropagation(); close(true); }
       const day = e.target.closest("[data-iso]");
       if (!day) return;
-      const step = { ArrowLeft: 1, ArrowRight: -1, ArrowDown: 7, ArrowUp: -7 }[e.key]; // RTL: left = next day
+      const side = I18N.en ? -1 : 1; // RTL: left = next day; LTR: right = next day
+      const step = { ArrowLeft: side, ArrowRight: -side, ArrowDown: 7, ArrowUp: -7 }[e.key];
       if (step) {
         e.preventDefault();
         const d = parse(day.dataset.iso); d.setDate(d.getDate() + step);
@@ -166,18 +167,18 @@
         const dis = iso < min || (ctx.phase === "end" && iso < s);
         const cls = ["dp__day", iso === t ? "is-today" : "", iso === s ? "is-start" : "", iso === e ? "is-end" : "", s && e && iso > s && iso < e ? "is-in" : ""].join(" ");
         const p = prices && prices[iso];
-        cells += `<button type="button" class="${cls}" data-iso="${iso}" ${dis ? "disabled" : ""} aria-pressed="${iso === s || iso === e}" aria-label="${parse(iso).toLocaleDateString("ar", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}${p ? " · " + usd.format(p) : ""}">
+        cells += `<button type="button" class="${cls}" data-iso="${iso}" ${dis ? "disabled" : ""} aria-pressed="${iso === s || iso === e}" aria-label="${parse(iso).toLocaleDateString(I18N.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}${p ? " · " + usd.format(p) : ""}">
           <span class="dp__n">${d}</span>${p && !dis ? `<small class="dp__p ${p === low ? "is-low" : ""}" dir="ltr">${usd.format(p)}</small>` : ""}</button>`;
       }
       return `<div class="dp__month"><h4>${fmtMonth(m)}</h4><div class="dp__grid">${WEEK.map((w) => `<span class="dp__wd">${w}</span>`).join("")}${cells}</div></div>`;
     }).join("");
 
-    const hint = ctx.round ? ctx.pair.words[ctx.phase === "start" ? 0 : 1] : "اختر التاريخ";
-    $(".dp__hint", pop).textContent = hint + (prices ? " · الأسعار تقديرية للفرد" : "");
+    const hint = ctx.round ? ctx.pair.words[ctx.phase === "start" ? 0 : 1] : T("اختر التاريخ", "Choose a date");
+    $(".dp__hint", pop).textContent = hint + (prices ? T(" · الأسعار تقديرية للفرد", " · estimated fares per person") : "");
     const nights = s && e ? Math.round((parse(e) - parse(s)) / 864e5) : 0;
     $(".dp__sel", pop).innerHTML = s
-      ? `<b>${fmtBtn(s)}</b>${ctx.round ? ` ← <b>${e ? fmtBtn(e) : "…"}</b>${nights ? ` · ${nights} ${ctx.pair.prices ? (nights === 1 ? "يوم" : "أيام") : nights === 1 ? "ليلة" : "ليالٍ"}` : ""}` : ""}`
-      : "لم يتم اختيار تاريخ";
+      ? `<b>${fmtBtn(s)}</b>${ctx.round ? ` ${T("←", "→")} <b>${e ? fmtBtn(e) : "…"}</b>${nights ? ` · ${nights} ${ctx.pair.prices ? (nights === 1 ? T("يوم", "day") : T("أيام", "days")) : nights === 1 ? T("ليلة", "night") : T("ليالٍ", "nights")}` : ""}` : ""}`
+      : T("لم يتم اختيار تاريخ", "No date selected");
     pop.classList.toggle("dp--single", single);
     paintRange();
   }
@@ -210,8 +211,8 @@
       const empty = !el.value;
       const d = !empty && parse(el.value);
       btn.querySelector(".date-btn__v").innerHTML = empty
-        ? "اختر التاريخ"
-        : `<b>${d.toLocaleDateString("ar", { day: "numeric", month: "long" })}</b> <small>${d.toLocaleDateString("ar", { weekday: "long" })}</small>`;
+        ? T("اختر التاريخ", "Choose a date")
+        : `<b>${d.toLocaleDateString(I18N.locale, { day: "numeric", month: I18N.en ? "short" : "long" })}</b> <small>${d.toLocaleDateString(I18N.locale, { weekday: I18N.en ? "short" : "long" })}</small>`;
       btn.classList.toggle("is-empty", empty);
       btn.disabled = el.disabled;
     }));
@@ -229,7 +230,7 @@
       btn.id = el.id + "Btn";
       btn.setAttribute("aria-haspopup", "dialog");
       btn.setAttribute("aria-expanded", "false");
-      btn.innerHTML = `<svg class="i"><use href="#i-calendar"/></svg><span class="date-btn__v">اختر التاريخ</span>`;
+      btn.innerHTML = `<svg class="i"><use href="#i-calendar"/></svg><span class="date-btn__v">${T("اختر التاريخ", "Choose a date")}</span>`;
       el.after(btn);
       const lab = field.querySelector("label");
       if (lab) lab.setAttribute("for", btn.id);

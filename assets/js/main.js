@@ -40,7 +40,7 @@ const waButtons = (text) =>
 // Email option shown next to WhatsApp/phone; opens the visitor's mail app with the request pre-filled
 const mailLink = (subject, body) => `mailto:${CONFIG.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 const mailBlock = (id, subject, body) =>
-  `<div class="mail-opt" id="${id}"><p class="call-list__t">أو راسلنا على البريد الإلكتروني</p>
+  `<div class="mail-opt" id="${id}"><p class="call-list__t">${T("أو راسلنا على البريد الإلكتروني", "Or email us")}</p>
     <a class="mail-btn" href="${mailLink(subject, body)}"><svg class="i"><use href="#i-mail"/></svg><span dir="ltr">${CONFIG.email}</span></a></div>`;
 const putMail = (afterEl, id, subject, body) => {
   const old = document.getElementById(id);
@@ -53,7 +53,7 @@ const toArabicDate = (v) => {
   const d = new Date(v.length === 7 ? v + "-01" : v);
   if (isNaN(d)) return v;
   const opts = v.length === 7 ? { year: "numeric", month: "long" } : { weekday: "short", day: "numeric", month: "long", year: "numeric" };
-  return d.toLocaleDateString("ar", opts);
+  return d.toLocaleDateString(I18N.locale, opts);
 };
 
 document.documentElement.classList.remove("no-js");
@@ -72,8 +72,8 @@ function applyConfig() {
     list.innerHTML = CONFIG.numbers
       .map(
         (n) => `<div class="num-row"><a class="num-row__tel" href="tel:+${n.intl}" dir="ltr">${n.display}</a>
-          <span class="num-row__actions"><a class="chip-btn" href="tel:+${n.intl}" aria-label="اتصال ${n.display}"><svg class="i"><use href="#i-phone"/></svg>اتصال</a>
-          <a class="chip-btn chip-btn--wa" href="${waLink("مرحباً، أرغب في حجز رحلة", n.intl)}" target="_blank" rel="noopener" aria-label="واتساب ${n.display}">${waIcon}واتساب</a></span></div>`
+          <span class="num-row__actions"><a class="chip-btn" href="tel:+${n.intl}" aria-label="${T("اتصال", "Call")} ${n.display}"><svg class="i"><use href="#i-phone"/></svg>${T("اتصال", "Call")}</a>
+          <a class="chip-btn chip-btn--wa" href="${waLink(T("مرحباً، أرغب في حجز رحلة", "Hello, I'd like to book a trip"), n.intl)}" target="_blank" rel="noopener" aria-label="WhatsApp ${n.display}">${waIcon}${T("واتساب", "WhatsApp")}</a></span></div>`
       )
       .join("");
   }
@@ -119,12 +119,12 @@ function initHeader() {
   const closeNav = () => {
     nav.classList.remove("is-open");
     burger.setAttribute("aria-expanded", "false");
-    burger.setAttribute("aria-label", "فتح القائمة");
+    burger.setAttribute("aria-label", T("فتح القائمة", "Open menu"));
   };
   burger.addEventListener("click", () => {
     const open = nav.classList.toggle("is-open");
     burger.setAttribute("aria-expanded", String(open));
-    burger.setAttribute("aria-label", open ? "إغلاق القائمة" : "فتح القائمة");
+    burger.setAttribute("aria-label", open ? T("إغلاق القائمة", "Close menu") : T("فتح القائمة", "Open menu"));
   });
   $$("a", nav).forEach((a) => a.addEventListener("click", closeNav));
   document.addEventListener("keydown", (e) => e.key === "Escape" && closeNav());
@@ -182,7 +182,7 @@ function initSearch() {
       const oneway = r.value === "oneway" && r.checked;
       returnField.classList.toggle("is-disabled", oneway);
       $("#return").disabled = oneway;
-      if (r.value === "multi" && r.checked) toast("للوجهات المتعددة أدخل الوجهة الأولى وسيكمل معك المستشار باقي المسارات");
+      if (r.value === "multi" && r.checked) toast(T("للوجهات المتعددة أدخل الوجهة الأولى وسيكمل معك المستشار باقي المسارات", "For multi-city trips, enter the first leg and your advisor will arrange the rest"));
     })
   );
 
@@ -199,10 +199,10 @@ function initSearch() {
   const paxBtn = $("#paxBtn"), panel = $("#paxPanel");
   const pax = { adults: 1, children: 0, infants: 0 };
   const renderPax = () => {
-    const parts = [`${pax.adults} ${pax.adults === 1 ? "بالغ" : "بالغين"}`];
-    if (pax.children) parts.push(`${pax.children} ${pax.children === 1 ? "طفل" : "أطفال"}`);
-    if (pax.infants) parts.push(`${pax.infants} ${pax.infants === 1 ? "رضيع" : "رضّع"}`);
-    $("#paxLabel").textContent = parts.join("، ");
+    const parts = [`${pax.adults} ${pax.adults === 1 ? T("بالغ", "adult") : T("بالغين", "adults")}`];
+    if (pax.children) parts.push(`${pax.children} ${pax.children === 1 ? T("طفل", "child") : T("أطفال", "children")}`);
+    if (pax.infants) parts.push(`${pax.infants} ${pax.infants === 1 ? T("رضيع", "infant") : T("رضّع", "infants")}`);
+    $("#paxLabel").textContent = parts.join(T("، ", ", "));
     $$(".pax__row", panel).forEach((row) => {
       const type = row.dataset.type;
       $("output", row).textContent = pax[type];
@@ -241,13 +241,13 @@ function initSearch() {
   );
 
   // Submit handlers
-  const cabinNames = { economy: "الدرجة السياحية", premium: "السياحية الممتازة", business: "رجال الأعمال", first: "الدرجة الأولى" };
-  const tripNames = { round: "ذهاب وعودة", oneway: "ذهاب فقط", multi: "وجهات متعددة" };
+  const cabinNames = { economy: T("الدرجة السياحية", "Economy"), premium: T("السياحية الممتازة", "Premium economy"), business: T("رجال الأعمال", "Business"), first: T("الدرجة الأولى", "First") };
+  const tripNames = { round: T("ذهاب وعودة", "Round trip"), oneway: T("ذهاب فقط", "One way"), multi: T("وجهات متعددة", "Multi-city") };
 
   panels.forEach((form) =>
     form.addEventListener("submit", (e) => {
       e.preventDefault();
-      if (!validate(form)) return toast("يرجى تعبئة الحقول المطلوبة");
+      if (!validate(form)) return toast(T("يرجى تعبئة الحقول المطلوبة", "Please fill in the required fields"));
       const d = Object.fromEntries(new FormData(form));
       let title, rows;
       switch (form.dataset.panel) {
@@ -256,24 +256,24 @@ function initSearch() {
             window.GTFlights.search(d, pax);
             return;
           }
-          if (d.from && d.from === d.to) return toast("مدينة المغادرة والوصول متطابقتان");
-          title = "طلب حجز طيران";
+          if (d.from && d.from === d.to) return toast(T("مدينة المغادرة والوصول متطابقتان", "Origin and destination are the same"));
+          title = T("طلب حجز طيران", "Flight booking request");
           rows = [
-            ["المسار", `${d.from} ← ${d.to}`],
-            ["نوع الرحلة", tripNames[d.trip]],
-            ["المغادرة", toArabicDate(d.depart)],
-            d.trip !== "oneway" && d.return ? ["العودة", toArabicDate(d.return)] : null,
-            ["المسافرون", $("#paxLabel").textContent],
-            ["الدرجة", cabinNames[d.cabin]],
+            [T("المسار", "Route"), `${d.from} ${T("←", "→")} ${d.to}`],
+            [T("نوع الرحلة", "Trip type"), tripNames[d.trip]],
+            [T("المغادرة", "Depart"), toArabicDate(d.depart)],
+            d.trip !== "oneway" && d.return ? [T("العودة", "Return"), toArabicDate(d.return)] : null,
+            [T("المسافرون", "Travelers"), $("#paxLabel").textContent],
+            [T("الدرجة", "Cabin"), cabinNames[d.cabin]],
           ];
           break;
         case "hotels":
-          title = "طلب حجز فندق";
-          rows = [["الوجهة", d.city], ["الوصول", toArabicDate(d.checkin)], ["المغادرة", toArabicDate(d.checkout)], ["الغرف", d.rooms]];
+          title = T("طلب حجز فندق", "Hotel booking request");
+          rows = [[T("الوجهة", "Destination"), d.city], [T("الوصول", "Check-in"), toArabicDate(d.checkin)], [T("المغادرة", "Check-out"), toArabicDate(d.checkout)], [T("الغرف", "Rooms"), d.rooms]];
           break;
         case "visa":
-          title = "طلب تأشيرة";
-          rows = [["الدولة", d.country], ["النوع", d.type], ["الجنسية", d.nationality], ["عدد المتقدمين", d.applicants]];
+          title = T("طلب تأشيرة", "Visa request");
+          rows = [[T("الدولة", "Country"), d.country], [T("النوع", "Type"), d.type], [T("الجنسية", "Nationality"), d.nationality], [T("عدد المتقدمين", "Applicants"), d.applicants]];
           break;
       }
       openModal(title, rows.filter(Boolean));
@@ -307,7 +307,7 @@ function openModal(title, rows) {
   lastFocus = document.activeElement;
   $("#modalTitle").textContent = title;
   $("#modalSummary").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v || "—")}</dd>`).join("");
-  const msg = `مرحباً، أرغب في ${title}:\n` + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n");
+  const msg = T(`مرحباً، أرغب في ${title}:\n`, `Hello, I'd like to make a ${title.toLowerCase()}:\n`) + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n");
   $("#modalWaList").innerHTML = waButtons(msg);
   // Reset extras that "book via agent" may have added on a previous opening
   const extra = $("#modalCallList");
@@ -334,7 +334,7 @@ function openWaPicker(text) {
   const p = $("#waPicker");
   pickerFocus = document.activeElement;
   $("#waPickerList").innerHTML = waButtons(text);
-  putMail($("#waPickerList"), "pickerMail", "استفسار — Green Travel", text);
+  putMail($("#waPickerList"), "pickerMail", T("استفسار", "Inquiry") + " — Green Travel", text);
   p.hidden = false;
   document.body.style.overflow = "hidden";
   $(".wa-num", p).focus();
@@ -360,7 +360,7 @@ function initModal() {
       e.preventDefault();
       const card = btn.closest(".offer");
       const price = card ? $(".price b", card)?.textContent + " " + ($(".price span", card)?.textContent || "") : "";
-      openModal("حجز عرض", [["العرض", btn.dataset.book], price ? ["السعر", price.trim()] : null].filter(Boolean));
+      openModal(T("حجز عرض", "Booking request"), [[T("العرض", "Offer"), btn.dataset.book], price ? [T("السعر", "Price"), price.trim()] : null].filter(Boolean));
     })
   );
 }
@@ -392,7 +392,7 @@ function initSlider() {
   // In RTL, "next" visually moves toward the left (negative scrollLeft)
   $$("[data-slide]").forEach((b) =>
     b.addEventListener("click", () => {
-      const dir = b.dataset.slide === "next" ? -1 : 1;
+      const dir = (b.dataset.slide === "next" ? -1 : 1) * (I18N.en ? -1 : 1);
       track.scrollBy({ left: dir * step(), behavior: "smooth" });
     })
   );
@@ -453,20 +453,20 @@ function initForms() {
   const status = $(".form-status", form);
   const summary = () => {
     const d = Object.fromEntries(new FormData(form));
-    return `مرحباً، أنا ${d.name}\nالجوال: ${d.phone}${d.email ? `\nالبريد: ${d.email}` : ""}\nالخدمة: ${d.service}\n${d.message || ""}`.trim();
+    return T(`مرحباً، أنا ${d.name}\nالجوال: ${d.phone}${d.email ? `\nالبريد: ${d.email}` : ""}\nالخدمة: ${d.service}\n${d.message || ""}`, `Hello, my name is ${d.name}\nMobile: ${d.phone}${d.email ? `\nEmail: ${d.email}` : ""}\nService: ${d.service}\n${d.message || ""}`).trim();
   };
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     status.className = "form-status";
     if (!validate(form)) {
-      status.textContent = "يرجى التحقق من الحقول المطلوبة.";
+      status.textContent = T("يرجى التحقق من الحقول المطلوبة.", "Please check the required fields.");
       status.classList.add("err");
       return;
     }
     const btn = $('button[type="submit"]', form);
     btn.disabled = true;
-    btn.textContent = "جارٍ الإرسال…";
+    btn.textContent = T("جارٍ الإرسال…", "Sending…");
     // ربط النموذج بخدمة استقبال (Formspree/Netlify Forms/خادمكم) عبر data-endpoint على الوسم <form>
     const endpoint = form.dataset.endpoint;
     try {
@@ -476,15 +476,15 @@ function initForms() {
       } else {
         await new Promise((r) => setTimeout(r, 700));
       }
-      status.textContent = "تم استلام طلبك بنجاح! سيتواصل معك مستشار السفر قريباً.";
+      status.textContent = T("تم استلام طلبك بنجاح! سيتواصل معك مستشار السفر قريباً.", "Request received! A travel advisor will contact you shortly.");
       status.classList.add("ok");
       form.reset();
     } catch {
-      status.textContent = "تعذر الإرسال، يرجى المحاولة مجدداً أو التواصل عبر واتساب.";
+      status.textContent = T("تعذر الإرسال، يرجى المحاولة مجدداً أو التواصل عبر واتساب.", "Couldn't send. Please try again or contact us on WhatsApp.");
       status.classList.add("err");
     } finally {
       btn.disabled = false;
-      btn.textContent = "إرسال الطلب";
+      btn.textContent = T("إرسال الطلب", "Send request");
     }
   });
 
@@ -492,7 +492,7 @@ function initForms() {
     const name = $("#cName"), phone = $("#cPhone");
     if (!name.value.trim() || !phone.value.trim()) {
       validate(form);
-      return toast("أدخل اسمك ورقم جوالك أولاً");
+      return toast(T("أدخل اسمك ورقم جوالك أولاً", "Enter your name and mobile number first"));
     }
     openWaPicker(summary());
   });
@@ -502,10 +502,10 @@ function initForms() {
     const input = $("#nlEmail");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value)) {
       input.focus();
-      return toast("يرجى إدخال بريد إلكتروني صحيح");
+      return toast(T("يرجى إدخال بريد إلكتروني صحيح", "Please enter a valid email address"));
     }
     input.value = "";
-    toast("شكراً لاشتراكك! ستصلك أحدث العروض قريباً ✈️");
+    toast(T("شكراً لاشتراكك! ستصلك أحدث العروض قريباً", "Thanks for subscribing! Our latest deals are on the way"));
   });
 }
 
