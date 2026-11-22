@@ -1,5 +1,5 @@
 /* =========================================================
-   أجنحة للسفر والسياحة — Interactions
+   جرين ترافيل Green Travel — Interactions
    عدّل بيانات التواصل من الكائن CONFIG أدناه فقط.
    ========================================================= */
 const CONFIG = {
@@ -378,7 +378,7 @@ function initReveal() {
 function initMarquee() {
   const track = $(".marquee__track");
   track.innerHTML += track.innerHTML;
-  $$("span", track).slice(track.children.length / 2).forEach((s) => s.setAttribute("aria-hidden", "true"));
+  [...track.children].slice(track.children.length / 2).forEach((s) => s.setAttribute("aria-hidden", "true"));
 }
 
 /* ---------- Contact & newsletter ---------- */
