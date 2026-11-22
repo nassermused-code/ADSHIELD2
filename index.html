@@ -36,7 +36,7 @@
     "logo": "https://greentravel.us/assets/img/logo-512.png",
     "url": "https://greentravel.us/",
     "image": "https://greentravel.us/assets/img/hero.webp",
-    "telephone": "+000000000000",
+    "telephone": ["+1-708-963-2552", "+1-708-940-2929", "+1-331-213-3768", "+1-708-953-2244"],
     "email": "info@greentravel.us",
     "priceRange": "$$",
     "aggregateRating": { "@type": "AggregateRating", "ratingValue": "4.9", "reviewCount": "1280" }
@@ -50,7 +50,7 @@
   <div class="topbar">
     <div class="container topbar__inner">
       <div class="topbar__info">
-        <a href="tel:+000000000000" data-config="phone-link"><svg class="i"><use href="#i-phone"/></svg><span data-config="phone">+000 000 000 000</span></a>
+        <a href="tel:+17089632552" data-config="phone-link"><svg class="i"><use href="#i-phone"/></svg><span data-config="phone">+1 (708) 963-2552</span></a>
         <a href="mailto:info@greentravel.us" data-config="email-link"><svg class="i"><use href="#i-mail"/></svg><span data-config="email">info@greentravel.us</span></a>
         <span class="hide-sm"><svg class="i"><use href="#i-clock"/></svg>دعم على مدار الساعة 24/7</span>
       </div>
@@ -582,8 +582,7 @@
           <h2>مستشارو السفر بانتظارك</h2>
           <p>أرسل طلبك وسنعود إليك بأفضل الخيارات والأسعار خلال 30 دقيقة في أوقات العمل.</p>
           <ul class="contact__list">
-            <li><span class="contact__ic"><svg class="i"><use href="#i-phone"/></svg></span><div><small>اتصل بنا</small><a href="tel:+000000000000" data-config="phone-link"><span data-config="phone">+000 000 000 000</span></a></div></li>
-            <li><span class="contact__ic contact__ic--wa"><svg class="i"><use href="#i-whatsapp"/></svg></span><div><small>واتساب</small><a href="#" data-whatsapp="مرحباً، أرغب في حجز رحلة"><span data-config="whatsapp-display">+000 000 000 000</span></a></div></li>
+            <li class="contact__nums"><span class="contact__ic contact__ic--wa"><svg class="i"><use href="#i-whatsapp"/></svg></span><div><small>اتصال وواتساب على جميع الأرقام</small><div class="num-list" id="numbersList"><div class="num-row"><a class="num-row__tel" href="tel:+17089632552" dir="ltr">+1 (708) 963-2552</a></div><div class="num-row"><a class="num-row__tel" href="tel:+17089402929" dir="ltr">+1 (708) 940-2929</a></div><div class="num-row"><a class="num-row__tel" href="tel:+13312133768" dir="ltr">+1 (331) 213-3768</a></div><div class="num-row"><a class="num-row__tel" href="tel:+17089532244" dir="ltr">+1 (708) 953-2244</a></div></div></div></li>
             <li><span class="contact__ic"><svg class="i"><use href="#i-mail"/></svg></span><div><small>البريد الإلكتروني</small><a href="mailto:info@greentravel.us" data-config="email-link"><span data-config="email">info@greentravel.us</span></a></div></li>
           </ul>
         </div>
@@ -592,7 +591,7 @@
           <h3>طلب حجز أو استفسار</h3>
           <div class="form-row">
             <div class="field"><label for="cName">الاسم الكامل</label><input id="cName" name="name" required autocomplete="name"></div>
-            <div class="field"><label for="cPhone">رقم الجوال</label><input id="cPhone" name="phone" type="tel" required autocomplete="tel" dir="ltr" placeholder="+000 000 000 000"></div>
+            <div class="field"><label for="cPhone">رقم الجوال</label><input id="cPhone" name="phone" type="tel" required autocomplete="tel" dir="ltr" placeholder="+1 (000) 000-0000"></div>
           </div>
           <div class="form-row">
             <div class="field"><label for="cEmail">البريد الإلكتروني</label><input id="cEmail" name="email" type="email" autocomplete="email" dir="ltr"></div>
@@ -657,11 +656,22 @@
       <div class="modal__icon"><svg class="i"><use href="#i-plane"/></svg></div>
       <h3 id="modalTitle">ملخص طلبك</h3>
       <dl class="summary" id="modalSummary"></dl>
-      <p class="modal__note">سيقوم مستشار السفر بالتحقق من التوفر وإرسال أفضل الأسعار لك. أكمل الطلب عبر واتساب للحصول على رد أسرع.</p>
+      <p class="modal__note">سيقوم مستشار السفر بالتحقق من التوفر وإرسال أفضل الأسعار لك. أكمل الطلب عبر واتساب على أي من أرقامنا للحصول على رد أسرع.</p>
       <div class="modal__actions">
-        <a href="#" class="btn btn--whatsapp" id="modalWa" target="_blank" rel="noopener"><svg class="i"><use href="#i-whatsapp"/></svg>أكمل عبر واتساب</a>
+        <div class="wa-list" id="modalWaList"></div>
         <a href="#contact" class="btn btn--ghost" data-close id="modalForm">عبر نموذج التواصل</a>
       </div>
+    </div>
+  </div>
+  <!-- WhatsApp number picker -->
+  <div class="modal" id="waPicker" hidden>
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__dialog modal__dialog--sm" role="dialog" aria-modal="true" aria-labelledby="waPickerTitle">
+      <button class="modal__close" data-close aria-label="إغلاق">×</button>
+      <div class="modal__icon modal__icon--wa"><svg class="i"><use href="#i-whatsapp"/></svg></div>
+      <h3 id="waPickerTitle">تواصل معنا عبر واتساب</h3>
+      <p class="modal__note">اختر أي رقم، جميع أرقامنا تستقبل الرسائل والمكالمات.</p>
+      <div class="wa-list" id="waPickerList"></div>
     </div>
   </div>
 

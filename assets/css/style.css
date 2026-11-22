@@ -547,3 +547,23 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   .reveal.is-in .service__icon .i, .reveal.is-in .step__icon .i, .reveal.is-in .contact__ic .i, .reveal.is-in .offer__meta .i,
   .hero .eyebrow .i, .hero__badges .i, .search__tab .i { stroke-dasharray: none; }
 }
+
+/* ---------- Multiple phone / WhatsApp numbers ---------- */
+.contact__nums { align-items: flex-start !important; }
+.contact__nums > div { flex: 1; min-width: 0; }
+.num-list { display: grid; gap: 8px; margin-top: 6px; }
+.num-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.contact__list .num-row__tel { font-weight: 600; direction: ltr; unicode-bidi: isolate; }
+.num-row__actions { display: flex; gap: 6px; }
+.chip-btn { display: inline-flex; align-items: center; gap: 5px; padding: .35em .8em; border-radius: 999px; font-size: .82rem; font-weight: 600; background: var(--sky-100); color: var(--sky-500) !important; transition: transform .2s var(--ease), background .2s; }
+.chip-btn:hover { transform: translateY(-2px); }
+.chip-btn--wa { background: #e4f9ec; color: #1aa356 !important; }
+.chip-btn--wa:hover { background: var(--green-wa); color: #fff !important; }
+.wa-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 12px; }
+.wa-num { display: flex; align-items: center; justify-content: center; gap: 8px; padding: .75em 1em; border-radius: 14px; background: var(--green-wa); color: #fff; font-weight: 600; box-shadow: 0 6px 16px rgba(37, 211, 102, .28); transition: transform .2s var(--ease), background .2s; }
+.wa-num:hover { transform: translateY(-2px); background: #1fb658; }
+.wa-num .i { width: 20px; height: 20px; }
+.modal__dialog--sm { width: min(500px, 100%); }
+.wa-num span { white-space: nowrap; }
+.modal__icon--wa { background: #e4f9ec; color: #1aa356; }
+@media (max-width: 420px) { .wa-list { grid-template-columns: 1fr; } }

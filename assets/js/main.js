@@ -3,11 +3,15 @@
    عدّل بيانات التواصل من الكائن CONFIG أدناه فقط.
    ========================================================= */
 const CONFIG = {
-  phone: "+000000000000",          // رقم الهاتف بالصيغة الدولية بدون مسافات
-  phoneDisplay: "+000 000 000 000",
-  whatsapp: "000000000000",        // رقم واتساب بالصيغة الدولية بدون + أو أصفار بادئة
+  // أرقام الهاتف وواتساب (كل رقم يستقبل المكالمات ورسائل واتساب)
+  // intl: الرقم بالصيغة الدولية بدون + أو مسافات — display: طريقة عرضه
+  numbers: [
+    { intl: "17089632552", display: "+1 (708) 963-2552" },
+    { intl: "17089402929", display: "+1 (708) 940-2929" },
+    { intl: "13312133768", display: "+1 (331) 213-3768" },
+    { intl: "17089532244", display: "+1 (708) 953-2244" },
+  ],
   email: "info@greentravel.us",
-  address: "الشارع الرئيسي، المدينة",
 };
 
 const AIRPORTS = [
@@ -25,7 +29,12 @@ const AIRPORTS = [
 
 const $ = (s, ctx = document) => ctx.querySelector(s);
 const $$ = (s, ctx = document) => [...ctx.querySelectorAll(s)];
-const waLink = (text) => `https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(text)}`;
+const waLink = (text, intl = CONFIG.numbers[0].intl) => `https://wa.me/${intl}?text=${encodeURIComponent(text)}`;
+const waIcon = '<svg class="i"><use href="#i-whatsapp"/></svg>';
+const waButtons = (text) =>
+  CONFIG.numbers
+    .map((n) => `<a class="wa-num" href="${waLink(text, n.intl)}" target="_blank" rel="noopener">${waIcon}<span dir="ltr">${n.display}</span></a>`)
+    .join("");
 const toArabicDate = (v) => {
   if (!v) return "";
   const d = new Date(v.length === 7 ? v + "-01" : v);
@@ -38,16 +47,31 @@ document.documentElement.classList.remove("no-js");
 
 /* ---------- Config injection ---------- */
 function applyConfig() {
-  $$('[data-config="phone"]').forEach((el) => (el.textContent = CONFIG.phoneDisplay));
-  $$('[data-config="whatsapp-display"]').forEach((el) => (el.textContent = CONFIG.phoneDisplay));
+  const first = CONFIG.numbers[0];
+  $$('[data-config="phone"]').forEach((el) => (el.textContent = first.display));
+  $$('[data-config="phone-link"]').forEach((el) => (el.href = `tel:+${first.intl}`));
   $$('[data-config="email"]').forEach((el) => (el.textContent = CONFIG.email));
-  $$('[data-config="address"]').forEach((el) => (el.textContent = CONFIG.address));
-  $$('[data-config="phone-link"]').forEach((el) => (el.href = `tel:${CONFIG.phone}`));
   $$('[data-config="email-link"]').forEach((el) => (el.href = `mailto:${CONFIG.email}`));
+
+  // Contact section: every number can be called or messaged on WhatsApp
+  const list = $("#numbersList");
+  if (list) {
+    list.innerHTML = CONFIG.numbers
+      .map(
+        (n) => `<div class="num-row"><a class="num-row__tel" href="tel:+${n.intl}" dir="ltr">${n.display}</a>
+          <span class="num-row__actions"><a class="chip-btn" href="tel:+${n.intl}" aria-label="اتصال ${n.display}"><svg class="i"><use href="#i-phone"/></svg>اتصال</a>
+          <a class="chip-btn chip-btn--wa" href="${waLink("مرحباً، أرغب في حجز رحلة", n.intl)}" target="_blank" rel="noopener" aria-label="واتساب ${n.display}">${waIcon}واتساب</a></span></div>`
+      )
+      .join("");
+  }
+
+  // Any other WhatsApp button opens a picker with all numbers
   $$("[data-whatsapp]").forEach((el) => {
     el.href = waLink(el.dataset.whatsapp);
-    el.target = "_blank";
-    el.rel = "noopener";
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      openWaPicker(el.dataset.whatsapp);
+    });
   });
   $("#year").textContent = new Date().getFullYear();
 }
@@ -271,7 +295,7 @@ function openModal(title, rows) {
   $("#modalTitle").textContent = title;
   $("#modalSummary").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v || "—")}</dd>`).join("");
   const msg = `مرحباً، أرغب في ${title}:\n` + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n");
-  $("#modalWa").href = waLink(msg);
+  $("#modalWaList").innerHTML = waButtons(msg);
   $("#modalForm").onclick = () => {
     $("#cMsg").value = rows.map(([k, v]) => `${k}: ${v}`).join("\n");
   };
@@ -284,9 +308,30 @@ function closeModal() {
   document.body.style.overflow = "";
   lastFocus && lastFocus.focus({ preventScroll: true });
 }
+/* ---------- WhatsApp number picker ---------- */
+let pickerFocus;
+function openWaPicker(text) {
+  const p = $("#waPicker");
+  pickerFocus = document.activeElement;
+  $("#waPickerList").innerHTML = waButtons(text);
+  p.hidden = false;
+  document.body.style.overflow = "hidden";
+  $(".wa-num", p).focus();
+}
+function closeWaPicker() {
+  $("#waPicker").hidden = true;
+  if ($("#modal").hidden) document.body.style.overflow = "";
+  pickerFocus && pickerFocus.focus({ preventScroll: true });
+}
 function initModal() {
   $$("#modal [data-close]").forEach((el) => el.addEventListener("click", closeModal));
-  document.addEventListener("keydown", (e) => e.key === "Escape" && !$("#modal").hidden && closeModal());
+  $$("#waPicker [data-close]").forEach((el) => el.addEventListener("click", closeWaPicker));
+  $("#waPickerList").addEventListener("click", (e) => e.target.closest(".wa-num") && setTimeout(closeWaPicker, 300));
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!$("#waPicker").hidden) return closeWaPicker();
+    if (!$("#modal").hidden) closeModal();
+  });
 
   // "Book" buttons on offers
   $$("[data-book]").forEach((btn) =>
@@ -428,7 +473,7 @@ function initForms() {
       validate(form);
       return toast("أدخل اسمك ورقم جوالك أولاً");
     }
-    window.open(waLink(summary()), "_blank", "noopener");
+    openWaPicker(summary());
   });
 
   $("#newsletter").addEventListener("submit", (e) => {
