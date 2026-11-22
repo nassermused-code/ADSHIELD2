@@ -255,7 +255,7 @@
   function routeOptions(o, d) {
     const km = dist(o, d);
     const domestic = o.cc === d.cc;
-    const small = o.rank === 2 || d.rank === 2;
+    const small = o.rank >= 2 || d.rank >= 2;
     const out = [];
     for (const cr of CARRIERS) {
       if (cr.type === "low" && km > 5200) continue;
@@ -347,10 +347,13 @@
   const todayIso = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   const cityName = (a) => a.ar || a.city || a.name;
 
+  // Airline logos live in assets/img/airlines/<IATA code>.webp; a lettered tile is the fallback
   function logoHtml(cr) {
-    const tile = cr.c && document.querySelector(`.airline[data-code="${cr.c}"] svg`);
-    if (tile) return `<span class="fl__logo" style="--brand:${cr.col}">${tile.outerHTML}</span>`;
-    return `<span class="fl__logo fl__logo--txt" style="--brand:${cr.col}">${cr.c || "✈"}</span>`;
+    if (cr.c) {
+      return `<span class="fl__logo" style="--brand:${cr.col}"><img src="assets/img/airlines/${cr.c}.webp" alt="${esc(cr.n)}" width="40" height="40" loading="lazy"
+        onerror="this.parentNode.classList.add('fl__logo--txt');this.parentNode.textContent='${cr.c}'"></span>`;
+    }
+    return `<span class="fl__logo fl__logo--txt" style="--brand:${cr.col}">✈</span>`;
   }
 
   /* ---------- Results view ---------- */

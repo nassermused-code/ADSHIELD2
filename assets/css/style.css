@@ -872,3 +872,8 @@ body.is-results .hero__bg { inset-block-end: 60px; border-radius: 0 0 28px 28px;
 .hero { z-index: 3; }
 .search { z-index: 20; }
 .ac, .pax { z-index: 60; }
+
+/* Airline logo images in results */
+.fl__logo { width: 52px; height: 52px; overflow: hidden; padding: 4px; }
+.fl__logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 10px; display: block; }
+.fl__air b { font-size: 1rem; }
