@@ -167,6 +167,7 @@ function initSearch() {
   const todayIso = iso(today);
   $$('input[type="date"]').forEach((i) => (i.min = todayIso));
   const linkDates = (a, b) => {
+    if (!a || !b) return;
     a.addEventListener("change", () => {
       b.min = a.value || todayIso;
       if (b.value && b.value < a.value) b.value = a.value;
@@ -511,14 +512,8 @@ function initForms() {
 
 /* ---------- Boot ---------- */
 document.addEventListener("DOMContentLoaded", () => {
-  applyConfig();
-  initHeader();
-  initSearch();
-  initModal();
-  initFilters();
-  initSlider();
-  initCounters();
-  initReveal();
-  initMarquee();
-  initForms();
+  // Each part is optional so the same script also runs on pages that only have some sections (e.g. b2b.html)
+  [applyConfig, initHeader, initSearch, initModal, initFilters, initSlider, initCounters, initReveal, initMarquee, initForms].forEach((fn) => {
+    try { fn(); } catch (e) { /* section not on this page */ }
+  });
 });

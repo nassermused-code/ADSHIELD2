@@ -343,7 +343,10 @@
           legRet = buildLeg(back, q.d, q.o, returnIso, rkey);
         }
         per = Math.round(per);
-        out.push({ id: key, cr: opt.cr, legs: legRet ? [legOut, legRet] : [legOut], stops: opt.via ? 1 : 0, per, total: Math.round(per * paxF), dur: legOut.dur + (legRet ? legRet.dur : 0) });
+        // Partner portal: everything shown is the partner's price (our cost + partner fee); keep the public fare for reference
+        const pub = per;
+        if (window.GTB2B && window.GTB2B.active) per = window.GTB2B.price(pub).partner;
+        out.push({ id: key, cr: opt.cr, legs: legRet ? [legOut, legRet] : [legOut], stops: opt.via ? 1 : 0, per, pub, total: Math.round(per * paxF), dur: legOut.dur + (legRet ? legRet.dur : 0) });
       }
     });
     return out;
@@ -447,6 +450,11 @@
       if (b) bookOnline(state.results.find((r) => r.id === b.dataset.bookFlight));
       const a = e.target.closest("[data-book-agent]");
       if (a) bookViaAgent(state.results.find((r) => r.id === a.dataset.bookAgent));
+      const q = e.target.closest("[data-b2b-quote]");
+      if (q && window.GTB2B) {
+        const r = state.results.find((x) => x.id === q.dataset.b2bQuote);
+        window.GTB2B.openQuote({ r, rows: flightRows(r), state, logo: logoHtml(r.cr), pax: state.pax, paxLabel: $("#paxLabel") ? $("#paxLabel").textContent : "", cabin: CABIN_AR[state.cabin], legs: r.legs.map((l) => ({ from: l.from.code, to: l.to.code, fromCity: cityName(l.from), toCity: cityName(l.to), dep: hm(l.dep), arr: hm(l.arr), plus: l.plus, date: dateAr(l.dateIso, { weekday: "short", day: "numeric", month: "short", year: "numeric" }), dur: durAr(l.dur), via: l.via ? l.via.code : "" })) });
+      }
     });
     return sec;
   }
@@ -502,14 +510,15 @@
     list.sort(sorters[state.sort]);
     const n = state.pax.adults + state.pax.children + state.pax.infants;
     $("#resCount").textContent = list.length ? T(`${list.length} خيار من ${all.length} · الأسعار بالدولار الأمريكي`, `${list.length} of ${all.length} options · prices in US dollars`) : "";
+    const b2b = window.GTB2B && window.GTB2B.active;
     $("#resList").innerHTML = list.length
       ? list.map((r, i) => `<article class="fl" style="--d:${Math.min(i, 8) * 60}ms">
           ${r.id === byCheap.id ? `<span class="fl__badge">${T("الأرخص", "Cheapest")}</span>` : r.id === byFast.id ? `<span class="fl__badge fl__badge--fast">${T("الأسرع", "Fastest")}</span>` : ""}
           <div class="fl__air">${logoHtml(r.cr)}<div><b>${esc(r.cr.n)}</b><small>${CABIN_AR[state.cabin]}${r.cr.type === "low" ? T(" · منخفض التكلفة", " · Low-cost") : ""}</small></div></div>
           <div class="fl__legs">${r.legs.map((l, j) => legHtml(l, r.legs.length > 1 ? (j ? T("العودة", "Return") : T("الذهاب", "Depart")) : T("الذهاب", "Depart"))).join("")}</div>
-          <div class="fl__price"><small>${T("تقديري للفرد", "Est. per person")}</small><b dir="ltr">${usd.format(r.per)}</b><small>${n > 1 ? `${T("الإجمالي", "Total")} <span dir="ltr">${usd.format(r.total)}</span> · ${n} ${T("مسافرين", "travelers")}` : r.legs.length > 1 ? T("ذهاب وعودة", "Round trip") : T("ذهاب فقط", "One way")}</small>
+          ${b2b ? b2bPriceHtml(r, n) : `<div class="fl__price"><small>${T("تقديري للفرد", "Est. per person")}</small><b dir="ltr">${usd.format(r.per)}</b><small>${n > 1 ? `${T("الإجمالي", "Total")} <span dir="ltr">${usd.format(r.total)}</span> · ${n} ${T("مسافرين", "travelers")}` : r.legs.length > 1 ? T("ذهاب وعودة", "Round trip") : T("ذهاب فقط", "One way")}</small>
             <button type="button" class="btn btn--accent btn--sm" data-book-flight="${r.id}"><svg class="i"><use href="#i-ticket"/></svg>${T("احجز الآن", "Book now")}</button>
-            <button type="button" class="btn btn--agent btn--sm" data-book-agent="${r.id}"><svg class="i"><use href="#i-headset"/></svg>${T("احجز عبر الوكيل", "Book with an agent")}</button></div>
+            <button type="button" class="btn btn--agent btn--sm" data-book-agent="${r.id}"><svg class="i"><use href="#i-headset"/></svg>${T("احجز عبر الوكيل", "Book with an agent")}</button></div>`}
         </article>`).join("")
       : `<div class="res-empty"><svg class="i"><use href="#i-search"/></svg><h3>${T("لا توجد نتائج مطابقة للفلاتر", "No flights match your filters")}</h3><p>${T("غيّر الفلاتر أو أعد ضبطها لرؤية كل الخيارات.", "Change or reset the filters to see all options.")}</p></div>`;
   }
@@ -567,6 +576,18 @@
   }
 
   /* ---------- Booking: two options ---------- */
+  // Partner (B2B) price block: partner cost, suggested selling price and profit
+  function b2bPriceHtml(r, n) {
+    const p = window.GTB2B.price(r.pub);
+    const k = r.total / r.per; // passenger weighting used for totals
+    return `<div class="fl__price fl__price--b2b">
+      <small>${T("سعرك للفرد", "Your price / person")}</small><b dir="ltr">${usd.format(p.partner)}</b>
+      <small>${T("سعر البيع المقترح", "Suggested sell")} <span dir="ltr">${usd.format(p.sell)}</span></small>
+      <span class="b2b-profit">${T("ربحك", "Your profit")} <b dir="ltr">${usd.format(p.profit * k)}</b>${n > 1 ? ` · ${n} ${T("مسافرين", "travelers")}` : ""}</span>
+      <button type="button" class="btn btn--accent btn--sm" data-b2b-quote="${r.id}"><svg class="i"><use href="#i-ticket"/></svg>${T("إنشاء عرض سعر", "Create quote")}</button>
+    </div>`;
+  }
+
   function flightRows(r) {
     const n = state.pax.adults + state.pax.children + state.pax.infants;
     const legTxt = (l) => `${dateAr(l.dateIso, { weekday: "short", day: "numeric", month: "long" })} · ${hm(l.dep)} ${l.from.code} ${T("←", "→")} ${hm(l.arr)}${l.plus ? "(+" + l.plus + ")" : ""} ${l.to.code} · ${l.via ? T("توقف في ", "stop in ") + l.via.code : T("مباشر", "nonstop")}`;
