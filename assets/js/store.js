@@ -17,7 +17,7 @@ window.GTDB = (() => {
   const STAFF_DOMAIN = "staff.greentravel.us"; // staff sign in with a username; this turns it into their login id
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, storageKey: "gt-auth", autoRefreshToken: true } });
 
-  const cache = { staff: [], partners: [], bookings: [], payments: [], expenses: [], tasks: [], log: [] };
+  const cache = { staff: [], partners: [], bookings: [], payments: [], expenses: [], tasks: [], log: [], journal: [] };
   const listeners = [];
   let profile = null;
   const notify = () => listeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
@@ -27,10 +27,10 @@ window.GTDB = (() => {
   const mapStaff = (r) => ({ id: r.id, kind: r.kind, role: r.kind, username: r.username || "", email: r.email || "", name: r.name, title: r.title, phone: r.phone, status: r.status, perms: r.perms || [], lastLogin: r.last_login, created: (r.created_at || "").slice(0, 10) });
   const mapPricing = (p) => (p ? { mode: p.mode, flatAll: +p.flat_all, pctAll: +p.pct_all, flat: +p.flat, threshold: +p.threshold, pct: +p.pct, publicMarkup: +p.public_markup } : {});
   const mapPartner = (r, pr) => ({ id: r.id, email: r.email, agency: r.agency, contact: r.contact, phone: r.phone, contactEmail: r.contact_email, website: r.website, logo: r.logo, sellMarkup: +r.sell_markup, status: r.status, creditLimit: +r.credit_limit, created: (r.created_at || "").slice(0, 10), pricing: mapPricing(pr) });
-  const mapBooking = (r, c) => ({ id: r.id, created: r.created, source: r.source, partnerId: r.partner_id, status: r.status, customer: Object.assign({ name: "", phone: "", email: "" }, r.customer || {}), route: r.route, airline: r.airline, cabin: r.cabin, depart: r.depart || "", ret: r.ret || "", pax: r.pax, travelers: r.travelers || [], pnr: r.pnr, tickets: r.tickets || [], sell: +r.sell, notes: r.notes, assignedTo: r.assigned_to || "", cost: c ? +c.cost : 0, fee: c ? +c.fee : 0 });
+  const mapBooking = (r, c) => ({ id: r.id, created: r.created, source: r.source, partnerId: r.partner_id, status: r.status, customer: Object.assign({ name: "", phone: "", email: "" }, r.customer || {}), route: r.route, airline: r.airline, cabin: r.cabin, depart: r.depart || "", ret: r.ret || "", pax: r.pax, travelers: r.travelers || [], pnr: r.pnr, tickets: r.tickets || [], sell: +r.sell, notes: r.notes, assignedTo: r.assigned_to || "", cost: c ? +c.cost : 0, fee: c ? +c.fee : 0, segments: r.segments || [], baggage: r.baggage || "", ticketedAt: r.ticketed_at || "", reminders: r.reminders || {} });
   const bookingRow = (b) => {
     const r = {};
-    const m = { status: "status", source: "source", partnerId: "partner_id", customer: "customer", route: "route", airline: "airline", cabin: "cabin", depart: "depart", ret: "ret", pax: "pax", travelers: "travelers", pnr: "pnr", tickets: "tickets", sell: "sell", notes: "notes", assignedTo: "assigned_to" };
+    const m = { status: "status", source: "source", partnerId: "partner_id", customer: "customer", route: "route", airline: "airline", cabin: "cabin", depart: "depart", ret: "ret", pax: "pax", travelers: "travelers", pnr: "pnr", tickets: "tickets", sell: "sell", notes: "notes", assignedTo: "assigned_to", segments: "segments", baggage: "baggage" };
     Object.entries(m).forEach(([k, col]) => { if (k in b) r[col] = b[k]; });
     if ("depart" in r) r.depart = r.depart || null;
     if ("ret" in r) r.ret = r.ret || null;
@@ -39,7 +39,8 @@ window.GTDB = (() => {
     return r;
   };
   const mapPayment = (r) => ({ id: r.id, date: r.date, dir: r.dir, amount: +r.amount, method: r.method, bookingId: r.booking_id, partnerId: r.partner_id, ref: r.ref, note: r.note, by: r.created_by });
-  const mapExpense = (r) => ({ id: r.id, date: r.date, category: r.category, amount: +r.amount, note: r.note });
+  const mapExpense = (r) => ({ id: r.id, date: r.date, category: r.category, amount: +r.amount, note: r.note, method: r.method || "bank" });
+  const mapJournal = (r) => ({ id: r.id, date: r.date, memo: r.memo, lines: (r.lines || []).map((l) => ({ account: String(l.account), debit: +l.debit || 0, credit: +l.credit || 0, note: l.note || "" })) });
   const mapTask = (r) => ({ id: r.id, title: r.title, details: r.details, assignee: r.assignee, due: r.due || "", priority: r.priority, status: r.status, bookingId: r.booking_id, created: r.created, createdBy: r.created_by, doneAt: r.done_at || "" });
 
   /* ---------- Load everything this user may see ---------- */
@@ -55,7 +56,7 @@ window.GTDB = (() => {
     if (!profile || profile.kind === "partner" || profile.status !== "active") { notify(); return; }
     const owner = profile.kind === "owner";
     const q = (t, sel = "*") => sb.from(t).select(sel).range(0, 9999);
-    const [st, pa, bk, pay, tk, costs, pricing, exp, lg] = await Promise.all([
+    const [st, pa, bk, pay, tk, costs, pricing, exp, lg, jr] = await Promise.all([
       q("profiles").in("kind", ["owner", "staff"]).order("created_at"),
       q("partners").order("agency"),
       q("bookings").order("created_at", { ascending: false }),
@@ -65,6 +66,7 @@ window.GTDB = (() => {
       owner ? q("partner_pricing") : { data: [] },
       owner ? q("expenses").order("date", { ascending: false }) : { data: [] },
       owner ? sb.from("activity_log").select("*").order("at", { ascending: false }).limit(300) : { data: [] },
+      owner ? q("journal_entries").order("date", { ascending: false }) : { data: [] },
     ]);
     const costBy = new Map((costs.data || []).map((c) => [c.booking_id, c]));
     const priceBy = new Map((pricing.data || []).map((p) => [p.partner_id, p]));
@@ -74,6 +76,7 @@ window.GTDB = (() => {
     cache.payments = (pay.data || []).map(mapPayment);
     cache.tasks = (tk.data || []).map(mapTask);
     cache.expenses = (exp.data || []).map(mapExpense);
+    cache.journal = (jr.data || []).map(mapJournal);
     cache.log = (lg.data || []).map((r) => ({ at: r.at, who: r.who, action: r.action, ref: r.ref }));
     const me = cache.staff.find((s) => s.id === profile.id);
     if (me) profile = me;
@@ -138,11 +141,12 @@ window.GTDB = (() => {
     async insert(col, obj) {
       let res;
       if (col === "tasks") res = await sb.from("tasks").insert({ title: obj.title, details: obj.details || "", assignee: obj.assignee || null, due: obj.due || null, priority: obj.priority || "normal", status: obj.status || "open", booking_id: obj.bookingId || "" }).select().single();
-      else if (col === "expenses") res = await sb.from("expenses").insert({ date: obj.date, category: obj.category, amount: obj.amount, note: obj.note || "" }).select().single();
+      else if (col === "expenses") res = await sb.from("expenses").insert({ date: obj.date, category: obj.category, amount: obj.amount, note: obj.note || "", method: obj.method || "bank" }).select().single();
+      else if (col === "journal") res = await sb.from("journal_entries").insert({ date: obj.date, memo: obj.memo || "", lines: obj.lines }).select().single();
       else if (col === "payments") res = await sb.from("payments").insert({ date: obj.date, dir: obj.dir, amount: obj.amount, method: obj.method, booking_id: obj.bookingId || null, partner_id: obj.partnerId || null, ref: obj.ref || "", note: obj.note || "" }).select().single();
       else throw new Error("insert " + col);
       fail(res.error);
-      const item = { tasks: mapTask, expenses: mapExpense, payments: mapPayment }[col](res.data);
+      const item = { tasks: mapTask, expenses: mapExpense, payments: mapPayment, journal: mapJournal }[col](res.data);
       cache[col].unshift(item);
       notify();
       return item;
@@ -169,7 +173,7 @@ window.GTDB = (() => {
       return api.get(col, id);
     },
     async remove(col, id) {
-      const table = { bookings: "bookings", payments: "payments", expenses: "expenses", tasks: "tasks" }[col];
+      const table = { bookings: "bookings", payments: "payments", expenses: "expenses", tasks: "tasks", journal: "journal_entries" }[col];
       if (!table) throw new Error("remove " + col);
       fail((await sb.from(table).delete().eq("id", id)).error);
       cache[col] = cache[col].filter((x) => x.id !== id);
@@ -184,6 +188,18 @@ window.GTDB = (() => {
       return api.get("bookings", data.id) || mapBooking(data);
     },
     async toggleTask(id) { const { data, error } = await sb.rpc("toggle_task", { p_id: id }); fail(error); await load(); return data; },
+    // Email a ticket ("ticket") or a reminder ("week" / "day") to the customer. Throws "email_not_configured" until the email service is set up.
+    async sendEmail(kind, bookingId, to) {
+      const { data, error } = await sb.functions.invoke("send-email", { body: { kind, bookingId, to: to || undefined } });
+      if (error) {
+        let msg = error.message;
+        try { const j = await error.context.json(); msg = j.error || msg; } catch (e) {}
+        throw new Error(msg);
+      }
+      if (data && data.error) throw new Error(data.error);
+      await load();
+      return data;
+    },
     log(action, ref) { sb.rpc("log_action", { p_action: String(action || ""), p_ref: String(ref || "") }).then(() => {}, () => {}); },
 
     /* ---------- Public website ---------- */
@@ -201,7 +217,7 @@ window.GTDB = (() => {
     paidOut: (bookingId) => cache.payments.filter((p) => p.bookingId === bookingId && p.dir === "out").reduce((s, p) => s + p.amount, 0),
     partnerBalance(partnerId) {
       const charges = cache.bookings.filter((b) => b.partnerId === partnerId && ["confirmed", "ticketed"].includes(b.status)).reduce((s, b) => s + b.sell, 0);
-      const paid = cache.payments.filter((p) => p.partnerId === partnerId && p.dir === "in").reduce((s, p) => s + p.amount, 0);
+      const paid = cache.payments.filter((p) => p.partnerId === partnerId && (p.dir === "in" || p.dir === "refund")).reduce((s, p) => s + (p.dir === "in" ? p.amount : -p.amount), 0);
       return { charges, paid, balance: charges - paid };
     },
   };

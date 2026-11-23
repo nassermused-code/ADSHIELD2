@@ -728,6 +728,7 @@
           route: `${state.o.code} → ${state.d.code}`, airline: r.cr.n, cabin: state.cabin,
           depart: r.legs[0].dateIso, ret: r.legs[1] ? r.legs[1].dateIso : "", pax: names.length || 1, travelers: names,
           sell: r.total, notes: [people.join("\n"), d.notes].filter(Boolean).join("\n\n"),
+          segments: r.legs.map((l) => ({ from: l.from.code, to: l.to.code, date: l.dateIso, dep: hm(l.dep), arr: hm(l.arr), arrDate: l.plus ? addDays(l.dateIso, l.plus) : l.dateIso, via: l.via ? l.via.code : "" })),
         });
       } catch (err) { console.warn("booking not saved online", err); }
       btn0.disabled = false;

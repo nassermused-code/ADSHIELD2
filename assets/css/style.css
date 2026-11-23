@@ -1313,3 +1313,62 @@ select option:disabled { color: #b5b5b5; }
 }
 .sec-note { margin: 0; text-align: center; font-size: .84rem; color: var(--ink-3); }
 body.is-loading .of-login { opacity: .4; pointer-events: none; }
+
+/* ---------- Accounting, tickets, travel alerts ---------- */
+.kpi-grid--auto { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.ac-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.ac-tabs button { flex: 0 0 auto; border: 1.5px solid var(--line); background: #fff; border-radius: 999px; padding: .5em 1em; font-weight: 600; font-size: .88rem; color: var(--ink-2); cursor: pointer; }
+.ac-tabs button.is-active { background: var(--g-800); border-color: var(--g-800); color: #fff; }
+.ac-bar { align-items: flex-end; }
+.ac-bar .spacer { flex: 1; }
+.fl--inline { display: grid; gap: 2px; }
+.fl--inline span { font-size: .74rem; color: var(--ink-3); }
+.fl--inline input { min-height: 38px; padding: .4em .6em; }
+.pnl tr.sec td { font-weight: 700; color: var(--g-800); padding-top: 14px; border-bottom: 2px solid var(--g-100); }
+.of-grid2.bs { grid-template-columns: 1fr 1fr; }
+.jr .jr-first td { border-top: 2px solid var(--line); }
+.jr .jr-line td { border-bottom: 0; }
+.jr td.jr-cr { padding-inline-start: 34px; }
+.je-line { display: grid; grid-template-columns: 2fr 1fr 1fr 32px; gap: 6px; margin-bottom: 6px; }
+.je-line select, .je-line input, .seg-row input { border: 1.5px solid var(--line); border-radius: 10px; padding: .45em .6em; min-height: 40px; background: #fff; width: 100%; min-width: 0; }
+.je-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 14px; }
+.je-foot .btn--primary { margin-inline-start: auto; }
+.seg-ed { margin-top: 10px; overflow-x: auto; }
+.seg-ed__h, .seg-row { display: grid; grid-template-columns: 1fr .8fr .8fr 1.3fr 1fr 1fr 28px; gap: 6px; min-width: 620px; }
+.seg-ed__h span { font-size: .72rem; color: var(--ink-3); font-weight: 600; }
+.seg-row { margin: 4px 0; align-items: center; }
+.seg-row input[readonly] { background: var(--paper); }
+#segAdd { margin-top: 4px; }
+.tk-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.tk-actions .btn .i { width: 16px; height: 16px; }
+.tk-mail { display: inline-flex; gap: 6px; flex: 1 1 280px; }
+.tk-mail input { flex: 1; min-width: 0; border: 1.5px solid var(--line); border-radius: 999px; padding: .45em .9em; }
+.ticket-doc { background: #fff; }
+.tk-ids { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
+.tk-ids > div, .tk-foot > div { background: var(--g-50); border: 1px solid var(--g-100); border-radius: 12px; padding: 10px 12px; display: grid; gap: 4px; }
+.tk-ids strong { font-size: 1.1rem; }
+.bi { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.bi b { font-size: .8rem; color: var(--ink-2); }
+.bi small { font-size: .7rem; color: var(--ink-3); }
+.tk-h { margin: 16px 0 6px; font-size: .98rem; }
+.tk-h .bi { justify-content: flex-start; }
+.tk-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.tk-notes { margin: 14px 0 0; padding-inline-start: 18px; font-size: .82rem; color: var(--ink-2); display: grid; gap: 4px; }
+.tk-notes small { display: block; color: var(--ink-3); }
+.row-hot td { background: #fff8f8; }
+.row-actions .btn .i { width: 15px; height: 15px; }
+@media (max-width: 860px) {
+  .tk-ids { grid-template-columns: 1fr 1fr; }
+  .of-grid2.bs { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .tk-foot { grid-template-columns: 1fr; }
+  .je-line { grid-template-columns: 1fr 1fr 32px; }
+  .je-line select { grid-column: 1 / -1; }
+}
+@media print {
+  .no-print, [hidden] { display: none !important; }
+  .print-area .tk-ids > div, .print-area .tk-foot > div { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.ac-date { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--ink-3); }
+.ac-date input { border: 1.5px solid var(--line); border-radius: 999px; padding: .4em .8em; min-height: 38px; background: #fff; }

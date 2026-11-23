@@ -366,6 +366,7 @@
             customer: { name: $("#qCustomer").value.trim(), phone: "", email: "" },
             route: q.route, airline: q.airline, cabin: q.cabinKey || "economy",
             depart: (q.legs[0] || {}).iso || "", ret: (q.legs[1] || {}).iso || "", pax: q.paxCount || 1,
+            segments: q.legs.map((l) => ({ from: l.from, to: l.to, date: l.iso, dep: l.dep, arr: l.arr, via: l.via || "" })),
             notes: T("طلب إصدار من بوابة الشركاء · عرض ", "Ticketing request from partner portal · quote ") + q.ref,
           }, ctx.param);
           q.bookingId = res.id;
