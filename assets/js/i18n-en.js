@@ -445,4 +445,11 @@ window.I18N_EN = {
   "المبلغ": "Amount",
   "مدفوعاتي": "My payments",
   "مرجع": "Reference",
+  "اسم المستخدم أو البريد": "Username or email",
+  "إظهار": "Show",
+  "المالك": "Owner",
+  "موظف إصدار": "Ticketing agent",
+  "موظف حجوزات": "Reservations agent",
+  "الأقسام": "Sections",
+  "المالك (عرض)": "Owner (view)",
 };

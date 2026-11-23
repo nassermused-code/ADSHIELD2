@@ -38,16 +38,17 @@
       <div class="pass-head pass-head--form" aria-hidden="true"><span class="pass-head__brand"><img src="assets/img/logo.png" alt="" width="20" height="20">BACK OFFICE</span><span class="barcode"></span></div>
       <h2>دخول الموظفين</h2>
       <p class="muted">المكتب الخلفي لجرين ترافيل: الحجوزات والمحاسبة ووكلاء B2B.</p>
-      <label class="fl"><span>البريد الإلكتروني</span><input id="ofEmail" type="email" dir="ltr" autocomplete="username" required></label>
-      <label class="fl"><span>كلمة المرور</span><input id="ofPass" type="password" dir="ltr" autocomplete="current-password" required></label>
+      <label class="fl"><span>اسم المستخدم أو البريد</span><input id="ofEmail" type="text" dir="ltr" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+      <label class="fl"><span>كلمة المرور</span><span class="pw-row"><input id="ofPass" type="password" dir="ltr" autocomplete="current-password" required><button type="button" class="btn btn--ghost btn--sm" id="ofShowPass" aria-pressed="false">إظهار</button></span></label>
       <button type="submit" class="btn btn--accent btn--block">دخول</button>
       <p class="form-status err" id="ofLoginStatus" role="status" aria-live="polite"></p>
       <div class="demo-note">
         <b>نسخة تجريبية</b>
         <p>البيانات تُحفظ في هذا المتصفح فقط، وكلمات المرور ظاهرة في الكود. للاستخدام الفعلي يجب ربط النظام بخادم آمن.</p>
         <div class="demo-actions">
-          <button type="button" class="btn btn--ghost btn--sm" data-fill="admin@greentravel.us|admin1234">دخول كمدير</button>
-          <button type="button" class="btn btn--ghost btn--sm" data-fill="agent@greentravel.us|agent1234">دخول كوكيل سفر</button>
+          <button type="button" class="btn btn--ghost btn--sm" data-fill="admin|admin1234">المالك</button>
+          <button type="button" class="btn btn--ghost btn--sm" data-fill="ticketing|ticket1234">موظف إصدار</button>
+          <button type="button" class="btn btn--ghost btn--sm" data-fill="agent|agent1234">موظف حجوزات</button>
         </div>
       </div>
       <div class="of-login__links"><a href="index.html">الموقع الرئيسي</a> · <a href="b2b.html">بوابة الشركاء</a> · <button type="button" class="lang-toggle lang-toggle--sm" data-lang-toggle>English</button></div>
@@ -58,15 +59,7 @@
   <div class="of-app" id="ofApp" hidden>
     <aside class="of-side" aria-label="القائمة الرئيسية">
       <a href="#dashboard" class="of-brand"><img src="assets/img/logo.png" alt="" width="40" height="40"><span><b>Green Travel</b><small>المكتب الخلفي</small></span></a>
-      <nav class="of-nav">
-        <a href="#dashboard"><svg class="i"><use href="#i-target"/></svg>لوحة التحكم</a>
-        <a href="#bookings"><svg class="i"><use href="#i-ticket"/></svg>الحجوزات</a>
-        <a href="#payments"><svg class="i"><use href="#i-card"/></svg>المدفوعات</a>
-        <a href="#agents"><svg class="i"><use href="#i-handshake"/></svg>وكلاء B2B</a>
-        <a href="#expenses" data-admin-only><svg class="i"><use href="#i-briefcase"/></svg>المصروفات</a>
-        <a href="#reports" data-admin-only><svg class="i"><use href="#i-list"/></svg>التقارير المالية</a>
-        <a href="#settings" data-admin-only><svg class="i"><use href="#i-shield"/></svg>الإعدادات</a>
-      </nav>
+      <nav class="of-nav" id="ofNav" aria-label="الأقسام"></nav>
       <div class="of-side__foot">
         <div class="of-user" id="ofUser"></div>
         <div class="of-side__links"><a href="index.html">الموقع</a><a href="b2b.html">بوابة الشركاء</a></div>
@@ -77,8 +70,10 @@
       <header class="of-top">
         <button type="button" class="of-burger" id="navToggle" aria-label="القائمة"><span></span><span></span><span></span></button>
         <h1 id="ofTitle">لوحة التحكم</h1>
+        <button type="button" class="profit-toggle" id="profitToggle" aria-pressed="false" hidden></button>
         <span class="of-top__cur" dir="ltr">USD</span>
       </header>
+      <div class="imp-banner" id="impBanner" role="status" hidden></div>
       <p class="demo-banner" id="demoBanner" hidden>نسخة تجريبية: الأرقام والأسماء الظاهرة بيانات تجريبية لعرض النظام. احذفها من «الإعدادات» قبل الاستخدام.</p>
       <div id="ofView" class="of-view"></div>
     </main>
