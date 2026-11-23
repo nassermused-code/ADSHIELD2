@@ -453,7 +453,7 @@
       const q = e.target.closest("[data-b2b-quote]");
       if (q && window.GTB2B) {
         const r = state.results.find((x) => x.id === q.dataset.b2bQuote);
-        window.GTB2B.openQuote({ r, rows: flightRows(r), state, logo: logoHtml(r.cr), pax: state.pax, paxLabel: $("#paxLabel") ? $("#paxLabel").textContent : "", cabin: CABIN_AR[state.cabin], legs: r.legs.map((l) => ({ from: l.from.code, to: l.to.code, fromCity: cityName(l.from), toCity: cityName(l.to), dep: hm(l.dep), arr: hm(l.arr), plus: l.plus, date: dateAr(l.dateIso, { weekday: "short", day: "numeric", month: "short", year: "numeric" }), dur: durAr(l.dur), via: l.via ? l.via.code : "" })) });
+        window.GTB2B.openQuote({ r, rows: flightRows(r), state, logo: logoHtml(r.cr), pax: state.pax, paxLabel: $("#paxLabel") ? $("#paxLabel").textContent : "", cabin: CABIN_AR[state.cabin], legs: r.legs.map((l) => ({ iso: l.dateIso, from: l.from.code, to: l.to.code, fromCity: cityName(l.from), toCity: cityName(l.to), dep: hm(l.dep), arr: hm(l.arr), plus: l.plus, date: dateAr(l.dateIso, { weekday: "short", day: "numeric", month: "short", year: "numeric" }), dur: durAr(l.dur), via: l.via ? l.via.code : "" })) });
       }
     });
     return sec;
@@ -707,11 +707,23 @@
     if (typeof validate === "function" && !validate(form)) { toast(T("يرجى إكمال الحقول المطلوبة", "Please complete the required fields")); return; }
     const d = Object.fromEntries(new FormData(form));
     const r = currentBooking;
-    const ref = "GT-" + todayIso().slice(2).replace(/-/g, "") + "-" + String(hash(r.id + Date.now()) % 9000 + 1000);
     const people = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => {
       const i = k.slice(5);
       return `${i}. ${d["first" + i]} ${d["last" + i]} (${d["type" + i]}${T("، ", ", ")}${d["dob" + i]})`;
     });
+    // Record the request in the shared system so it appears in the back office; its number is the reference
+    let ref = "GT-" + todayIso().slice(2).replace(/-/g, "") + "-" + String(hash(r.id + Date.now()) % 9000 + 1000);
+    if (window.GTDB) {
+      const names = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => `${d[k]} ${d["last" + k.slice(5)]}`.trim());
+      const bk = window.GTDB.addBooking({
+        source: "website", status: "new",
+        customer: { name: names[0] || "", phone: d.phone, email: d.email },
+        route: `${state.o.code} → ${state.d.code}`, airline: r.cr.n, cabin: state.cabin,
+        depart: r.legs[0].dateIso, ret: r.legs[1] ? r.legs[1].dateIso : "", pax: names.length || 1, travelers: names,
+        sell: r.total, cost: Math.round(r.total / 1.08), notes: d.notes || "",
+      });
+      ref = bk.id;
+    }
     const rows = flightRows(r);
     const msg = T(`طلب حجز جديد عبر الموقع — رقم ${ref}\n`, `New booking request from the website — ref ${ref}\n`) + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n") +
       T(`\n\nالمسافرون:\n${people.join("\n")}\n\nالجوال: ${d.phone}\nالبريد: ${d.email}${d.notes ? `\nملاحظات: ${d.notes}` : ""}`, `\n\nTravelers:\n${people.join("\n")}\n\nMobile: ${d.phone}\nEmail: ${d.email}${d.notes ? `\nNotes: ${d.notes}` : ""}`);

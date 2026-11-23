@@ -173,6 +173,24 @@
 
       <section class="section b2b-panels">
         <div class="container b2b-grid">
+          <!-- Partner account with Green Travel -->
+          <article class="b2b-card b2b-card--wide" id="accountCard" hidden>
+            <h3><span class="ic3d ic3d--green"><svg class="i"><use href="#i-card"/></svg></span>حسابي مع جرين ترافيل</h3>
+            <p class="muted">رصيدك وحجوزاتك ومدفوعاتك كما تظهر في نظام جرين ترافيل. يتحدّث عند إصدار التذاكر أو تسجيل الدفعات.</p>
+            <div class="acc-kpis">
+              <div><span>الرصيد المستحق</span><b id="acBalance" dir="ltr">$0</b></div>
+              <div><span>إجمالي الحجوزات</span><b id="acCharges" dir="ltr">$0</b></div>
+              <div><span>المدفوع</span><b id="acPaid" dir="ltr">$0</b></div>
+              <div><span>حد الائتمان</span><b id="acLimit" dir="ltr">$0</b></div>
+              <div><span>المتاح للحجز</span><b id="acAvail" dir="ltr">$0</b></div>
+            </div>
+            <p class="q-warn" id="acOver" hidden>تجاوزت حد الائتمان. يرجى تسديد الرصيد ليتمكن فريقنا من إصدار تذاكر جديدة.</p>
+            <h4 class="bk-h">حجوزاتي</h4>
+            <div class="table-wrap"><table class="mini-table"><thead><tr><th>الحجز</th><th>التاريخ</th><th>المسار</th><th>العميل</th><th>الحالة</th><th>PNR</th><th>أرقام التذاكر</th><th>المبلغ</th></tr></thead><tbody id="acBookings"></tbody></table></div>
+            <h4 class="bk-h">مدفوعاتي</h4>
+            <div class="table-wrap"><table class="mini-table"><thead><tr><th>التاريخ</th><th>مرجع</th><th>المبلغ</th></tr></thead><tbody id="acPayments"></tbody></table></div>
+          </article>
+
           <!-- Pricing rules -->
           <article class="b2b-card">
             <h3><span class="ic3d ic3d--amber"><svg class="i"><use href="#i-tag"/></svg></span>طريقة احتساب سعرك</h3>
@@ -384,6 +402,7 @@
 
   <script src="assets/js/i18n-en.js" defer></script>
   <script src="assets/js/i18n.js" defer></script>
+  <script src="assets/js/store.js" defer></script>
   <script src="assets/js/main.js" defer></script>
   <script src="assets/js/flights.js" defer></script>
   <script src="assets/js/datepicker.js" defer></script>
