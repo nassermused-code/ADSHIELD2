@@ -164,6 +164,7 @@
     box.className = "b2b-card login-card"; box.id = "ofSetupForm"; box.noValidate = true;
     box.innerHTML = `<h2>${T("إعداد حساب المالك", "Set up the owner account")}</h2>
       <p class="muted">${T("هذه أول مرة يُفتح فيها النظام. أنشئ حساب المالك الذي يتحكم في كل شيء. احفظ كلمة المرور في مكان آمن، لا أحد غيرك يعرفها.", "This is the first time the system is opened. Create the owner account that controls everything. Keep the password safe: nobody else knows it.")}</p>
+      <label class="fl"><span>${T("رمز الإعداد (من إعدادات Supabase)", "Setup code (from your Supabase settings)")}</span><input name="setupCode" type="password" dir="ltr" autocomplete="off" required></label>
       <label class="fl"><span>${T("الاسم", "Name")}</span><input name="name" required></label>
       <label class="fl"><span>${T("اسم المستخدم (بالإنجليزية)", "Username (English)")}</span><input name="username" dir="ltr" autocomplete="username" autocapitalize="none" required></label>
       <label class="fl"><span>${T("كلمة المرور (8 أحرف على الأقل)", "Password (8+ characters)")}</span><input name="password" type="password" dir="ltr" autocomplete="new-password" required></label>
@@ -176,7 +177,7 @@
       const d = Object.fromEntries(new FormData(box)), st = box.querySelector(".form-status");
       if (d.password !== d.password2) { st.textContent = T("كلمتا المرور غير متطابقتين.", "Passwords do not match."); return; }
       try {
-        await DB.admin("bootstrap", { name: d.name, username: d.username, password: d.password, title: T("المالك / المدير العام", "Owner / General manager") });
+        await DB.admin("bootstrap", { setupCode: d.setupCode, name: d.name, username: d.username, password: d.password, title: T("المالك / المدير العام", "Owner / General manager") });
         const r = await DB.login(d.username, d.password);
         if (!r) throw new Error(T("تم إنشاء الحساب، سجّل الدخول.", "Account created, please sign in."));
         box.remove(); $("#ofLoginForm").hidden = false; location.hash = "team"; showApp();
