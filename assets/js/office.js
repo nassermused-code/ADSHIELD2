@@ -27,22 +27,28 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
     del(k) { try { localStorage.removeItem(k); } catch (e) {} },
   };
-  const SESSION = "gt-office-session", PROFIT = "gt-office-show-profit";
+  const VIEWAS = "gt-office-viewas", PROFIT = "gt-office-show-profit";
 
   /* ---------- Who is signed in ---------- */
-  // session = { id: staffId, asOwner?: ownerId }  (asOwner = the owner is viewing this staff account)
-  let sess = ls.get(SESSION, null);
+  // The real signed-in account comes from the database (DB.profile).
+  // sess.asOwner = the owner is looking at the system as one employee (no password needed).
+  let sess = null;
   let me = null;
   function refreshMe() {
-    me = sess ? DB.get("staff", sess.id || sess.email) : null;
-    if (me && me.status !== "active" && !sess.asOwner) me = null;
-    if (!me) { sess = null; ls.del(SESSION); }
+    const real = DB.profile;
+    if (!real || real.kind === "partner" || real.status !== "active") { me = null; sess = null; return; }
+    const v = real.kind === "owner" ? ls.get(VIEWAS, null) : null;
+    const target = v ? DB.get("staff", v) : null;
+    sess = target && target.role !== "owner" ? { id: target.id, asOwner: real.id } : { id: real.id };
+    if (!sess.asOwner) ls.del(VIEWAS);
+    me = sess.asOwner ? target : DB.get("staff", real.id) || real;
   }
   const isOwner = () => !!me && me.role === "owner";
   const can = (p) => isOwner() || (!!me && (me.perms || []).includes(p));
   const showProfit = () => isOwner() && ls.get(PROFIT, false) === true;
   const viewer = () => (sess && sess.asOwner ? DB.get("staff", sess.asOwner) : me);
-  const log = (action, ref) => DB.log(viewer() ? viewer().id : "", action, ref);
+  const log = (action, ref) => DB.log(action, ref);
+  const errToast = (e) => toast(T("تعذّر الحفظ: ", "Could not save: ") + (e && e.message ? e.message : e));
 
   /* ---------- Labels ---------- */
   const STATUS = () => ({ new: T("جديد", "New"), quoted: T("عرض سعر", "Quoted"), confirmed: T("مؤكد", "Confirmed"), ticketed: T("صادرة", "Ticketed"), cancelled: T("ملغي", "Cancelled"), refunded: T("مسترد", "Refunded") });
@@ -108,13 +114,13 @@
     if (sess.asOwner) {
       imp.hidden = false;
       imp.innerHTML = `${icon("i-eye")}<span>${T("أنت داخل حساب", "You are inside the account of")} <b>${esc(me.name)}</b> ${T("وترى النظام كما يراه بالضبط.", "and see exactly what they see.")}</span><button type="button" class="btn btn--sm btn--accent" id="impBack">${T("العودة إلى حسابي", "Back to my account")}</button>`;
-      $("#impBack").addEventListener("click", () => { const o = sess.asOwner; log(T("خروج من حساب موظف", "Left staff account"), me.name); sess = { id: o }; ls.set(SESSION, sess); location.hash = "team"; showApp(); });
+      $("#impBack").addEventListener("click", () => { log(T("خروج من حساب موظف", "Left staff account"), me.name); ls.del(VIEWAS); location.hash = "team"; showApp(); });
     } else imp.hidden = true;
     // Profit switch (owner only)
     const pt = $("#profitToggle");
     pt.hidden = !isOwner();
     if (isOwner()) { const on = showProfit(); pt.classList.toggle("is-on", on); pt.setAttribute("aria-pressed", on); pt.innerHTML = `${icon(on ? "i-eye" : "i-lock")}<span>${on ? T("الأرباح ظاهرة", "Profit visible") : T("الأرباح مخفية", "Profit hidden")}</span>`; }
-    $("#demoBanner").hidden = !DB.hasDemo();
+    $("#demoBanner").hidden = true;
     route();
   }
   function route() {
@@ -131,28 +137,51 @@
 
   /* ---------- Login ---------- */
   function initLogin() {
-    $("#ofLoginForm").addEventListener("submit", (e) => {
+    $("#ofLoginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const r = DB.login($("#ofEmail").value, $("#ofPass").value);
-      const st = $("#ofLoginStatus");
+      const st = $("#ofLoginStatus"), btn = e.target.querySelector("[type=submit]");
+      st.textContent = ""; btn.disabled = true;
+      let r = null;
+      try { r = await DB.login($("#ofEmail").value, $("#ofPass").value); } catch (er) { st.textContent = T("تعذّر الاتصال بالخادم. حاول مرة أخرى.", "Could not reach the server. Try again."); btn.disabled = false; return; }
+      btn.disabled = false;
       if (r && r.error === "inactive") { st.textContent = T("هذا الحساب موقوف. تواصل مع المدير.", "This account is suspended. Contact the owner."); return; }
-      if (!r || r.kind !== "staff") { st.textContent = T("اسم المستخدم أو كلمة المرور غير صحيحة.", "Incorrect username or password."); return; }
-      sess = { id: r.id };
-      ls.set(SESSION, sess);
-      st.textContent = "";
+      if (!r) { st.textContent = T("اسم المستخدم أو كلمة المرور غير صحيحة.", "Incorrect username or password."); return; }
+      if (r.kind !== "staff") { await DB.logout(); st.textContent = T("هذا حساب وكيل B2B: ادخل من بوابة الشركاء.", "This is a B2B agent account: sign in through the partner portal."); return; }
       $("#ofPass").value = "";
-      refreshMe();
+      ls.del(VIEWAS);
       log(T("تسجيل دخول", "Signed in"));
       location.hash = "dashboard";
       showApp();
     });
-    $$("[data-fill]").forEach((b) => b.addEventListener("click", () => {
-      const [em, pw] = b.dataset.fill.split("|");
-      $("#ofEmail").value = em; $("#ofPass").value = pw;
-    }));
     $("#ofShowPass").addEventListener("click", (e) => { const p = $("#ofPass"); p.type = p.type === "password" ? "text" : "password"; e.currentTarget.setAttribute("aria-pressed", p.type === "text"); });
-    $("#ofLogout").addEventListener("click", () => { log(T("تسجيل خروج", "Signed out")); sess = null; ls.del(SESSION); showApp(); });
+    $("#ofLogout").addEventListener("click", async () => { log(T("تسجيل خروج", "Signed out")); ls.del(VIEWAS); await DB.logout(); showApp(); });
     $("#profitToggle").addEventListener("click", () => { ls.set(PROFIT, !showProfit()); showApp(); });
+  }
+  // First run: no owner yet, so the person setting up creates the owner account with their own password
+  function showSetup() {
+    $("#ofLoginForm").hidden = true;
+    const box = document.createElement("form");
+    box.className = "b2b-card login-card"; box.id = "ofSetupForm"; box.noValidate = true;
+    box.innerHTML = `<h2>${T("إعداد حساب المالك", "Set up the owner account")}</h2>
+      <p class="muted">${T("هذه أول مرة يُفتح فيها النظام. أنشئ حساب المالك الذي يتحكم في كل شيء. احفظ كلمة المرور في مكان آمن، لا أحد غيرك يعرفها.", "This is the first time the system is opened. Create the owner account that controls everything. Keep the password safe: nobody else knows it.")}</p>
+      <label class="fl"><span>${T("الاسم", "Name")}</span><input name="name" required></label>
+      <label class="fl"><span>${T("اسم المستخدم (بالإنجليزية)", "Username (English)")}</span><input name="username" dir="ltr" autocomplete="username" autocapitalize="none" required></label>
+      <label class="fl"><span>${T("كلمة المرور (8 أحرف على الأقل)", "Password (8+ characters)")}</span><input name="password" type="password" dir="ltr" autocomplete="new-password" required></label>
+      <label class="fl"><span>${T("تأكيد كلمة المرور", "Confirm password")}</span><input name="password2" type="password" dir="ltr" autocomplete="new-password" required></label>
+      <button type="submit" class="btn btn--accent btn--block">${T("إنشاء حساب المالك", "Create owner account")}</button>
+      <p class="form-status err" role="status" aria-live="polite"></p>`;
+    $("#ofLogin").appendChild(box);
+    box.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(box)), st = box.querySelector(".form-status");
+      if (d.password !== d.password2) { st.textContent = T("كلمتا المرور غير متطابقتين.", "Passwords do not match."); return; }
+      try {
+        await DB.admin("bootstrap", { name: d.name, username: d.username, password: d.password, title: T("المالك / المدير العام", "Owner / General manager") });
+        const r = await DB.login(d.username, d.password);
+        if (!r) throw new Error(T("تم إنشاء الحساب، سجّل الدخول.", "Account created, please sign in."));
+        box.remove(); $("#ofLoginForm").hidden = false; location.hash = "team"; showApp();
+      } catch (er) { st.textContent = er.message; }
+    });
   }
 
   // Owner opens any staff account without a password
@@ -160,8 +189,7 @@
     const s = DB.get("staff", staffId);
     if (!isOwner() || !s || s.role === "owner") return;
     log(T("دخول إلى حساب موظف", "Opened staff account"), s.name);
-    sess = { id: s.id, asOwner: me.id };
-    ls.set(SESSION, sess);
+    ls.set(VIEWAS, s.id);
     closeModal();
     location.hash = "dashboard";
     showApp();
@@ -171,9 +199,8 @@
   function openPortal(partnerId) {
     const p = DB.get("partners", partnerId);
     if (!isOwner() || !p) return;
-    ls.set("gt-b2b-session", { email: p.email, at: Date.now(), by: me.id, byName: me.name });
     log(T("فتح بوابة وكيل", "Opened agent portal"), p.agency);
-    window.open("b2b.html", "_blank");
+    window.open("b2b.html?as=" + encodeURIComponent(p.id), "_blank");
   }
 
   /* ---------- Shared calculations ---------- */
@@ -312,19 +339,20 @@
     }).join("")}</ul>`;
   }
   function bindTasks(el) {
-    $$("[data-task-toggle]", el).forEach((b) => b.addEventListener("click", () => {
+    $$("[data-task-toggle]", el).forEach((b) => b.addEventListener("click", async () => {
       const t = DB.get("tasks", b.dataset.taskToggle);
       if (!t || (!isOwner() && t.assignee !== me.id)) return;
       const done = t.status !== "done";
-      DB.update("tasks", t.id, { status: done ? "done" : "open", doneAt: done ? today() : "" });
+      b.disabled = true;
+      try { await DB.toggleTask(t.id); } catch (e) { b.disabled = false; return errToast(e); }
       log(done ? T("أنجز مهمة", "Completed task") : T("أعاد فتح مهمة", "Reopened task"), t.title);
       toast(done ? T("أحسنت! تمّت المهمة", "Task done") : T("أُعيد فتح المهمة", "Task reopened"));
       route();
     }));
     $$("[data-task-edit]", el).forEach((b) => b.addEventListener("click", () => taskForm(b.dataset.taskEdit)));
-    $$("[data-task-del]", el).forEach((b) => b.addEventListener("click", () => {
+    $$("[data-task-del]", el).forEach((b) => b.addEventListener("click", async () => {
       if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "?"; return; }
-      DB.remove("tasks", b.dataset.taskDel); route();
+      try { await DB.remove("tasks", b.dataset.taskDel); } catch (e) { return errToast(e); } route();
     }));
     $$("[data-open]", el).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openBooking(a.dataset.open); }));
   }
@@ -361,13 +389,12 @@
         <div class="f3">${sel("assignee", T("إسناد إلى", "Assign to"), staffOpts, t.assignee)}${inp("due", T("تاريخ التسليم", "Due date"), t.due, "date")}${sel("priority", T("الأولوية", "Priority"), PRIORITY(), t.priority)}</div>
         ${inp("bookingId", T("رقم الحجز المرتبط (اختياري)", "Linked booking (optional)"), t.bookingId, "text", "ltr")}
         <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button></div></form>`);
-    $("#tkForm").addEventListener("submit", (e) => {
+    $("#tkForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.target));
       if (!d.title.trim()) { toast(T("اكتب المهمة", "Write the task")); return; }
       const data = { title: d.title.trim(), details: d.details.trim(), assignee: d.assignee, due: d.due, priority: d.priority, bookingId: d.bookingId.trim().toUpperCase() };
-      if (id) DB.update("tasks", id, data);
-      else DB.insert("tasks", Object.assign({ status: "open", created: today(), createdBy: me.id }, data), "TSK");
+      try { if (id) await DB.update("tasks", id, data); else await DB.insert("tasks", Object.assign({ status: "open" }, data)); } catch (er) { return errToast(er); }
       log(id ? T("عدّل مهمة", "Edited task") : T("أسند مهمة", "Assigned task"), `${data.title} → ${staffName(data.assignee)}`);
       closeModal(); toast(T("تم حفظ المهمة", "Task saved")); route();
     });
@@ -478,7 +505,7 @@
         </form>` : ""}</section>` : ""}`;
     const f = $("#bkForm");
     if (prof) { const upd = () => ($("#bkProfit").textContent = usd.format((+f.sell.value || 0) - (+f.cost.value || 0))); f.sell.addEventListener("input", upd); f.cost.addEventListener("input", upd); }
-    f.addEventListener("submit", (e) => {
+    f.addEventListener("submit", async (e) => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(f));
       const data = {
@@ -494,14 +521,17 @@
       if (data.status === "ticketed" && !data.pnr) { toast(T("أدخل رقم PNR قبل تحويل الحالة إلى صادرة", "Enter the PNR before marking it ticketed")); return; }
       const cost = owner ? data.cost : b.cost;
       data.fee = data.source === "b2b" ? data.sell - cost : 0;
+      const sb = f.querySelector("[type=submit]"); sb.disabled = true;
+      try {
       if (id) {
-        DB.update("bookings", id, data);
+        await DB.update("bookings", id, data);
         log(data.status !== b.status ? `${T("غيّر حالة الحجز إلى", "Changed booking status to")} ${STATUS()[data.status]}` : T("عدّل حجزاً", "Edited booking"), id);
       } else {
-        const nb = DB.addBooking(Object.assign({ cost: 0, assignedTo: me.id }, data, { created: today() }));
+        const nb = await DB.addBooking(Object.assign({ cost: 0, assignedTo: me.id }, data));
         id = nb.id;
         log(T("أنشأ حجزاً", "Created booking"), id);
       }
+      } catch (er) { sb.disabled = false; return errToast(er); }
       toast(T("تم الحفظ", "Saved"));
       openBooking(id);
       route();
@@ -509,20 +539,19 @@
     if (id) {
       $("#bkInvoice").addEventListener("click", () => printInvoice(id));
       const del = $("#bkDelete");
-      if (del) del.addEventListener("click", () => {
+      if (del) del.addEventListener("click", async () => {
         if (del.dataset.confirm !== "1") { del.dataset.confirm = "1"; del.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
-        DB.all("payments").filter((p) => p.bookingId === id).forEach((p) => DB.remove("payments", p.id));
-        DB.remove("bookings", id); log(T("حذف حجزاً", "Deleted booking"), id); closeDrawer(); route(); toast(T("تم حذف الحجز", "Booking deleted"));
+        try { await DB.remove("bookings", id); } catch (er) { return errToast(er); } log(T("حذف حجزاً", "Deleted booking"), id); closeDrawer(); route(); toast(T("تم حذف الحجز", "Booking deleted"));
       });
       if ($("#bkTask")) $("#bkTask").addEventListener("click", () => { closeDrawer(); taskForm(null, { bookingId: id, assignee: b.assignedTo || undefined, title: `${T("متابعة الحجز", "Follow up booking")} ${id}` }); });
       const pf = $("#payForm");
-      if (pf) pf.addEventListener("submit", (e) => {
+      if (pf) pf.addEventListener("submit", async (e) => {
         e.preventDefault();
         const d = Object.fromEntries(new FormData(e.target));
         const amount = +d.amount;
         if (!(amount > 0)) { toast(T("أدخل مبلغاً صحيحاً", "Enter a valid amount")); return; }
         const dir = owner ? d.dir : "in";
-        DB.insert("payments", { date: d.date || today(), dir, amount, method: d.method, bookingId: id, partnerId: dir === "in" ? b.partnerId : null, ref: d.ref, note: "", by: me.id }, "PAY");
+        try { await DB.insert("payments", { date: d.date || today(), dir, amount, method: d.method, bookingId: id, partnerId: dir === "in" ? b.partnerId : null, ref: d.ref, note: "" }); } catch (er) { return errToast(er); }
         log(dir === "in" ? T("سجّل دفعة مقبوضة", "Recorded payment received") : T("سجّل دفعة للمورد", "Recorded supplier payment"), `${id} · ${usd.format(amount)}`);
         toast(T("تم تسجيل الدفعة", "Payment recorded"));
         openBooking(id); route();
@@ -582,9 +611,9 @@
         ${owner ? `<td><button type="button" class="x-btn" data-del-pay="${p.id}" aria-label="${T("حذف", "Delete")}">×</button></td>` : ""}</tr>`).join("")}</tbody></table></div>`;
   }
   function bindPayDelete(el, after) {
-    $$("[data-del-pay]", el).forEach((b) => b.addEventListener("click", () => {
+    $$("[data-del-pay]", el).forEach((b) => b.addEventListener("click", async () => {
       if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "?"; b.title = T("اضغط مرة أخرى للحذف", "Press again to delete"); return; }
-      DB.remove("payments", b.dataset.delPay); log(T("حذف دفعة", "Deleted payment"), b.dataset.delPay); toast(T("تم حذف الدفعة", "Payment deleted")); after();
+      try { await DB.remove("payments", b.dataset.delPay); } catch (er) { return errToast(er); } log(T("حذف دفعة", "Deleted payment"), b.dataset.delPay); toast(T("تم حذف الدفعة", "Payment deleted")); after();
     }));
   }
   function viewPayments(el) {
@@ -618,16 +647,16 @@
           <button type="submit" class="btn btn--accent btn--sm">+ ${T("إضافة", "Add")}</button></form></section>
       <section class="of-card">${list.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("التاريخ", "Date")}</th><th>${T("الفئة", "Category")}</th><th>${T("ملاحظة", "Note")}</th><th>${T("المبلغ", "Amount")}</th><th></th></tr></thead>
         <tbody>${list.map((x) => `<tr><td>${fmtDate(x.date)}</td><td>${EXP()[x.category] || x.category}</td><td>${esc(x.note)}</td><td class="neg">−${money(x.amount)}</td><td><button type="button" class="x-btn" data-del-exp="${x.id}" aria-label="${T("حذف", "Delete")}">×</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted empty">${T("لا توجد مصروفات.", "No expenses.")}</p>`}</section>`;
-    $("#expForm").addEventListener("submit", (e) => {
+    $("#expForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.target));
       if (!(+d.amount > 0)) { toast(T("أدخل مبلغاً صحيحاً", "Enter a valid amount")); return; }
-      DB.insert("expenses", { date: d.date || today(), category: d.category, amount: +d.amount, note: d.note }, "EXP");
+      try { await DB.insert("expenses", { date: d.date || today(), category: d.category, amount: +d.amount, note: d.note }); } catch (er) { return errToast(er); }
       toast(T("تمت الإضافة", "Added")); route();
     });
-    $$("[data-del-exp]", el).forEach((b) => b.addEventListener("click", () => {
+    $$("[data-del-exp]", el).forEach((b) => b.addEventListener("click", async () => {
       if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "?"; return; }
-      DB.remove("expenses", b.dataset.delExp); route();
+      try { await DB.remove("expenses", b.dataset.delExp); } catch (er) { return errToast(er); } route();
     }));
   }
 
@@ -662,7 +691,7 @@
   function agentForm(id) {
     if (!can("agents_manage")) return;
     const owner = isOwner();
-    const p = id ? DB.get("partners", id) : { email: "", password: genPass(), agency: "", contact: "", phone: "", contactEmail: "", website: "", sellMarkup: 6, status: "active", creditLimit: 3000, pricing: { mode: "hybrid" } };
+    const p = id ? Object.assign({ password: "" }, DB.get("partners", id)) : { email: "", password: genPass(), agency: "", contact: "", phone: "", contactEmail: "", website: "", sellMarkup: 6, status: "active", creditLimit: 3000, pricing: { mode: "hybrid" } };
     const c = Object.assign({}, DEF_PRICING, p.pricing || {});
     openModal(id ? T("تعديل وكيل", "Edit agent") : T("وكيل B2B جديد", "New B2B agent"), `
       <form id="agForm" class="dr-form" novalidate>
@@ -670,7 +699,7 @@
           ${inp("agency", T("اسم الوكالة", "Agency name"), p.agency)}${inp("contact", T("اسم المسؤول", "Contact person"), p.contact)}${inp("phone", T("الهاتف", "Phone"), p.phone, "tel", "ltr")}</div></fieldset>
         <fieldset><legend>${T("الدخول إلى بوابة الشركاء", "Partner portal login")}</legend><div class="f3">
           ${inp("email", T("البريد (اسم الدخول)", "Email (login)"), p.email, "email", "ltr")}
-          <label class="fl"><span>${T("كلمة المرور", "Password")}</span><span class="pw-row"><input name="password" type="text" dir="ltr" value="${esc(p.password)}"><button type="button" class="btn btn--ghost btn--sm" data-gen>${T("توليد", "Generate")}</button></span></label>
+          <label class="fl"><span>${T("كلمة المرور", "Password")}</span><span class="pw-row"><input name="password" type="text" dir="ltr" value="${esc(p.password)}" placeholder="${id ? T("اتركها فارغة للإبقاء عليها", "Leave empty to keep") : ""}" autocomplete="off"><button type="button" class="btn btn--ghost btn--sm" data-gen>${T("توليد", "Generate")}</button></span></label>
           ${sel("status", T("الحالة", "Status"), { active: T("نشط", "Active"), pending: T("قيد الموافقة", "Pending"), suspended: T("موقوف", "Suspended") }, p.status)}</div></fieldset>
         ${owner ? `<fieldset><legend>${T("التسعير والائتمان (يراه المالك فقط)", "Pricing & credit (owner only)")}</legend><div class="f3">
           ${sel("mode", T("نظام التسعير", "Pricing model"), { flat: T("سعر ثابت", "Flat rate"), percent: T("نسبة مئوية", "Percentage"), hybrid: T("ثابت + نسبة", "Flat + percentage") }, c.mode)}
@@ -680,21 +709,18 @@
         <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button></div>
       </form>`);
     $("[data-gen]").addEventListener("click", () => ($("#agForm").password.value = genPass()));
-    $("#agForm").addEventListener("submit", (e) => {
+    $("#agForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.target));
       const email = d.email.trim().toLowerCase();
-      if (!d.agency.trim() || !email || d.password.length < 6) { toast(T("اسم الوكالة والبريد وكلمة مرور من 6 أحرف على الأقل مطلوبة", "Agency name, email and a password of 6+ characters are required")); return; }
-      if (loginTaken(email, id)) { toast(T("هذا البريد مستخدم بالفعل", "This email is already in use")); return; }
-      const data = { agency: d.agency.trim(), contact: d.contact.trim(), phone: d.phone.trim(), email, password: d.password, status: d.status };
-      if (owner) Object.assign(data, { creditLimit: +d.creditLimit || 0, pricing: { mode: d.mode, flatAll: +d.flatAll || 0, pctAll: (+d.pctAll || 0) / 100, flat: +d.flat || 0, threshold: +d.threshold || 0, pct: (+d.pct || 0) / 100, publicMarkup: (+d.publicMarkup || 0) / 100 } });
-      if (id) DB.update("partners", id, data);
-      else DB.insert("partners", Object.assign({ contactEmail: email, website: "", logo: "", sellMarkup: 6, created: today(), creditLimit: 3000, pricing: { mode: "hybrid" } }, data), "P");
-      log(id ? T("عدّل حساب وكيل", "Edited agent account") : T("فتح حساب وكيل", "Opened agent account"), data.agency);
+      if (!d.agency.trim() || !email || (!id && d.password.length < 8) || (d.password && d.password.length < 8)) { toast(T("اسم الوكالة والبريد وكلمة مرور من 8 أحرف على الأقل مطلوبة", "Agency name, email and a password of 8+ characters are required")); return; }
+      const payload = { id, agency: d.agency.trim(), contact: d.contact.trim(), phone: d.phone.trim(), email, password: d.password || undefined, status: d.status };
+      if (owner) Object.assign(payload, { creditLimit: +d.creditLimit || 0, pricing: { mode: d.mode, flatAll: +d.flatAll || 0, pctAll: (+d.pctAll || 0) / 100, flat: +d.flat || 0, threshold: +d.threshold || 0, pct: (+d.pct || 0) / 100, publicMarkup: (+d.publicMarkup || 0) / 100 } });
+      const btn = e.target.querySelector("[type=submit]"); btn.disabled = true;
+      try { await DB.admin("save_partner", payload); } catch (er) { btn.disabled = false; return errToast(er); }
       closeModal(); toast(T("تم حفظ الوكيل", "Agent saved")); route();
     });
   }
-  const loginTaken = (login, exceptId) => DB.all("partners").some((x) => x.email === login && x.id !== exceptId) || DB.all("staff").some((s) => (s.email === login || (s.username || "").toLowerCase() === login) && s.id !== exceptId);
   function genPass() { const c = "abcdefghjkmnpqrstuvwxyz23456789"; let s = ""; for (let i = 0; i < 8; i++) s += c[Math.floor(Math.random() * c.length)]; return s + Math.floor(Math.random() * 90 + 10); }
 
   function agentPaymentForm(partnerId) {
@@ -705,11 +731,11 @@
         ${inp("date", T("التاريخ", "Date"), today(), "date")}${inp("ref", T("مرجع", "Reference"), "", "text", "ltr")}</div>
         <p class="muted">${T("تُخصم الدفعة من رصيد الوكيل الإجمالي (حساب جارٍ).", "The payment is applied to the agent's overall balance (running account).")}</p>
         <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("تسجيل الدفعة", "Record payment")}</button></div></form>`);
-    $("#apForm").addEventListener("submit", (e) => {
+    $("#apForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(e.target));
       if (!(+d.amount > 0)) { toast(T("أدخل مبلغاً صحيحاً", "Enter a valid amount")); return; }
-      DB.insert("payments", { date: d.date || today(), dir: "in", amount: +d.amount, method: d.method, bookingId: null, partnerId: d.partnerId, ref: d.ref, note: T("دفعة على الحساب", "Payment on account"), by: me.id }, "PAY");
+      try { await DB.insert("payments", { date: d.date || today(), dir: "in", amount: +d.amount, method: d.method, bookingId: null, partnerId: d.partnerId, ref: d.ref, note: T("دفعة على الحساب", "Payment on account") }); } catch (er) { return errToast(er); }
       log(T("سجّل دفعة من وكيل", "Recorded agent payment"), `${partnerName(d.partnerId)} · ${usd.format(+d.amount)}`);
       closeModal(); toast(T("تم تسجيل الدفعة", "Payment recorded")); route();
     });
@@ -839,7 +865,7 @@
   }
   function staffForm(id) {
     if (!isOwner()) return;
-    const s = id ? DB.get("staff", id) : { name: "", title: "", phone: "", email: "", username: "", password: genPass(), role: "staff", perms: ["bookings_create", "payments", "customers"], status: "active" };
+    const s = id ? Object.assign({ password: "" }, DB.get("staff", id)) : { name: "", title: "", phone: "", email: "", username: "", password: genPass(), role: "staff", perms: ["bookings_create", "payments", "customers"], status: "active" };
     const isOwn = s.role === "owner";
     openModal(id ? T("تعديل موظف", "Edit employee") : T("موظف جديد", "New employee"), `
       <form id="sfForm" class="dr-form" novalidate>
@@ -847,7 +873,7 @@
           ${inp("name", T("الاسم", "Name"), s.name)}${inp("title", T("الوظيفة", "Job title"), s.title)}${inp("phone", T("الهاتف", "Phone"), s.phone, "tel", "ltr")}</div></fieldset>
         <fieldset><legend>${T("بيانات الدخول", "Login")}</legend><div class="f3">
           ${inp("username", T("اسم المستخدم", "Username"), s.username, "text", "ltr", 'autocomplete="off"')}
-          <label class="fl"><span>${T("كلمة المرور", "Password")}</span><span class="pw-row"><input name="password" type="text" dir="ltr" value="${esc(s.password)}" autocomplete="off"><button type="button" class="btn btn--ghost btn--sm" data-gen>${T("توليد", "Generate")}</button></span></label>
+          <label class="fl"><span>${T("كلمة المرور", "Password")}</span><span class="pw-row"><input name="password" type="text" dir="ltr" value="${esc(s.password)}" placeholder="${id ? T("اتركها فارغة للإبقاء عليها", "Leave empty to keep") : ""}" autocomplete="off"><button type="button" class="btn btn--ghost btn--sm" data-gen>${T("توليد", "Generate")}</button></span></label>
           ${inp("email", T("البريد (اختياري)", "Email (optional)"), s.email, "email", "ltr")}
           ${isOwn ? "" : sel("status", T("الحالة", "Status"), { active: T("نشط: يستطيع الدخول", "Active: can sign in"), suspended: T("موقوف: لا يستطيع الدخول", "Suspended: cannot sign in") }, s.status)}</div></fieldset>
         ${isOwn ? `<p class="hint">${icon("i-shield")}${T("حساب المالك يملك كل الصلاحيات دائماً.", "The owner account always has full access.")}</p>` : `<fieldset><legend>${T("الصلاحيات: ماذا يستطيع أن يرى ويفعل", "Permissions: what they can see and do")}</legend>
@@ -858,32 +884,35 @@
       </form>`, true);
     const f = $("#sfForm");
     $("[data-gen]", f).addEventListener("click", () => (f.password.value = genPass()));
-    f.addEventListener("submit", (e) => {
+    f.addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(f), d = Object.fromEntries(fd);
-      const username = d.username.trim().toLowerCase(), email = d.email.trim().toLowerCase();
+      const username = d.username.trim().toLowerCase();
       if (!d.name.trim() || !/^[a-z0-9._-]{3,}$/.test(username)) { toast(T("أدخل الاسم واسم مستخدم بالإنجليزية (3 أحرف على الأقل)", "Enter a name and an English username (3+ characters)")); return; }
-      if (d.password.length < 6) { toast(T("كلمة المرور 6 أحرف على الأقل", "Password must be 6+ characters")); return; }
-      if (loginTaken(username, id) || (email && loginTaken(email, id))) { toast(T("اسم المستخدم أو البريد مستخدم بالفعل", "Username or email already in use")); return; }
-      const data = { name: d.name.trim(), title: d.title.trim(), phone: d.phone.trim(), username, email, password: d.password };
-      if (!isOwn) Object.assign(data, { status: d.status, perms: fd.getAll("perm") });
-      if (id) DB.update("staff", id, data);
-      else DB.insert("staff", Object.assign({ role: "staff", created: today() }, data), "U");
-      log(id ? T("عدّل بيانات/صلاحيات موظف", "Edited employee / permissions") : T("أضاف موظفاً", "Added employee"), data.name);
+      if ((!id && d.password.length < 8) || (d.password && d.password.length < 8)) { toast(T("كلمة المرور 8 أحرف على الأقل", "Password must be 8+ characters")); return; }
+      const payload = { id, name: d.name.trim(), title: d.title.trim(), phone: d.phone.trim(), username, email: d.email.trim().toLowerCase(), password: d.password || undefined };
+      if (!isOwn) Object.assign(payload, { status: d.status, perms: fd.getAll("perm") });
+      const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+      try { await DB.admin("save_staff", payload); } catch (er) { btn.disabled = false; return errToast(er); }
       closeModal(); toast(T("تم حفظ الموظف", "Employee saved")); showApp();
     });
     const del = $("#sfDel");
-    if (del) del.addEventListener("click", () => {
+    if (del) del.addEventListener("click", async () => {
       if (del.dataset.confirm !== "1") { del.dataset.confirm = "1"; del.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
-      DB.remove("staff", id); log(T("حذف موظفاً", "Deleted employee"), s.name); closeModal(); toast(T("تم حذف الموظف", "Employee deleted")); route();
+      try { await DB.admin("delete_staff", { id }); } catch (er) { return errToast(er); }
+      closeModal(); toast(T("تم حذف الموظف", "Employee deleted")); route();
     });
   }
 
   /* ---------- Activity log (owner) ---------- */
+  // Entries written by the server are in English; show them in the page language
+  const ACTIONS = () => ({ "Added employee": T("أضاف موظفاً", "Added employee"), "Edited employee / permissions": T("عدّل بيانات/صلاحيات موظف", "Edited employee / permissions"), "Deleted employee": T("حذف موظفاً", "Deleted employee"),
+    "Opened agent account": T("فتح حساب وكيل", "Opened agent account"), "Edited agent account": T("عدّل حساب وكيل", "Edited agent account"), "Owner account created": T("أنشأ حساب المالك", "Owner account created"), "B2B ticket request": T("طلب إصدار من وكيل B2B", "B2B ticket request") });
+  const whoName = (id) => (DB.get("staff", id) || {}).name || (DB.get("partners", id) ? `${partnerName(id)} (B2B)` : "—");
   function viewActivity(el) {
     const list = DB.all("log");
     el.innerHTML = `<section class="of-card">${list.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الوقت", "Time")}</th><th>${T("الموظف", "Employee")}</th><th>${T("العملية", "Action")}</th><th>${T("التفاصيل", "Details")}</th></tr></thead>
-      <tbody>${list.slice(0, 200).map((l) => `<tr><td>${fmtTime(l.at)}</td><td><span class="who">${avatar(DB.get("staff", l.who), "xs")}${esc(staffName(l.who))}</span></td><td>${esc(l.action)}</td><td dir="auto">${esc(l.ref)}</td></tr>`).join("")}</tbody></table></div>`
+      <tbody>${list.slice(0, 200).map((l) => `<tr><td>${fmtTime(l.at)}</td><td><span class="who">${avatar(DB.get("staff", l.who) || { name: whoName(l.who) }, "xs")}${esc(whoName(l.who))}</span></td><td>${esc(ACTIONS()[l.action] || l.action)}</td><td dir="auto">${esc(l.ref)}</td></tr>`).join("")}</tbody></table></div>`
       : `<p class="muted empty">${T("لا يوجد نشاط مسجّل بعد. سيظهر هنا كل دخول وكل تعديل يقوم به الموظفون.", "No activity yet. Every sign-in and change made by staff will appear here.")}</p>`}</section>`;
   }
 
@@ -892,12 +921,8 @@
     el.innerHTML = `
       <section class="of-card"><header class="of-card__h"><h3>${T("خصوصية الأرباح", "Profit privacy")}</h3></header>
         <p class="muted">${T("الأرباح والتكاليف لا تظهر لأي موظف ولا لأي وكيل B2B في أي شاشة أو ملف تصدير. على حسابك أنت تبقى مخفية افتراضياً، ويمكنك إظهارها مؤقتاً من الزر أعلى الصفحة.", "Profit and costs are never shown to staff or B2B agents on any screen or export. On your own account they stay hidden by default; you can show them from the switch at the top.")}</p></section>
-      <section class="of-card"><header class="of-card__h"><h3>${T("البيانات التجريبية", "Demo data")}</h3></header>
-        <p class="muted">${T("النظام يعمل الآن بنسخة تجريبية تحفظ البيانات في هذا المتصفح فقط. احذف البيانات التجريبية قبل إدخال حجوزات حقيقية، أو أعد تحميلها لعرض النظام.", "The system runs as a demo that stores data in this browser only. Remove the sample data before entering real bookings, or reload it to show the system.")}</p>
-        <div class="dr-actions"><button type="button" class="btn btn--ghost" id="stClear">${T("حذف البيانات التجريبية", "Remove sample data")}</button><button type="button" class="btn btn--ghost" id="stReset">${T("إعادة تحميل البيانات التجريبية", "Reload sample data")}</button></div></section>`;
-    const twice = (btn, fn) => btn.addEventListener("click", () => { if (btn.dataset.confirm !== "1") { btn.dataset.confirm = "1"; btn.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; } fn(); });
-    twice($("#stClear"), () => { DB.clearDemo(); toast(T("تم حذف البيانات التجريبية", "Sample data removed")); showApp(); });
-    twice($("#stReset"), () => { DB.reset(); sess = { id: "U-OWNER" }; ls.set(SESSION, sess); toast(T("تمت إعادة تحميل البيانات التجريبية", "Sample data reloaded")); showApp(); });
+      <section class="of-card"><header class="of-card__h"><h3>${T("الحماية والبيانات", "Security and data")}</h3></header>
+        <p class="muted">${T("كل البيانات محفوظة في قاعدة بيانات آمنة على الإنترنت (Supabase)، ويراها كل الموظفين من أي جهاز حسب صلاحياتهم. القاعدة نفسها تمنع أي موظف من قراءة التكاليف والأرباح، وتمنع كل وكيل من رؤية أي حساب غير حسابه. لتغيير كلمة مرورك افتح «الموظفون والصلاحيات» ثم «تعديل» على حسابك.", "All data is kept in a secure online database (Supabase) that staff reach from any device, limited by their permissions. The database itself stops staff from reading costs and profit, and stops each agent from seeing any account but their own. To change your password open Team & permissions, then Edit on your own card.")}</p></section>`;
   }
 
   /* ---------- Generic modal ---------- */
@@ -919,6 +944,11 @@
     $("#navToggle").addEventListener("click", () => document.body.classList.toggle("nav-open"));
     window.addEventListener("hashchange", route);
     DB.onChange(() => { if (!me || !$("#drawer").hidden || !$("#ofModal").hidden) return; refreshMe(); if (me) route(); else showApp(); });
-    showApp();
+    document.body.classList.add("is-loading");
+    DB.ready.then(async () => {
+      document.body.classList.remove("is-loading");
+      showApp();
+      if (!me) { try { if (!(await DB.hasOwner())) showSetup(); } catch (e) {} }
+    });
   });
 })();

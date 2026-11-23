@@ -560,7 +560,12 @@
     showLoading();
     if (!keepScroll) setTimeout(() => sec.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     clearTimeout(run.t);
-    run.t = setTimeout(() => {
+    run.t = setTimeout(async () => {
+      // Partner portal: partner prices are worked out on the server. A first pass collects the public fares, then one call prices them.
+      if (window.GTB2B && window.GTB2B.active && window.GTB2B.prepare) {
+        for (let k = -3; k <= 3; k++) generate(state, addDays(state.depart, k), state.ret ? addDays(state.ret, k) : null);
+        await window.GTB2B.prepare();
+      }
       state.results = generate(state, state.depart, state.ret);
       state.sort = state.sort || "cheap";
       renderDates();
@@ -713,16 +718,19 @@
     });
     // Record the request in the shared system so it appears in the back office; its number is the reference
     let ref = "GT-" + todayIso().slice(2).replace(/-/g, "") + "-" + String(hash(r.id + Date.now()) % 9000 + 1000);
-    if (window.GTDB) {
+    if (window.GTDB && window.GTDB.websiteBooking) {
       const names = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => `${d[k]} ${d["last" + k.slice(5)]}`.trim());
-      const bk = window.GTDB.addBooking({
-        source: "website", status: "new",
-        customer: { name: names[0] || "", phone: d.phone, email: d.email },
-        route: `${state.o.code} → ${state.d.code}`, airline: r.cr.n, cabin: state.cabin,
-        depart: r.legs[0].dateIso, ret: r.legs[1] ? r.legs[1].dateIso : "", pax: names.length || 1, travelers: names,
-        sell: r.total, cost: Math.round(r.total / 1.08), notes: d.notes || "",
-      });
-      ref = bk.id;
+      const btn0 = $('button[type="submit"]', form);
+      btn0.disabled = true;
+      try {
+        ref = await window.GTDB.websiteBooking({
+          customer: { name: names[0] || "", phone: d.phone, email: d.email },
+          route: `${state.o.code} → ${state.d.code}`, airline: r.cr.n, cabin: state.cabin,
+          depart: r.legs[0].dateIso, ret: r.legs[1] ? r.legs[1].dateIso : "", pax: names.length || 1, travelers: names,
+          sell: r.total, notes: [people.join("\n"), d.notes].filter(Boolean).join("\n\n"),
+        });
+      } catch (err) { console.warn("booking not saved online", err); }
+      btn0.disabled = false;
     }
     const rows = flightRows(r);
     const msg = T(`طلب حجز جديد عبر الموقع — رقم ${ref}\n`, `New booking request from the website — ref ${ref}\n`) + rows.map(([k, v]) => `• ${k}: ${v}`).join("\n") +

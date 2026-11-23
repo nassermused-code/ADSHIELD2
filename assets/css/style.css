@@ -1311,3 +1311,5 @@ select option:disabled { color: #b5b5b5; }
   .team-grid { grid-template-columns: 1fr; }
   .staff-card dl { grid-template-columns: 1fr 1fr; }
 }
+.sec-note { margin: 0; text-align: center; font-size: .84rem; color: var(--ink-3); }
+body.is-loading .of-login { opacity: .4; pointer-events: none; }

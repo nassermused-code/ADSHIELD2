@@ -77,17 +77,11 @@
         <form class="b2b-card login-card" id="loginForm" novalidate>
           <div class="pass-head pass-head--form" aria-hidden="true"><span class="pass-head__brand"><img src="assets/img/logo.png" alt="" width="20" height="20">PARTNER LOGIN</span><span class="barcode"></span></div>
           <h2>تسجيل دخول الشركاء</h2>
-          <div class="field"><label for="lgEmail">البريد الإلكتروني</label><input id="lgEmail" type="email" autocomplete="username" dir="ltr" required></div>
+          <div class="field"><label for="lgEmail">البريد الإلكتروني</label><input id="lgEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" dir="ltr" required></div>
           <div class="field"><label for="lgPass">كلمة المرور</label><input id="lgPass" type="password" autocomplete="current-password" dir="ltr" required></div>
           <button type="submit" class="btn btn--accent btn--block">دخول</button>
           <p class="form-status" id="loginStatus" role="status" aria-live="polite"></p>
-          <div class="demo-note">
-            <b>نسخة تجريبية</b>
-            <p>هذه الصفحة للعرض فقط، والبيانات تُحفظ في متصفحك. للاستخدام الفعلي مع شركاء حقيقيين يجب ربطها بخادم آمن.</p>
-            <p class="demo-cred"><span>حساب شريك:</span> <b dir="ltr">demo@partner.com · demo1234</b></p>
-            <p class="demo-cred"><span>حساب جرين ترافيل:</span> <b dir="ltr">admin@greentravel.us · admin1234</b></p>
-            <div class="demo-actions"><button type="button" class="btn btn--ghost btn--sm" id="fillDemo">دخول كشريك</button><button type="button" class="btn btn--ghost btn--sm" id="fillAdmin">دخول كجرين ترافيل</button></div>
-          </div>
+          <p class="sec-note">🔒 كل وكيل يدخل إلى حسابه الخاص فقط، ولا يرى أي حساب آخر.</p>
           <a href="#" class="link-arrow" data-whatsapp="مرحباً، نرغب في فتح حساب شريك (B2B) مع جرين ترافيل">اطلب حساب شريك<svg class="i"><use href="#i-arrow"/></svg></a>
         </form>
       </div>
@@ -402,6 +396,7 @@
 
   <script src="assets/js/i18n-en.js" defer></script>
   <script src="assets/js/i18n.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
   <script src="assets/js/store.js" defer></script>
   <script src="assets/js/main.js" defer></script>
   <script src="assets/js/flights.js" defer></script>

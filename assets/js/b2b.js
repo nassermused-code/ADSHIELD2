@@ -1,12 +1,14 @@
 /* =========================================================
-   Green Travel — Partner (B2B) portal  ·  DEMO MODE
+   Green Travel — Partner (B2B) portal
    ---------------------------------------------------------
-   IMPORTANT: this demo keeps accounts, profiles and quotes in the visitor's
-   browser (localStorage). It is NOT secure: anyone can read this file.
-   For real partners, move login and data to a backend with per-partner
-   access rules (e.g. Supabase Auth + row-level security).
+   Each agent signs in with their own account (Supabase Auth). The database
+   only lets an agent read their own account, and partner prices are worked
+   out ON THE SERVER (partner_prices / partner_request_ticket), so an agent
+   never receives Green Travel's cost or fee.
+   The owner can open any agent's portal without a password (b2b.html?as=<id>)
+   and, signing in here directly, edit each agent's pricing.
 
-   Pricing (set by Green Travel per partner, in the admin settings panel):
+   Pricing (set by Green Travel per partner):
      our cost (net)  = public website fare / (1 + publicMarkup)
      mode "hybrid":  fee = flat (if net < threshold), net × pct (if net ≥ threshold)
      mode "flat":    fee = flatAll on every ticket
@@ -20,105 +22,115 @@
   const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  /* ---------- Green Travel settings ---------- */
-  const DEFAULT_PRICING = {
-    mode: "hybrid",     // "hybrid" (flat under the threshold, % above), "flat" (same fee per ticket) or "percent" (same % per ticket)
-    flatAll: 20,        // fee per ticket in "flat" mode
-    pctAll: 0.02,       // percentage per ticket in "percent" mode
-    publicMarkup: 0.08, // Green Travel's markup on the public website (used to back out our cost)
-    flat: 20,           // flat fee per ticket for tickets below the threshold
-    threshold: 1000,    // USD, on our cost
-    pct: 0.02,          // percentage for tickets at or above the threshold (2% × $1,000 = $20, so no jump)
-  };
-  // Accounts come from the shared store (assets/js/store.js): partners are managed in the back office,
-  // Green Travel admins are the "admin" staff accounts.
+  const DEFAULT_PRICING = { mode: "hybrid", flatAll: 20, pctAll: 0.02, publicMarkup: 0.08, flat: 20, threshold: 1000, pct: 0.02 };
   const DB = window.GTDB;
-  const ACCOUNTS = () => [
-    ...DB.all("partners").map((p) => ({ email: p.email, password: p.password, role: "partner", id: p.id, status: p.status, agency: p.agency, contact: p.contact, phone: p.phone, partnerEmail: p.contactEmail || p.email, website: p.website, logo: p.logo, sellMarkup: p.sellMarkup, pricing: p.pricing || {}, creditLimit: p.creditLimit })),
-    ...DB.all("staff").filter((x) => x.role === "owner").map((x) => ({ email: x.email, password: x.password, role: "admin", agency: "Green Travel", contact: x.name, phone: "+1 (708) 963-2552", partnerEmail: "info@greentravel.us", website: "www.greentravel.us", pricing: {} })),
-  ];
-  const PARTNERS = () => ACCOUNTS().filter((a) => a.role === "partner");
-  const partnerIdOf = (email) => (DB.all("partners").find((x) => x.email === email) || {}).id;
-
-  const KEY_SESSION = "gt-b2b-session", KEY_PROFILE = "gt-b2b-profile:", KEY_QUOTES = "gt-b2b-quotes:";
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
     del(k) { try { localStorage.removeItem(k); } catch (e) {} },
   };
+  const KEY_PROFILE = "gt-b2b-profile:owner", KEY_QUOTES = "gt-b2b-quotes:";
 
-  let session = store.get(KEY_SESSION, null);
-  const account = () => ACCOUNTS().find((a) => session && a.email === session.email);
+  /* ---------- Who is using the portal ---------- */
+  // ctx.role "partner": an agent (or the owner viewing one agent: ctx.ownerView); "admin": the owner editing pricing
+  let ctx = null;
+  const priceCache = new Map(), pending = new Set();
+  const account = () => (ctx ? { role: ctx.role, id: ctx.pid, email: ctx.partner ? ctx.partner.email : "owner", creditLimit: ctx.acc ? +ctx.acc.creditLimit : 0 } : null);
+  const isAdmin = () => !!ctx && ctx.role === "admin";
+  const PARTNERS = () => DB.all("partners");
   const profile = () => {
-    const a = account();
-    if (!a) return null;
-    const base = { agency: a.agency, contact: a.contact, phone: a.phone, email: a.partnerEmail, website: a.website, logo: a.logo || "", sellMarkup: a.sellMarkup ?? 6 };
-    return a.role === "partner" ? base : Object.assign(base, store.get(KEY_PROFILE + a.email, {}));
+    if (!ctx) return null;
+    if (ctx.role === "partner") { const p = ctx.partner; return { agency: p.agency, contact: p.contact, phone: p.phone, email: p.contactEmail || p.email, website: p.website, logo: p.logo || "", sellMarkup: p.sellMarkup ?? 6 }; }
+    return Object.assign({ agency: "Green Travel", contact: (DB.profile || {}).name || "", phone: "+1 (708) 963-2552", email: "info@greentravel.us", website: "www.greentravel.us", logo: "", sellMarkup: 6 }, store.get(KEY_PROFILE, {}));
   };
-  const KEY_PRICING = "gt-b2b-pricing:";
-  const isAdmin = () => !!account() && account().role === "admin";
-  let adminTarget = null; // partner whose pricing the admin is editing/previewing
-  const pricingFor = (email) => {
-    const acc = ACCOUNTS().find((a) => a.email === email) || {};
-    return Object.assign({}, DEFAULT_PRICING, acc.pricing || {});
-  };
-  const pricedPartner = () => (isAdmin() ? adminTarget || (PARTNERS()[0] || {}).email : (account() || {}).email);
-  const pricing = () => pricingFor(pricedPartner());
+  let adminTarget = null; // partner id whose pricing the owner is editing/previewing
+  const pricingFor = (id) => Object.assign({}, DEFAULT_PRICING, (DB.get("partners", id) || {}).pricing || {});
+  const pricing = () => pricingFor(adminTarget);
 
+  async function loadCtx() {
+    ctx = null; priceCache.clear(); pending.clear();
+    const pr = DB.profile;
+    if (!pr || pr.status !== "active") return;
+    const as = new URLSearchParams(location.search).get("as");
+    if (pr.kind === "partner") ctx = { role: "partner", pid: pr.id, param: null };
+    else if (pr.kind === "owner" && as) ctx = { role: "partner", pid: as, param: as, ownerView: true };
+    else if (pr.kind === "owner") ctx = { role: "admin" };
+    else return;
+    if (ctx.role === "partner") {
+      ctx.partner = await DB.partnerRow(ctx.pid);
+      if (!ctx.partner) { ctx = null; return; }
+      await refreshAccount();
+      [400, 1250, 3000].forEach((x) => pending.add(x));
+      await prepare();
+    }
+  }
+  async function refreshAccount() { if (ctx && ctx.role === "partner") ctx.acc = await DB.partnerAccount(ctx.param); }
+
+  // Partner prices come from the server. price() records any fare it hasn't seen; prepare() prices them in one call.
+  async function prepare() {
+    if (!ctx || ctx.role !== "partner" || !pending.size) return;
+    const pubs = [...pending]; pending.clear();
+    try { (await DB.partnerPrices(pubs, ctx.param)).forEach((x) => priceCache.set(Math.round(+x.pub), +x.partner)); } catch (e) { console.warn(e); }
+  }
   function price(pub) {
-    const c = pricing();
-    const net = pub / (1 + c.publicMarkup);
-    let fee = c.mode === "flat" ? c.flatAll : c.mode === "percent" ? net * c.pctAll : net < c.threshold ? c.flat : net * c.pct;
-    fee = Math.min(fee, (pub - net) * 0.6); // safety: the partner always pays less than the public fare
-    const partner = Math.round(net + fee);
+    pub = Math.round(pub);
     const pr = profile();
+    let partner, net = null, fee = null;
+    if (isAdmin()) {
+      const c = pricingFor(adminTarget);
+      net = pub / (1 + c.publicMarkup);
+      fee = c.mode === "flat" ? c.flatAll : c.mode === "percent" ? net * c.pctAll : net < c.threshold ? c.flat : net * c.pct;
+      fee = Math.min(fee, (pub - net) * 0.6);
+      partner = Math.round(net + fee);
+    } else {
+      partner = priceCache.get(pub);
+      if (partner == null) { pending.add(pub); partner = pub; }
+    }
     const sell = Math.max(partner, Math.min(pub, Math.round(partner * (1 + (pr ? pr.sellMarkup : 6) / 100))));
-    return { pub, net: Math.round(net), fee: Math.round(fee), partner, sell, profit: sell - partner };
+    return { pub, partner, sell, profit: sell - partner, net: net == null ? null : Math.round(net), fee: fee == null ? null : Math.round(fee) };
   }
 
   /* ---------- Login ---------- */
   function ownerBar() {
     let bar = $("#b2bOwnerBar");
-    const on = !!(session && session.by && account());
+    const on = !!(ctx && ctx.ownerView);
     if (!on) { if (bar) bar.remove(); return; }
     if (!bar) { bar = document.createElement("div"); bar.id = "b2bOwnerBar"; bar.className = "b2b-owner-bar"; bar.setAttribute("role", "status"); document.body.prepend(bar); }
-    bar.innerHTML = `<span>${T("وضع المالك: أنت داخل حساب", "Owner view: you are inside the account of")} <b>${esc(profile().agency || session.email)}</b> ${T("بدون كلمة مرور، وترى ما يراه الوكيل فقط.", "without a password and see only what the agent sees.")}</span><button type="button" class="btn btn--sm btn--accent" data-b2b-logout>${T("إنهاء العرض", "End view")}</button>`;
-    $("[data-b2b-logout]", bar).addEventListener("click", () => { store.del(KEY_SESSION); session = null; if (window.GTFlights) window.GTFlights.exit(); showApp(); if (window.opener) window.close(); });
+    bar.innerHTML = `<span>${T("وضع المالك: أنت داخل حساب", "Owner view: you are inside the account of")} <b>${esc(profile().agency)}</b> ${T("بدون كلمة مرور، وترى ما يراه الوكيل فقط.", "without a password and see only what the agent sees.")}</span><a class="btn btn--sm btn--accent" href="office.html#agents">${T("العودة إلى المكتب الخلفي", "Back to the back office")}</a>`;
   }
 
   function showApp() {
     ownerBar();
-    const logged = !!account();
+    const logged = !!ctx;
     $("#b2bLogin").hidden = logged;
     $("#b2bApp").hidden = !logged;
     $$("[data-b2b-logout]").forEach((b) => (b.hidden = !logged));
     window.GTB2B.active = logged;
     $("#adminForm").hidden = !(logged && isAdmin());
     $("#accountCard").hidden = !(logged && !isAdmin());
-    if (logged) { renderProfile(); renderRules(); renderQuotes(); if (isAdmin()) renderAdmin(); else renderAccount(); }
+    if (logged) { renderProfile(); if (isAdmin()) renderAdmin(); renderRules(); renderQuotes(); if (!isAdmin()) renderAccount(); }
   }
 
   function initLogin() {
     const form = $("#loginForm");
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const r = DB.login($("#lgEmail").value, $("#lgPass").value);
-      const st = $("#loginStatus");
-      st.className = "form-status err";
+      const st = $("#loginStatus"), btn = form.querySelector("[type=submit]");
+      st.className = "form-status err"; st.textContent = ""; btn.disabled = true;
+      let r = null;
+      try { r = await DB.login($("#lgEmail").value, $("#lgPass").value); } catch (er) { st.textContent = T("تعذّر الاتصال بالخادم. حاول مرة أخرى.", "Could not reach the server. Try again."); btn.disabled = false; return; }
+      btn.disabled = false;
       if (r && r.error === "inactive") { st.textContent = T("حسابك غير مفعّل حالياً. تواصل مع جرين ترافيل.", "Your account is not active. Please contact Green Travel."); return; }
-      if (r && r.kind === "staff" && r.role !== "owner") { st.textContent = T("حسابات الموظفين تدخل من المكتب الخلفي.", "Staff accounts sign in through the back office."); return; }
-      const acc = r && ACCOUNTS().find((a) => a.email === r.email);
-      if (!acc) { st.textContent = T("البريد الإلكتروني أو كلمة المرور غير صحيحة.", "Incorrect email or password."); return; }
-      session = { email: acc.email, at: Date.now() };
-      store.set(KEY_SESSION, session);
-      st.textContent = "";
+      if (!r) { st.textContent = T("البريد الإلكتروني أو كلمة المرور غير صحيحة.", "Incorrect email or password."); return; }
+      if (r.kind === "staff" && r.role !== "owner") { await DB.logout(); st.textContent = T("حسابات الموظفين تدخل من المكتب الخلفي.", "Staff accounts sign in through the back office."); return; }
+      $("#lgPass").value = "";
+      await loadCtx();
       showApp();
       window.scrollTo({ top: 0 });
     });
-    $("#fillDemo").addEventListener("click", () => { $("#lgEmail").value = "demo@partner.com"; $("#lgPass").value = "demo1234"; });
-    $("#fillAdmin").addEventListener("click", () => { $("#lgEmail").value = "admin@greentravel.us"; $("#lgPass").value = "admin1234"; });
-    $$("[data-b2b-logout]").forEach((b) => b.addEventListener("click", () => {
-      store.del(KEY_SESSION); session = null;
+    $$("[data-b2b-logout]").forEach((b) => b.addEventListener("click", async () => {
+      if (ctx && ctx.ownerView) { location.href = "office.html#agents"; return; }
+      await DB.logout(); ctx = null;
       if (window.GTFlights) window.GTFlights.exit();
       showApp();
     }));
@@ -164,10 +176,12 @@
       if (window.GTFlights && document.body.classList.contains("is-results")) $("#search .search__panel.is-active").requestSubmit();
     });
   }
-  function saveProfile(p) {
-    const a = account();
-    if (a.role === "partner") DB.update("partners", a.id, { agency: p.agency, contact: p.contact, phone: p.phone, contactEmail: p.email, website: p.website, logo: p.logo, sellMarkup: p.sellMarkup });
-    else store.set(KEY_PROFILE + a.email, p);
+  async function saveProfile(p) {
+    if (ctx.role === "partner") {
+      try { await DB.updatePartnerProfile({ agency: p.agency, contact: p.contact, phone: p.phone, email: p.email, website: p.website, logo: p.logo, sellMarkup: p.sellMarkup }, ctx.param); ctx.partner = await DB.partnerRow(ctx.pid); }
+      catch (e) { toast(T("تعذّر الحفظ", "Could not save") + ": " + e.message); }
+    } else store.set(KEY_PROFILE, p);
+    renderProfile();
   }
 
   /* ---------- Pricing rules card ---------- */
@@ -194,8 +208,8 @@
   /* ---------- Green Travel admin: pricing per partner ---------- */
   function renderAdmin() {
     const list = PARTNERS();
-    if (!adminTarget) adminTarget = (list[0] || {}).email;
-    $("#adPartner").innerHTML = list.map((a) => `<option value="${esc(a.email)}" ${a.email === adminTarget ? "selected" : ""}>${esc(a.agency)} · ${esc(a.email)}</option>`).join("");
+    if (!adminTarget || !DB.get("partners", adminTarget)) adminTarget = (list[0] || {}).id;
+    $("#adPartner").innerHTML = list.length ? list.map((a) => `<option value="${esc(a.id)}" ${a.id === adminTarget ? "selected" : ""}>${esc(a.agency)} · ${esc(a.email)}</option>`).join("") : `<option value="">${T("لا يوجد وكلاء بعد: أضفهم من المكتب الخلفي", "No agents yet: add them in the back office")}</option>`;
     const c = pricingFor(adminTarget);
     $$('input[name="adMode"]').forEach((r) => (r.checked = r.value === c.mode));
     $("#adFlatAll").value = c.flatAll;
@@ -215,7 +229,7 @@
   function initAdmin() {
     $("#adPartner").addEventListener("change", (e) => { adminTarget = e.target.value; renderAdmin(); renderRules(); });
     $$('input[name="adMode"]').forEach((r) => r.addEventListener("change", toggleAdminFields));
-    $("#adminForm").addEventListener("submit", (e) => {
+    $("#adminForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : d; };
       const cfg = {
@@ -227,18 +241,20 @@
         pct: num("#adPct", DEFAULT_PRICING.pct * 100) / 100,
         publicMarkup: num("#adMarkup", DEFAULT_PRICING.publicMarkup * 100) / 100,
       };
-      DB.update("partners", partnerIdOf(adminTarget), { pricing: cfg });
+      if (!adminTarget) return;
+      try { await DB.update("partners", adminTarget, { pricing: cfg }); } catch (er) { toast(er.message); return; }
       renderRules();
       toast(T("تم حفظ تسعير الشريك", "Partner pricing saved"));
       if (document.body.classList.contains("is-results")) $("#search .search__panel.is-active").requestSubmit();
     });
-    $("#adReset").addEventListener("click", () => { DB.update("partners", partnerIdOf(adminTarget), { pricing: { mode: "hybrid" } }); renderAdmin(); renderRules(); toast(T("تمت إعادة التسعير الافتراضي", "Default pricing restored")); });
+    $("#adReset").addEventListener("click", async () => { if (!adminTarget) return; try { await DB.update("partners", adminTarget, { pricing: { mode: "hybrid" } }); } catch (er) { toast(er.message); return; } renderAdmin(); renderRules(); toast(T("تمت إعادة التسعير الافتراضي", "Default pricing restored")); });
   }
 
   /* ---------- Quotes ---------- */
   let current = null;
-  const quotes = () => store.get(KEY_QUOTES + account().email, []);
-  const saveQuotes = (q) => store.set(KEY_QUOTES + account().email, q);
+  const quotesKey = () => KEY_QUOTES + (ctx.role === "partner" ? ctx.pid : "owner");
+  const quotes = () => store.get(quotesKey(), []);
+  const saveQuotes = (q) => store.set(quotesKey(), q);
 
   function openQuote(data) {
     const p = profile();
@@ -317,7 +333,7 @@
     $("#kpiProfit").textContent = usd.format(list.reduce((s, q) => s + (q.profit || 0), 0));
     $("#kpiTicketing").textContent = list.filter((q) => q.status === "ticketing").length;
     $("#quotesList").innerHTML = list.length
-      ? list.map((q) => { const bk = q.bookingId && DB.get("bookings", q.bookingId); return `<tr><td dir="ltr">${esc(q.ref)}</td><td dir="ltr">${esc(q.route)}</td><td>${esc(q.customer || "—")}</td><td dir="ltr">${usd.format(q.sell)}</td><td dir="ltr" class="pos">${usd.format(q.profit)}</td><td><span class="st st--${q.status}">${STATUS[q.status] || q.status}</span>${bk ? ` <span class="pill pill--${bk.status}">${BSTATUS()[bk.status] || bk.status}</span>` : ""}</td></tr>`; }).join("")
+      ? list.map((q) => { const bk = q.bookingId && ctx.acc && (ctx.acc.bookings || []).find((b) => b.id === q.bookingId); return `<tr><td dir="ltr">${esc(q.ref)}</td><td dir="ltr">${esc(q.route)}</td><td>${esc(q.customer || "—")}</td><td dir="ltr">${usd.format(q.sell)}</td><td dir="ltr" class="pos">${usd.format(q.profit)}</td><td><span class="st st--${q.status}">${STATUS[q.status] || q.status}</span>${bk ? ` <span class="pill pill--${bk.status}">${BSTATUS()[bk.status] || bk.status}</span>` : ""}</td></tr>`; }).join("")
       : `<tr><td colspan="6" class="empty">${T("لا توجد عروض بعد. ابحث عن رحلة واضغط «إنشاء عرض سعر».", "No quotes yet. Search for a flight and press “Create quote”.")}</td></tr>`;
   }
 
@@ -340,20 +356,23 @@
       (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast(T("تم نسخ العرض", "Quote copied"))).catch(() => toast(T("تعذّر النسخ", "Couldn't copy")));
       recordQuote("draft");
     });
-    $("#qTicket").addEventListener("click", () => {
-      const a = account(), q = current;
-      if (a.role === "partner" && !q.bookingId) {
-        const pr = price(q.pub);
-        const bk = DB.addBooking({
-          source: "b2b", partnerId: a.id, status: "new",
-          customer: { name: $("#qCustomer").value.trim(), phone: "", email: "" },
-          route: q.route, airline: q.airline, cabin: q.cabinKey || "economy",
-          depart: (q.legs[0] || {}).iso || "", ret: (q.legs[1] || {}).iso || "", pax: q.paxCount || 1,
-          cost: Math.round(pr.net * q.k), sell: Math.round(q.partnerPer * q.k), fee: Math.round((q.partnerPer - pr.net) * q.k),
-          notes: T("طلب إصدار من بوابة الشركاء · عرض ", "Ticketing request from partner portal · quote ") + q.ref,
-        });
-        q.bookingId = bk.id;
-        toast(T(`تم إنشاء الحجز ${bk.id} لدى جرين ترافيل`, `Booking ${bk.id} created with Green Travel`));
+    $("#qTicket").addEventListener("click", async () => {
+      const q = current, btn = $("#qTicket");
+      if (ctx.role === "partner" && !q.bookingId) {
+        btn.disabled = true;
+        try {
+          const res = await DB.partnerRequest({
+            pubPer: q.pub, k: q.k,
+            customer: { name: $("#qCustomer").value.trim(), phone: "", email: "" },
+            route: q.route, airline: q.airline, cabin: q.cabinKey || "economy",
+            depart: (q.legs[0] || {}).iso || "", ret: (q.legs[1] || {}).iso || "", pax: q.paxCount || 1,
+            notes: T("طلب إصدار من بوابة الشركاء · عرض ", "Ticketing request from partner portal · quote ") + q.ref,
+          }, ctx.param);
+          q.bookingId = res.id;
+          toast(T(`تم إنشاء الحجز ${res.id} لدى جرين ترافيل`, `Booking ${res.id} created with Green Travel`));
+          await refreshAccount();
+        } catch (er) { btn.disabled = false; toast(T("تعذّر إرسال الطلب: ", "Could not send the request: ") + er.message); return; }
+        btn.disabled = false;
       }
       recordQuote("ticketing");
       renderAccount();
@@ -365,33 +384,32 @@
   /* ---------- Partner account with Green Travel (same data as the back office) ---------- */
   const BSTATUS = () => ({ new: T("قيد المراجعة", "In review"), quoted: T("عرض سعر", "Quoted"), confirmed: T("مؤكد", "Confirmed"), ticketed: T("صادرة", "Ticketed"), cancelled: T("ملغي", "Cancelled"), refunded: T("مسترد", "Refunded") });
   function renderAccount() {
-    const a = account();
-    if (!a || a.role !== "partner") return;
-    const bal = DB.partnerBalance(a.id);
-    const bks = DB.all("bookings").filter((b) => b.partnerId === a.id);
-    const pays = DB.all("payments").filter((p) => p.partnerId === a.id && p.dir === "in");
-    const over = a.creditLimit && bal.balance > a.creditLimit;
-    $("#acBalance").textContent = usd.format(bal.balance);
-    $("#acBalance").classList.toggle("neg", bal.balance > 0);
-    $("#acCharges").textContent = usd.format(bal.charges);
-    $("#acPaid").textContent = usd.format(bal.paid);
-    $("#acLimit").textContent = usd.format(a.creditLimit || 0);
-    $("#acAvail").textContent = usd.format(Math.max(0, (a.creditLimit || 0) - bal.balance));
+    if (!ctx || ctx.role !== "partner" || !ctx.acc) return;
+    const a = ctx.acc, lim = +a.creditLimit || 0, bal = +a.balance;
+    const over = lim && bal > lim;
+    $("#acBalance").textContent = usd.format(bal);
+    $("#acBalance").classList.toggle("neg", bal > 0);
+    $("#acCharges").textContent = usd.format(+a.charges);
+    $("#acPaid").textContent = usd.format(+a.paid);
+    $("#acLimit").textContent = usd.format(lim);
+    $("#acAvail").textContent = usd.format(Math.max(0, lim - bal));
     $("#acOver").hidden = !over;
-    $("#acBookings").innerHTML = bks.length ? bks.map((b) => `<tr><td dir="ltr">${esc(b.id)}</td><td>${new Date(b.created + "T12:00:00").toLocaleDateString(I18N.locale, { day: "numeric", month: "short" })}</td><td dir="ltr">${esc(b.route)}</td><td>${esc(b.customer.name || "—")}</td><td><span class="pill pill--${b.status}">${BSTATUS()[b.status] || b.status}</span></td><td dir="ltr">${esc(b.pnr || "—")}</td><td dir="ltr">${esc((b.tickets || []).join(", ") || "—")}</td><td dir="ltr">${usd.format(b.sell)}</td></tr>`).join("")
+    const bks = a.bookings || [], pays = a.payments || [];
+    $("#acBookings").innerHTML = bks.length ? bks.map((b) => `<tr><td dir="ltr">${esc(b.id)}</td><td>${new Date(b.created + "T12:00:00").toLocaleDateString(I18N.locale, { day: "numeric", month: "short" })}</td><td dir="ltr">${esc(b.route)}</td><td>${esc(b.customer || "—")}</td><td><span class="pill pill--${b.status}">${BSTATUS()[b.status] || b.status}</span></td><td dir="ltr">${esc(b.pnr || "—")}</td><td dir="ltr">${esc((b.tickets || []).join(", ") || "—")}</td><td dir="ltr">${usd.format(+b.sell)}</td></tr>`).join("")
       : `<tr><td colspan="8" class="empty">${T("لا توجد حجوزات بعد.", "No bookings yet.")}</td></tr>`;
-    $("#acPayments").innerHTML = pays.length ? pays.map((p) => `<tr><td>${new Date(p.date + "T12:00:00").toLocaleDateString(I18N.locale, { day: "numeric", month: "short", year: "numeric" })}</td><td dir="ltr">${esc(p.ref || "—")}</td><td dir="ltr" class="pos">${usd.format(p.amount)}</td></tr>`).join("")
+    $("#acPayments").innerHTML = pays.length ? pays.map((p) => `<tr><td>${new Date(p.date + "T12:00:00").toLocaleDateString(I18N.locale, { day: "numeric", month: "short", year: "numeric" })}</td><td dir="ltr">${esc(p.ref || "—")}</td><td dir="ltr" class="pos">${usd.format(+p.amount)}</td></tr>`).join("")
       : `<tr><td colspan="3" class="empty">${T("لا توجد مدفوعات مسجلة.", "No payments recorded.")}</td></tr>`;
   }
-  DB.onChange(() => { if (account()) { renderAccount(); renderQuotes(); } });
+  // Keep the agent's account fresh (bookings issued, payments recorded by the team)
+  setInterval(async () => { if (ctx && ctx.role === "partner" && !document.hidden) { await refreshAccount().catch(() => {}); renderAccount(); renderQuotes(); } }, 60000);
 
-  window.GTB2B = { active: false, price, openQuote };
+  window.GTB2B = { active: false, price, prepare, openQuote };
 
   document.addEventListener("DOMContentLoaded", () => {
     initLogin();
     initProfile();
     initQuote();
     initAdmin();
-    showApp();
+    DB.ready.then(async () => { await loadCtx().catch((e) => console.warn(e)); showApp(); });
   });
 })();

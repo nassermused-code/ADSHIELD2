@@ -452,4 +452,6 @@ window.I18N_EN = {
   "موظف حجوزات": "Reservations agent",
   "الأقسام": "Sections",
   "المالك (عرض)": "Owner (view)",
+  "🔒 الدخول آمن ومشفّر. كل موظف يرى فقط ما سمح به المالك.": "🔒 Secure, encrypted sign-in. Each employee sees only what the owner allows.",
+  "🔒 كل وكيل يدخل إلى حسابه الخاص فقط، ولا يرى أي حساب آخر.": "🔒 Each agent signs in to their own account only and cannot see any other account.",
 };
