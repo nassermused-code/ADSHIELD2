@@ -455,4 +455,9 @@ window.I18N_EN = {
   "🔒 الدخول آمن ومشفّر. كل موظف يرى فقط ما سمح به المالك.": "🔒 Secure, encrypted sign-in. Each employee sees only what the owner allows.",
   "🔒 كل وكيل يدخل إلى حسابه الخاص فقط، ولا يرى أي حساب آخر.": "🔒 Each agent signs in to their own account only and cannot see any other account.",
   "إدارة حجزي": "Manage my booking",
+  "بوابة الشركات": "Company portal",
+  "إدارة سفر موظفي شركتكم مع جرين ترافيل: طلبات السفر والموافقات والتذاكر والفواتير.": "Manage your company's business travel with Green Travel: trip requests, approvals, tickets and invoices.",
+  "🔒 كل شركة ترى بياناتها فقط. لفتح حساب لشركتكم تواصل معنا.": "🔒 Each company sees only its own data. To open an account for your company, contact us.",
+  "بوابة الشركات · Green Travel": "Company portal · Green Travel",
+  "بوابة الشركات (سفر الأعمال)": "Company portal (business travel)",
 };

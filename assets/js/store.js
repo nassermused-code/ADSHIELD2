@@ -17,7 +17,10 @@ window.GTDB = (() => {
   const STAFF_DOMAIN = "staff.greentravel.us"; // staff sign in with a username; this turns it into their login id
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, storageKey: "gt-auth", autoRefreshToken: true } });
 
-  const cache = { staff: [], partners: [], bookings: [], payments: [], expenses: [], tasks: [], log: [], journal: [] };
+  const cache = { staff: [], partners: [], bookings: [], payments: [], expenses: [], tasks: [], log: [], journal: [],
+    companies: [], costCenters: [], travelers: [], policies: [], trips: [], invoices: [], companyUsers: [] };
+  // snake_case row -> camelCase object (TMC tables)
+  const camel = (r) => Object.fromEntries(Object.entries(r || {}).map(([k, v]) => [k.replace(/_([a-z])/g, (m, c) => c.toUpperCase()), v]));
   const listeners = [];
   let profile = null;
   const notify = () => listeners.forEach((fn) => { try { fn(); } catch (e) { console.error(e); } });
@@ -27,18 +30,21 @@ window.GTDB = (() => {
   const mapStaff = (r) => ({ id: r.id, kind: r.kind, role: r.kind, username: r.username || "", email: r.email || "", name: r.name, title: r.title, phone: r.phone, status: r.status, perms: r.perms || [], lastLogin: r.last_login, created: (r.created_at || "").slice(0, 10) });
   const mapPricing = (p) => (p ? { mode: p.mode, flatAll: +p.flat_all, pctAll: +p.pct_all, flat: +p.flat, threshold: +p.threshold, pct: +p.pct, publicMarkup: +p.public_markup } : {});
   const mapPartner = (r, pr) => ({ id: r.id, email: r.email, agency: r.agency, contact: r.contact, phone: r.phone, contactEmail: r.contact_email, website: r.website, logo: r.logo, sellMarkup: +r.sell_markup, status: r.status, creditLimit: +r.credit_limit, created: (r.created_at || "").slice(0, 10), pricing: mapPricing(pr) });
-  const mapBooking = (r, c) => ({ id: r.id, created: r.created, source: r.source, partnerId: r.partner_id, status: r.status, customer: Object.assign({ name: "", phone: "", email: "" }, r.customer || {}), route: r.route, airline: r.airline, cabin: r.cabin, depart: r.depart || "", ret: r.ret || "", pax: r.pax, travelers: r.travelers || [], pnr: r.pnr, tickets: r.tickets || [], sell: +r.sell, notes: r.notes, assignedTo: r.assigned_to || "", cost: c ? +c.cost : 0, fee: c ? +c.fee : 0, segments: r.segments || [], baggage: r.baggage || "", ticketedAt: r.ticketed_at || "", reminders: r.reminders || {}, provider: r.provider || "", providerRef: r.provider_ref || "", holdExpires: r.hold_expires || "" });
+  const mapBooking = (r, c) => ({ id: r.id, created: r.created, source: r.source, partnerId: r.partner_id, status: r.status, customer: Object.assign({ name: "", phone: "", email: "" }, r.customer || {}), route: r.route, airline: r.airline, cabin: r.cabin, depart: r.depart || "", ret: r.ret || "", pax: r.pax, travelers: r.travelers || [], pnr: r.pnr, tickets: r.tickets || [], sell: +r.sell, notes: r.notes, assignedTo: r.assigned_to || "", cost: c ? +c.cost : 0, fee: c ? +c.fee : 0, segments: r.segments || [], baggage: r.baggage || "", ticketedAt: r.ticketed_at || "", reminders: r.reminders || {}, provider: r.provider || "", providerRef: r.provider_ref || "", holdExpires: r.hold_expires || "",
+    companyId: r.company_id || "", travelerId: r.traveler_id || "", costCenterId: r.cost_center_id || "", tripId: r.trip_id || "", invoiceId: r.invoice_id || "", serviceFee: +r.service_fee || 0 });
   const bookingRow = (b) => {
     const r = {};
-    const m = { status: "status", source: "source", partnerId: "partner_id", customer: "customer", route: "route", airline: "airline", cabin: "cabin", depart: "depart", ret: "ret", pax: "pax", travelers: "travelers", pnr: "pnr", tickets: "tickets", sell: "sell", notes: "notes", assignedTo: "assigned_to", segments: "segments", baggage: "baggage" };
+    const m = { status: "status", source: "source", partnerId: "partner_id", customer: "customer", route: "route", airline: "airline", cabin: "cabin", depart: "depart", ret: "ret", pax: "pax", travelers: "travelers", pnr: "pnr", tickets: "tickets", sell: "sell", notes: "notes", assignedTo: "assigned_to", segments: "segments", baggage: "baggage",
+      companyId: "company_id", travelerId: "traveler_id", costCenterId: "cost_center_id", tripId: "trip_id", serviceFee: "service_fee" };
     Object.entries(m).forEach(([k, col]) => { if (k in b) r[col] = b[k]; });
     if ("depart" in r) r.depart = r.depart || null;
     if ("ret" in r) r.ret = r.ret || null;
     if ("assigned_to" in r) r.assigned_to = r.assigned_to || null;
     if ("partner_id" in r) r.partner_id = r.partner_id || null;
+    ["company_id", "traveler_id", "cost_center_id"].forEach((k) => { if (k in r) r[k] = r[k] || null; });
     return r;
   };
-  const mapPayment = (r) => ({ id: r.id, date: r.date, dir: r.dir, amount: +r.amount, method: r.method, bookingId: r.booking_id, partnerId: r.partner_id, ref: r.ref, note: r.note, by: r.created_by });
+  const mapPayment = (r) => ({ id: r.id, date: r.date, dir: r.dir, amount: +r.amount, method: r.method, bookingId: r.booking_id, partnerId: r.partner_id, companyId: r.company_id || "", invoiceId: r.invoice_id || "", ref: r.ref, note: r.note, by: r.created_by });
   const mapExpense = (r) => ({ id: r.id, date: r.date, category: r.category, amount: +r.amount, note: r.note, method: r.method || "bank" });
   const mapJournal = (r) => ({ id: r.id, date: r.date, memo: r.memo, lines: (r.lines || []).map((l) => ({ account: String(l.account), debit: +l.debit || 0, credit: +l.credit || 0, note: l.note || "" })) });
   const mapTask = (r) => ({ id: r.id, title: r.title, details: r.details, assignee: r.assignee, due: r.due || "", priority: r.priority, status: r.status, bookingId: r.booking_id, created: r.created, createdBy: r.created_by, doneAt: r.done_at || "" });
@@ -68,6 +74,15 @@ window.GTDB = (() => {
       owner ? sb.from("activity_log").select("*").order("at", { ascending: false }).limit(300) : { data: [] },
       owner ? q("journal_entries").order("date", { ascending: false }) : { data: [] },
     ]);
+    // Corporate travel (TMC): only for the owner and staff with the "corporate" permission
+    const corp = owner || (profile.perms || []).includes("corporate");
+    const [co, cc, tv, po, tr, iv, cu] = corp ? await Promise.all([
+      q("companies").order("name"), q("cost_centers").order("name"), q("travelers").order("last_name"), q("travel_policies"),
+      q("trip_requests").order("created_at", { ascending: false }), q("company_invoices").order("issued", { ascending: false }), q("company_users"),
+    ]) : [{}, {}, {}, {}, {}, {}, {}];
+    cache.companies = (co.data || []).map(camel); cache.costCenters = (cc.data || []).map(camel); cache.travelers = (tv.data || []).map(camel);
+    cache.policies = (po.data || []).map((x) => Object.assign(camel(x), { id: x.company_id })); cache.trips = (tr.data || []).map(camel);
+    cache.invoices = (iv.data || []).map(camel); cache.companyUsers = (cu.data || []).map((x) => Object.assign(camel(x), { id: x.user_id }));
     const costBy = new Map((costs.data || []).map((c) => [c.booking_id, c]));
     const priceBy = new Map((pricing.data || []).map((p) => [p.partner_id, p]));
     cache.staff = (st.data || []).map(mapStaff);
@@ -111,6 +126,7 @@ window.GTDB = (() => {
       await loadProfile();
       if (!profile) { await sb.auth.signOut(); return null; }
       if (profile.status !== "active") { await sb.auth.signOut(); profile = null; return { error: "inactive" }; }
+      if (profile.kind === "company") return { kind: "company", id: profile.id, name: profile.name, email: profile.email };
       sb.rpc("touch_login").then(() => {}, () => {});
       await load();
       subscribe();
@@ -143,7 +159,7 @@ window.GTDB = (() => {
       if (col === "tasks") res = await sb.from("tasks").insert({ title: obj.title, details: obj.details || "", assignee: obj.assignee || null, due: obj.due || null, priority: obj.priority || "normal", status: obj.status || "open", booking_id: obj.bookingId || "" }).select().single();
       else if (col === "expenses") res = await sb.from("expenses").insert({ date: obj.date, category: obj.category, amount: obj.amount, note: obj.note || "", method: obj.method || "bank" }).select().single();
       else if (col === "journal") res = await sb.from("journal_entries").insert({ date: obj.date, memo: obj.memo || "", lines: obj.lines }).select().single();
-      else if (col === "payments") res = await sb.from("payments").insert({ date: obj.date, dir: obj.dir, amount: obj.amount, method: obj.method, booking_id: obj.bookingId || null, partner_id: obj.partnerId || null, ref: obj.ref || "", note: obj.note || "" }).select().single();
+      else if (col === "payments") res = await sb.from("payments").insert({ date: obj.date, dir: obj.dir, amount: obj.amount, method: obj.method, booking_id: obj.bookingId || null, partner_id: obj.partnerId || null, company_id: obj.companyId || null, invoice_id: obj.invoiceId || "", ref: obj.ref || "", note: obj.note || "" }).select().single();
       else throw new Error("insert " + col);
       fail(res.error);
       const item = { tasks: mapTask, expenses: mapExpense, payments: mapPayment, journal: mapJournal }[col](res.data);
@@ -210,6 +226,17 @@ window.GTDB = (() => {
       }
       return data;
     },
+    // TMC rows are written with their database column names (snake_case); the cache is refreshed afterwards
+    async saveRow(table, row, key = "id") {
+      const id = row[key];
+      const res = id ? await sb.from(table).update(row).eq(key, id).select().maybeSingle() : await sb.from(table).insert(row).select().single();
+      fail(res.error);
+      await load();
+      return res.data;
+    },
+    async upsertRow(table, row) { fail((await sb.from(table).upsert(row)).error); await load(); },
+    async deleteRow(table, id, key = "id") { fail((await sb.from(table).delete().eq(key, id)).error); await load(); },
+    async rpc(name, args) { const { data, error } = await sb.rpc(name, args || {}); fail(error); return data; },
     log(action, ref) { sb.rpc("log_action", { p_action: String(action || ""), p_ref: String(ref || "") }).then(() => {}, () => {}); },
 
     /* ---------- Public website ---------- */

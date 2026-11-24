@@ -1419,3 +1419,20 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 .tk-share { margin-top: -6px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .st-head small + small { display: block; }
 .prov-pay { border-inline-start: 4px solid var(--amber); }
+
+/* TMC */
+.row-link { cursor: pointer; }
+.row-link:hover { background: var(--g-50); }
+.co-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.co-head h2 { margin: 0; font-size: 1.3rem; }
+.co-dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 0; }
+.co-dl dt { font-size: .75rem; color: var(--ink-3); }
+.co-dl dd { margin: 0; font-weight: 600; white-space: pre-wrap; }
+.corp-fs { border-color: #d6e7ff !important; background: #f7fbff; }
+.pol-check { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.duty-map { background: linear-gradient(180deg, #eaf4ff, #f4faf6); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin-bottom: 12px; }
+.duty-map svg { display: block; width: 100%; height: auto; }
+.duty-map .grid { stroke: rgba(11, 61, 31, .08); }
+.duty-map .dot-base { fill: rgba(11, 61, 31, .25); }
+.duty-map .dot-now { fill: var(--amber); stroke: #fff; stroke-width: 3; }
+.duty-map .dot-l { font: 700 14px var(--font-display); fill: var(--g-800); }

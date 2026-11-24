@@ -68,6 +68,7 @@
     ["agents", T("وكلاء B2B: الأرصدة والدفعات", "B2B agents: balances and payments"), T("كشوف الحساب وتسجيل دفعات الوكلاء", "Statements and agent payments")],
     ["agents_manage", T("فتح حسابات الوكلاء", "Open agent accounts"), T("إنشاء وتعديل دخول الوكلاء (بدون التسعير)", "Create and edit agent logins (not pricing)")],
     ["export", T("تصدير CSV", "Export CSV"), T("تنزيل قائمة الحجوزات", "Download the bookings list")],
+    ["corporate", T("سفر الشركات (TMC)", "Corporate travel (TMC)"), T("الشركات والمسافرون والسياسات والموافقات وفواتير الشركات", "Companies, travelers, policies, approvals and company invoices")],
   ];
   const pill = (st) => `<span class="pill pill--${st}">${STATUS()[st] || st}</span>`;
   const partnerName = (id) => (DB.get("partners", id) || {}).agency || "—";
@@ -89,6 +90,11 @@
     customers: { icon: "i-users", t: () => T("العملاء", "Customers"), r: viewCustomers, ok: () => can("customers") },
     payments: { icon: "i-card", t: () => T("المدفوعات", "Payments"), r: viewPayments, ok: () => can("payments") },
     agents: { icon: "i-handshake", t: () => T("وكلاء B2B", "B2B agents"), r: viewAgents, ok: () => can("agents") || can("agents_manage") },
+    corporate: { icon: "i-briefcase", t: () => T("الشركات (TMC)", "Companies (TMC)"), r: viewCorporate, ok: () => can("corporate"), group: "corp" },
+    trips: { icon: "i-check", t: () => T("طلبات السفر", "Trip requests"), r: viewTrips, ok: () => can("corporate"), group: "corp", badge: () => DB.all("trips").filter((r) => r.status === "approved").length },
+    invoices: { icon: "i-card", t: () => T("فواتير الشركات", "Company invoices"), r: viewInvoices, ok: () => can("corporate"), group: "corp" },
+    duty: { icon: "i-globe", t: () => T("أين المسافرون الآن", "Where travelers are"), r: viewDuty, ok: () => can("corporate"), group: "corp", badge: () => abroadNow().length },
+    corpreports: { icon: "i-list", t: () => T("تقارير الشركات", "Corporate reports"), r: viewCorpReports, ok: () => can("corporate"), group: "corp" },
     expenses: { icon: "i-briefcase", t: () => T("المصروفات", "Expenses"), r: viewExpenses, ok: isOwner, owner: true },
     providers: { icon: "i-globe", t: () => T("مزودو الحجز (API)", "Booking providers (API)"), r: viewProviders, ok: isOwner, owner: true },
     accounting: { icon: "i-briefcase", t: () => T("النظام المحاسبي", "Accounting"), r: viewAccounting, ok: isOwner, owner: true },
@@ -99,9 +105,9 @@
   };
   function renderNav() {
     const items = Object.entries(VIEWS).filter(([, v]) => v.ok());
-    const main = items.filter(([, v]) => !v.owner), own = items.filter(([, v]) => v.owner);
+    const main = items.filter(([, v]) => !v.owner && !v.group), own = items.filter(([, v]) => v.owner), corpItems = items.filter(([, v]) => v.group === "corp");
     const link = ([k, v]) => { const n = v.badge ? v.badge() : 0; return `<a href="#${k}">${icon(v.icon)}<span>${v.t()}</span>${n ? `<em class="nav-badge">${n}</em>` : ""}</a>`; };
-    $("#ofNav").innerHTML = main.map(link).join("") + (own.length ? `<p class="of-nav__label">${T("للمالك فقط", "Owner only")}</p>` + own.map(link).join("") : "");
+    $("#ofNav").innerHTML = main.map(link).join("") + (corpItems.length ? `<p class="of-nav__label">${T("سفر الشركات", "Corporate travel")}</p>` + corpItems.map(link).join("") : "") + (own.length ? `<p class="of-nav__label">${T("للمالك فقط", "Owner only")}</p>` + own.map(link).join("") : "");
   }
 
   /* ---------- App shell ---------- */
@@ -211,7 +217,7 @@
   const live = (b) => !["cancelled", "refunded"].includes(b.status);
   function bookingMoney(b) {
     const inn = DB.paidIn(b.id), out = DB.paidOut(b.id);
-    return { inn, out, due: live(b) ? Math.max(0, b.sell - inn) : 0, payable: b.status === "ticketed" ? Math.max(0, b.cost - out) : 0, profit: live(b) ? b.sell - b.cost : 0 };
+    return { inn, out, due: live(b) && !b.companyId ? Math.max(0, b.sell - inn) : 0, payable: b.status === "ticketed" ? Math.max(0, b.cost - out) : 0, profit: live(b) ? b.sell - b.cost : 0 };
   }
   const visibleBookings = () => (can("bookings_all") ? DB.all("bookings") : DB.all("bookings").filter((b) => b.assignedTo === me.id));
   const allTasks = () => DB.all("tasks");
@@ -456,8 +462,8 @@
   }
 
   /* ---------- Booking drawer ---------- */
-  function openBooking(id) {
-    const b = id ? DB.get("bookings", id) : { id: "", created: today(), source: "office", partnerId: null, status: "new", customer: { name: "", phone: "", email: "" }, route: "", airline: "", cabin: "economy", depart: "", ret: "", pax: 1, travelers: [], pnr: "", tickets: [], cost: 0, sell: 0, fee: 0, notes: "", assignedTo: me.id };
+  function openBooking(id, preset) {
+    const b = id ? DB.get("bookings", id) : Object.assign({ companyId: "", travelerId: "", costCenterId: "", serviceFee: 0 }, preset || {}, { id: "", created: today(), source: "office", partnerId: null, status: "new", customer: { name: "", phone: "", email: "" }, route: "", airline: "", cabin: "economy", depart: "", ret: "", pax: 1, travelers: [], pnr: "", tickets: [], cost: 0, sell: 0, fee: 0, notes: "", assignedTo: me.id });
     if (!b) { toast(T("الحجز غير موجود", "Booking not found")); return; }
     if (id && !can("bookings_all") && b.assignedTo !== me.id) { toast(T("هذا الحجز غير مسند إليك", "This booking is not assigned to you")); return; }
     closeModal();
@@ -486,6 +492,11 @@
           <label class="fl"><span>${T("المصدر", "Source")}</span><select name="source" ${owner || !id ? "" : "disabled"}>${Object.entries(SOURCE()).map(([k, t]) => `<option value="${k}" ${k === b.source ? "selected" : ""}>${t}</option>`).join("")}</select></label>
           <label class="fl"><span>${T("وكيل B2B", "B2B agent")}</span><select name="partnerId" ${owner || !id ? "" : "disabled"}><option value="">—</option>${partnerOpts}</select></label>
           ${owner ? `<label class="fl"><span>${T("مسند إلى", "Assigned to")}</span><select name="assignedTo"><option value="">—</option>${staffOpts}</select></label>` : ""}</div></fieldset>
+        ${can("corporate") ? `<fieldset class="corp-fs"><legend>${T("سفر الشركات (TMC)", "Corporate travel (TMC)")}</legend><div class="f3">
+          <label class="fl"><span>${T("الشركة", "Company")}</span><select name="companyId"><option value="">—</option>${DB.all("companies").map((c) => `<option value="${c.id}" ${b.companyId === c.id ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
+          <label class="fl"><span>${T("المسافر", "Traveler")}</span><select name="travelerId"></select></label>
+          <label class="fl"><span>${T("القسم / مركز التكلفة", "Cost center")}</span><select name="costCenterId"></select></label>
+          ${inp("serviceFee", T("رسوم الخدمة", "Service fee"), b.serviceFee || 0, "number", "ltr")}</div><div id="polCheck" class="pol-check"></div></fieldset>` : ""}
         <fieldset><legend>${T("العميل", "Customer")}</legend><div class="f3">
           ${inp("cname", T("الاسم", "Name"), b.customer.name, "text", "", ro(edit))}${inp("cphone", T("الهاتف", "Phone"), b.customer.phone, "tel", "ltr", ro(edit))}${inp("cemail", T("البريد", "Email"), b.customer.email, "email", "ltr", ro(edit))}</div></fieldset>
         <fieldset><legend>${T("الرحلة", "Trip")}</legend><div class="f3">
@@ -516,6 +527,24 @@
           <button type="submit" class="btn btn--accent btn--sm">+ ${T("تسجيل دفعة", "Record payment")}</button>
         </form>` : ""}</section>` : ""}`;
     const f = $("#bkForm");
+    // Corporate: travelers and cost centers follow the chosen company; the travel policy is checked live
+    if (f.companyId) {
+      const fill = (keep) => {
+        const cid = f.companyId.value;
+        f.travelerId.innerHTML = `<option value="">—</option>` + DB.all("travelers").filter((t) => t.companyId === cid).map((t) => `<option value="${t.id}" ${(keep ? b.travelerId : "") === t.id ? "selected" : ""}>${esc(t.firstName)} ${esc(t.lastName)}</option>`).join("");
+        f.costCenterId.innerHTML = `<option value="">—</option>` + DB.all("costCenters").filter((x) => x.companyId === cid).map((x) => `<option value="${x.id}" ${(keep ? b.costCenterId : "") === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+      };
+      const pol = () => {
+        const cid = f.companyId.value;
+        if (!cid) { $("#polCheck").innerHTML = ""; return; }
+        const v = checkPolicy(cid, { intl: true, cabin: f.cabin.value, fare: +f.sell.value || 0, depart: f.depart.value });
+        $("#polCheck").innerHTML = v.length ? v.map((x) => `<span class="tag tag--out">${esc(VIOL(x))}</span>`).join(" ") : `<span class="tag tag--in">${T("ضمن سياسة الشركة", "Within company policy")}</span>`;
+      };
+      fill(true); pol();
+      f.companyId.addEventListener("change", () => { fill(false); const c = DB.get("companies", f.companyId.value); if (c && !id) f.serviceFee.value = c.serviceFee; pol(); });
+      f.travelerId.addEventListener("change", () => { const t = DB.get("travelers", f.travelerId.value); if (!t) return; if (!f.cname.value) f.cname.value = `${t.firstName} ${t.lastName}`; if (!f.cphone.value) f.cphone.value = t.phone || ""; if (!f.cemail.value) f.cemail.value = t.email || ""; if (!f.travelers.value.trim()) f.travelers.value = `${t.firstName} ${t.lastName}`.toUpperCase(); if (t.costCenterId && !f.costCenterId.value) f.costCenterId.value = t.costCenterId; });
+      ["cabin", "sell", "depart"].forEach((k) => f[k].addEventListener("change", pol));
+    }
     const bindSeg = () => $$("[data-rmseg]").forEach((x) => (x.onclick = () => { if ($$("#segRows [data-seg]").length > 1) x.parentElement.parentNode.removeChild(x.parentElement); }));
     if ($("#segAdd")) $("#segAdd").addEventListener("click", () => { const last = $$("#segRows [data-seg]").pop(); const prev = last ? { from: last.querySelector("[name=to]").value, date: last.querySelector("[name=date]").value } : {}; $("#segRows").insertAdjacentHTML("beforeend", segRow(prev, true)); bindSeg(); });
     bindSeg();
@@ -530,6 +559,7 @@
         travelers: d.travelers.split("\n").map((s) => s.trim()).filter(Boolean), pnr: d.pnr.trim().toUpperCase(),
         tickets: d.tickets.split(",").map((s) => s.trim()).filter(Boolean), sell: +d.sell || 0, notes: d.notes,
       };
+      if (can("corporate") && f.companyId) Object.assign(data, { companyId: d.companyId || "", travelerId: d.travelerId || "", costCenterId: d.costCenterId || "", serviceFee: d.companyId ? Math.max(0, +d.serviceFee || 0) : 0 });
       if (segEdit) {
         data.baggage = (d.baggage || "").trim();
         data.segments = $$("#segRows [data-seg]").map((r) => Object.fromEntries($$("input", r).map((i) => [i.name, ["from", "to", "flight"].includes(i.name) ? i.value.trim().toUpperCase() : i.value]))).filter((x) => x.from && x.to);
@@ -1209,6 +1239,7 @@
     ["1030", T("مقبوضات البطاقات", "Card receipts"), "asset"],
     ["1100", T("ذمم العملاء", "Receivable: customers"), "asset"],
     ["1110", T("ذمم وكلاء B2B", "Receivable: B2B agents"), "asset"],
+    ["1120", T("ذمم الشركات (TMC)", "Receivable: corporate clients"), "asset"],
     ["1200", T("أصول أخرى", "Other assets"), "asset"],
     ["2010", T("ذمم الموردين (شركات الطيران)", "Payable: airlines / suppliers"), "liability"],
     ["2020", T("قروض والتزامات أخرى", "Loans and other liabilities"), "liability"],
@@ -1217,6 +1248,7 @@
     ["3030", T("أرباح محتجزة (افتتاحية)", "Retained earnings (opening)"), "equity"],
     ["4010", T("مبيعات التذاكر", "Ticket sales"), "revenue"],
     ["4020", T("إيرادات أخرى", "Other income"), "revenue"],
+    ["4030", T("رسوم خدمة الشركات", "Corporate service fees"), "revenue"],
     ["5010", T("تكلفة التذاكر", "Cost of tickets"), "expense"],
     ["6010", T("إيجار", "Rent"), "expense"], ["6020", T("رواتب", "Salaries"), "expense"], ["6030", T("تسويق", "Marketing"), "expense"],
     ["6040", T("برامج", "Software"), "expense"], ["6050", T("خدمات", "Utilities"), "expense"], ["6090", T("مصروفات أخرى", "Other expenses"), "expense"],
@@ -1232,13 +1264,15 @@
     const out = [], bk = DB.all("bookings");
     const bById = Object.fromEntries(bk.map((b) => [b.id, b]));
     bk.filter((b) => b.status === "ticketed").forEach((b) => {
-      const date = b.ticketedAt || b.created, ar = b.partnerId ? "1110" : "1100", party = b.partnerId ? partnerName(b.partnerId) : b.customer.name || "";
-      out.push({ date, ref: b.id, src: "sale", memo: `${T("بيع تذاكر", "Ticket sale")} ${b.id} · ${b.route} · ${party}`, lines: [{ account: ar, debit: b.sell, credit: 0, party }, { account: "4010", debit: 0, credit: b.sell }] });
+      const date = b.ticketedAt || b.created, ar = b.partnerId ? "1110" : b.companyId ? "1120" : "1100", party = b.partnerId ? partnerName(b.partnerId) : b.companyId ? coName(b.companyId) : b.customer.name || "";
+      const fee = b.companyId ? +b.serviceFee || 0 : 0;
+      out.push({ date, ref: b.id, src: "sale", memo: `${T("بيع تذاكر", "Ticket sale")} ${b.id} · ${b.route} · ${party}`, lines: [{ account: ar, debit: b.sell + fee, credit: 0, party }, { account: "4010", debit: 0, credit: b.sell }, ...(fee ? [{ account: "4030", debit: 0, credit: fee }] : [])] });
       if (b.cost > 0) out.push({ date, ref: b.id, src: "cost", memo: `${T("تكلفة تذاكر", "Ticket cost")} ${b.id} · ${b.airline}`, lines: [{ account: "5010", debit: b.cost, credit: 0 }, { account: "2010", debit: 0, credit: b.cost, party: b.airline }] });
     });
     DB.all("payments").forEach((p) => {
       const b = p.bookingId ? bById[p.bookingId] : null, cash = CASH_ACC[p.method] || "1020";
-      const agent = p.partnerId || (b && b.partnerId), ar = agent ? "1110" : "1100", party = agent ? partnerName(agent) : b ? b.customer.name : "";
+      const agent = p.partnerId || (b && b.partnerId), co = p.companyId || (b && b.companyId);
+      const ar = agent ? "1110" : co ? "1120" : "1100", party = agent ? partnerName(agent) : co ? coName(co) : b ? b.customer.name : "";
       if (p.dir === "in") out.push({ date: p.date, ref: p.bookingId || p.ref || "", src: "receipt", memo: `${T("مقبوض", "Receipt")} ${METHOD()[p.method] || p.method} · ${party}${p.ref ? " · " + p.ref : ""}`, lines: [{ account: cash, debit: p.amount, credit: 0 }, { account: ar, debit: 0, credit: p.amount, party }] });
       else if (p.dir === "refund") out.push({ date: p.date, ref: p.bookingId || "", src: "refund", memo: `${T("استرداد للعميل", "Customer refund")} · ${party}`, lines: [{ account: ar, debit: p.amount, credit: 0, party }, { account: cash, debit: 0, credit: p.amount }] });
       else out.push({ date: p.date, ref: p.bookingId || p.ref || "", src: "supplier", memo: `${T("دفع للمورد", "Supplier payment")} · ${b ? b.airline : ""}${p.ref ? " · " + p.ref : ""}`, lines: [{ account: "2010", debit: p.amount, credit: 0, party: b ? b.airline : "" }, { account: cash, debit: 0, credit: p.amount }] });
@@ -1463,6 +1497,351 @@
       log(T("عدّل إعدادات مزود حجز", "Edited booking provider"), f.dataset.prov);
       toast(T("تم الحفظ", "Saved")); route();
     }));
+  }
+
+  /* =========================================================
+     TMC — corporate travel management (permission "corporate")
+     Companies · travelers · cost centers · travel policy · approvals ·
+     company portal users · monthly invoices · reports · duty of care
+     ========================================================= */
+  const ROLE = () => ({ coordinator: T("منسق السفر", "Travel coordinator"), approver: T("مدير موافقات", "Approver"), traveler: T("مسافر", "Traveler") });
+  const TRIP_ST = () => ({ pending: T("بانتظار الموافقة", "Awaiting approval"), approved: T("موافق عليه", "Approved"), rejected: T("مرفوض", "Rejected"), booked: T("تم الحجز", "Booked"), cancelled: T("ملغي", "Cancelled") });
+  const tripPill = (s) => `<span class="pill pill--${{ pending: "new", approved: "confirmed", rejected: "cancelled", booked: "ticketed", cancelled: "cancelled" }[s] || "new"}">${TRIP_ST()[s] || s}</span>`;
+  const coName = (id) => (DB.get("companies", id) || {}).name || "—";
+  const tvName = (id) => { const t = DB.get("travelers", id); return t ? `${t.firstName} ${t.lastName}` : "—"; };
+  const ccName = (id) => (DB.get("costCenters", id) || {}).name || "—";
+  const policyOf = (cid) => DB.get("policies", cid) || null;
+  const VIOL = (v) => ({ cabin: T(`الدرجة أعلى من المسموح (${CABIN()[v.allowed] || v.allowed})`, `Cabin above policy (${CABIN()[v.allowed] || v.allowed})`), fare: T(`السعر أعلى من السقف (${usd.format(v.max)})`, `Fare above cap (${usd.format(v.max)})`), advance: T(`حجز قبل أقل من ${v.days} أيام`, `Booked less than ${v.days} days ahead`) }[v.code] || v.code);
+  const rank = (c) => ({ economy: 1, premium: 2, business: 3, first: 4 }[c] || 1);
+  // Same rules as the server's check_policy()
+  function checkPolicy(cid, { intl = true, cabin = "economy", hours = 0, fare = 0, depart = "" }) {
+    const p = policyOf(cid); if (!p) return [];
+    let allowed = intl ? p.cabinIntl : p.cabinDomestic;
+    if (p.businessOverHours > 0 && hours >= p.businessOverHours && rank(allowed) < 3) allowed = "business";
+    const v = [];
+    if (rank(cabin) > rank(allowed)) v.push({ code: "cabin", allowed });
+    const max = intl ? +p.maxFareIntl : +p.maxFareDomestic;
+    if (fare > max) v.push({ code: "fare", max });
+    if (depart && daysUntil(depart) < p.advanceDays) v.push({ code: "advance", days: p.advanceDays });
+    return v;
+  }
+  const corpBookings = (cid) => DB.all("bookings").filter((b) => b.companyId && (!cid || b.companyId === cid));
+  const invoicedIds = () => new Set(DB.all("invoices").filter((i) => i.status !== "void").flatMap((i) => (i.lines || []).map((l) => l.booking)));
+  const invPaid = (inv) => DB.all("payments").filter((p) => p.invoiceId === inv.id && p.dir === "in").reduce((s, p) => s + p.amount, 0);
+  const abroadNow = () => corpBookings().filter((b) => b.status === "ticketed" && b.depart && b.depart <= today() && (b.ret ? b.ret >= today() : daysUntil(b.depart) > -3));
+
+  let corp = { sel: "", tab: "profile" };
+  function viewCorporate(el) {
+    if (corp.sel && DB.get("companies", corp.sel)) return companyPage(el, DB.get("companies", corp.sel));
+    corp.sel = "";
+    const cos = DB.all("companies"), trips = DB.all("trips");
+    const unpaid = DB.all("invoices").filter((i) => i.status === "issued");
+    el.innerHTML = `
+      <div class="kpi-grid kpi-grid--4">
+        ${kpi(T("الشركات العميلة", "Client companies"), count(cos.filter((c) => c.status === "active").length), `${DB.all("travelers").length} ${T("مسافر", "travelers")}`, "", "i-briefcase")}
+        ${kpi(T("بانتظار الموافقة", "Awaiting approval"), count(trips.filter((t) => t.status === "pending").length), `${trips.filter((t) => t.status === "approved").length} ${T("موافق عليها بانتظار الحجز", "approved, to book")}`, trips.some((t) => t.status === "approved") ? "warn" : "", "i-check")}
+        ${kpi(T("فواتير غير مدفوعة", "Unpaid invoices"), money(unpaid.reduce((s, i) => s + (+i.total - invPaid(i)), 0)), `${unpaid.filter((i) => i.due < today()).length} ${T("متأخرة", "overdue")}`, unpaid.some((i) => i.due < today()) ? "bad" : "", "i-card")}
+        ${kpi(T("مسافرون الآن", "Traveling now"), count(abroadNow().length), T("متابعة السلامة", "Duty of care"), "", "i-globe")}
+      </div>
+      <div class="of-toolbar"><button type="button" class="btn btn--accent btn--sm" id="coNew">+ ${T("شركة جديدة", "New company")}</button>
+        <a class="btn btn--ghost btn--sm" href="#trips">${T("طلبات السفر", "Trip requests")}</a><a class="btn btn--ghost btn--sm" href="#invoices">${T("فواتير الشركات", "Company invoices")}</a><a class="btn btn--ghost btn--sm" href="#duty">${T("أين المسافرون الآن", "Where travelers are")}</a><a class="btn btn--ghost btn--sm" href="#corpreports">${T("تقارير الشركات", "Corporate reports")}</a></div>
+      <section class="of-card">${cos.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الشركة", "Company")}</th><th>${T("المسافرون", "Travelers")}</th><th>${T("طلبات معلقة", "Pending")}</th><th>${T("حجوزات", "Bookings")}</th><th>${T("المبيعات", "Sales")}</th><th>${T("غير مدفوع", "Unpaid")}</th><th>${T("حد الائتمان", "Credit")}</th><th>${T("الحالة", "Status")}</th></tr></thead>
+        <tbody>${cos.map((c) => { const bk = corpBookings(c.id).filter((b) => b.status === "ticketed"); const due = DB.all("invoices").filter((i) => i.companyId === c.id && i.status === "issued").reduce((s, i) => s + (+i.total - invPaid(i)), 0);
+          return `<tr data-co="${c.id}" tabindex="0" class="row-link"><td><span class="who">${avatar({ name: c.name }, "xs")}<b>${esc(c.name)}</b></span></td><td class="num">${DB.all("travelers").filter((t) => t.companyId === c.id).length}</td><td class="num">${DB.all("trips").filter((t) => t.companyId === c.id && t.status === "pending").length}</td><td class="num">${bk.length}</td><td>${money(bk.reduce((s, b) => s + b.sell + b.serviceFee, 0))}</td><td class="${due ? "neg" : ""}">${money(due)}</td><td>${money(c.creditLimit)}</td><td><span class="pill pill--${c.status === "active" ? "ticketed" : "cancelled"}">${c.status === "active" ? T("نشطة", "Active") : T("موقوفة", "Suspended")}</span></td></tr>`; }).join("")}</tbody></table></div>`
+        : `<div class="locked">${icon("i-briefcase")}<h3>${T("لا توجد شركات بعد", "No companies yet")}</h3><p class="muted">${T("أضف أول شركة عميلة، ثم موظفيها وسياسة السفر وحسابات بوابتها.", "Add your first client company, then its travelers, travel policy and portal accounts.")}</p></div>`}</section>`;
+    $("#coNew").addEventListener("click", () => companyForm(null));
+    $$("[data-co]", el).forEach((r) => r.addEventListener("click", () => { corp.sel = r.dataset.co; corp.tab = "profile"; route(); }));
+  }
+
+  function companyForm(c) {
+    c = c || { name: "", legalName: "", taxId: "", address: "", phone: "", email: "", billingEmail: "", creditLimit: 10000, paymentTerms: 30, serviceFee: 25, status: "active", notes: "" };
+    openModal(c.id ? T("بيانات الشركة", "Company details") : T("شركة جديدة", "New company"), `<form id="coForm" class="dr-form" novalidate>
+      <div class="f3">${inp("name", T("اسم الشركة", "Company name"), c.name)}${inp("legal_name", T("الاسم القانوني", "Legal name"), c.legalName)}${inp("tax_id", T("الرقم الضريبي (EIN)", "Tax ID (EIN)"), c.taxId, "text", "ltr")}
+        ${inp("phone", T("الهاتف", "Phone"), c.phone, "tel", "ltr")}${inp("email", T("البريد", "Email"), c.email, "email", "ltr")}${inp("billing_email", T("بريد الفواتير", "Billing email"), c.billingEmail, "email", "ltr")}
+        ${inp("credit_limit", T("حد الائتمان (USD)", "Credit limit (USD)"), c.creditLimit, "number", "ltr")}${inp("payment_terms", T("مدة السداد (أيام)", "Payment terms (days)"), c.paymentTerms, "number", "ltr")}${inp("service_fee", T("رسوم الخدمة لكل تذكرة", "Service fee per ticket"), c.serviceFee, "number", "ltr")}
+        ${sel("status", T("الحالة", "Status"), { active: T("نشطة", "Active"), suspended: T("موقوفة", "Suspended") }, c.status)}</div>
+      ${area("address", T("العنوان", "Address"), c.address)}${area("notes", T("ملاحظات العقد", "Contract notes"), c.notes)}
+      <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button></div></form>`, true);
+    $("#coForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(e.target));
+      if (!d.name.trim()) return toast(T("اكتب اسم الشركة", "Enter the company name"));
+      const row = { name: d.name.trim(), legal_name: d.legal_name, tax_id: d.tax_id, phone: d.phone, email: d.email, billing_email: d.billing_email, credit_limit: +d.credit_limit || 0, payment_terms: Math.max(0, +d.payment_terms || 0), service_fee: Math.max(0, +d.service_fee || 0), status: d.status, address: d.address, notes: d.notes };
+      try {
+        if (c.id) await DB.saveRow("companies", Object.assign({ id: c.id }, row));
+        else { const n = await DB.saveRow("companies", row); await DB.upsertRow("travel_policies", { company_id: n.id }); corp.sel = n.id; corp.tab = "policy"; }
+      } catch (er) { return errToast(er); }
+      log(c.id ? T("عدّل بيانات شركة", "Edited company") : T("أضاف شركة عميلة", "Added client company"), row.name);
+      closeModal(); toast(T("تم الحفظ", "Saved")); route();
+    });
+  }
+
+  function companyPage(el, c) {
+    const TABS = [["profile", T("الملف", "Profile")], ["travelers", T("المسافرون", "Travelers")], ["policy", T("سياسة السفر", "Travel policy")], ["costcenters", T("الأقسام ومراكز التكلفة", "Cost centers")],
+      ["users", T("حسابات البوابة", "Portal accounts")], ["trips", T("طلبات السفر", "Trip requests")], ["bookings", T("الحجوزات", "Bookings")], ["invoices", T("الفواتير", "Invoices")]];
+    el.innerHTML = `<div class="co-head"><button type="button" class="btn btn--ghost btn--sm" id="coBack">→ ${T("كل الشركات", "All companies")}</button><h2>${esc(c.name)}</h2>${c.status !== "active" ? `<span class="pill pill--cancelled">${T("موقوفة", "Suspended")}</span>` : ""}</div>
+      <div class="ac-tabs">${TABS.map(([k, v]) => `<button type="button" data-cotab="${k}" class="${k === corp.tab ? "is-active" : ""}">${v}</button>`).join("")}</div>
+      <div id="coBody"></div>`;
+    $("#coBack").addEventListener("click", () => { corp.sel = ""; route(); });
+    $$("[data-cotab]", el).forEach((b) => b.addEventListener("click", () => { corp.tab = b.dataset.cotab; route(); }));
+    const body = $("#coBody");
+    ({ profile: coProfile, travelers: coTravelers, policy: coPolicy, costcenters: coCostCenters, users: coUsers, trips: coTrips, bookings: coBookings, invoices: coInvoices }[corp.tab] || coProfile)(body, c);
+  }
+  function coProfile(el, c) {
+    const bk = corpBookings(c.id).filter((b) => b.status === "ticketed");
+    const due = DB.all("invoices").filter((i) => i.companyId === c.id && i.status === "issued").reduce((s, i) => s + (+i.total - invPaid(i)), 0);
+    const uninv = corpBookings(c.id).filter((b) => b.status === "ticketed" && !invoicedIds().has(b.id)).reduce((s, b) => s + b.sell + b.serviceFee, 0);
+    el.innerHTML = `<div class="kpi-grid kpi-grid--4">${kpi(T("مبيعات هذه السنة", "Sales this year"), money(bk.filter((b) => (b.ticketedAt || b.created).slice(0, 4) === today().slice(0, 4)).reduce((s, b) => s + b.sell + b.serviceFee, 0)), `${bk.length} ${T("تذكرة", "tickets")}`, "", "i-ticket")}
+      ${kpi(T("غير مدفوع", "Unpaid"), money(due), T("فواتير صادرة", "Issued invoices"), due ? "warn" : "", "i-card")}${kpi(T("لم يُفوتر بعد", "Not invoiced yet"), money(uninv), T("تذاكر صادرة", "Ticketed"), "", "i-list")}
+      ${kpi(T("الائتمان المتاح", "Credit available"), money(Math.max(0, c.creditLimit - due - uninv)), `${T("من", "of")} ${usd.format(c.creditLimit)}`, c.creditLimit - due - uninv < 0 ? "bad" : "good", "i-shield")}</div>
+      <section class="of-card"><header class="of-card__h"><h3>${T("بيانات الشركة", "Company details")}</h3><button type="button" class="btn btn--ghost btn--sm" id="coEdit">${T("تعديل", "Edit")}</button></header>
+        <dl class="co-dl">${[[T("الاسم القانوني", "Legal name"), c.legalName], [T("الرقم الضريبي", "Tax ID"), c.taxId], [T("الهاتف", "Phone"), c.phone], [T("البريد", "Email"), c.email], [T("بريد الفواتير", "Billing email"), c.billingEmail], [T("مدة السداد", "Payment terms"), `${c.paymentTerms} ${T("يوماً", "days")}`], [T("رسوم الخدمة", "Service fee"), usd.format(c.serviceFee) + " / " + T("تذكرة", "ticket")], [T("العنوان", "Address"), c.address], [T("ملاحظات العقد", "Contract notes"), c.notes]].map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v || "—")}</dd></div>`).join("")}</dl></section>`;
+    $("#coEdit").addEventListener("click", () => companyForm(c));
+  }
+  function coTravelers(el, c) {
+    const list = DB.all("travelers").filter((t) => t.companyId === c.id);
+    const soon = (d) => d && daysUntil(d) < 180;
+    el.innerHTML = `<div class="of-toolbar"><button type="button" class="btn btn--accent btn--sm" id="tvNew">+ ${T("مسافر جديد", "New traveler")}</button><button type="button" class="btn btn--ghost btn--sm" id="tvCsv">Excel / CSV</button></div>
+      <section class="of-card">${list.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الاسم", "Name")}</th><th>${T("الوظيفة", "Title")}</th><th>${T("القسم", "Cost center")}</th><th>${T("الجواز", "Passport")}</th><th>${T("التواصل", "Contact")}</th><th>${T("المدير المعتمد", "Approver")}</th><th></th></tr></thead>
+        <tbody>${list.map((t) => `<tr><td><b>${esc(t.firstName)} ${esc(t.lastName)}</b>${t.vip ? ` <span class="tag tag--b2b">VIP</span>` : ""}${t.status !== "active" ? ` <span class="tag">${T("غير نشط", "Inactive")}</span>` : ""}</td><td>${esc(t.jobTitle)}</td><td>${esc(ccName(t.costCenterId))}</td>
+          <td dir="ltr" class="${soon(t.passportExpiry) ? "neg" : ""}">${esc(t.passportNo || "—")}${t.passportExpiry ? ` · ${fmtDate(t.passportExpiry)}` : ""}${soon(t.passportExpiry) ? ` ⚠` : ""}</td><td dir="ltr"><small>${esc([t.email, t.phone].filter(Boolean).join(" · "))}</small></td><td>${esc(t.approverId ? tvName(t.approverId) : "—")}</td>
+          <td class="row-actions"><button type="button" class="btn btn--ghost btn--sm" data-tv="${t.id}">${T("تعديل", "Edit")}</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted empty">${T("لا يوجد مسافرون بعد.", "No travelers yet.")}</p>`}</section>`;
+    $("#tvNew").addEventListener("click", () => travelerForm(c, null));
+    $$("[data-tv]", el).forEach((b) => b.addEventListener("click", () => travelerForm(c, DB.get("travelers", b.dataset.tv))));
+    $("#tvCsv").addEventListener("click", () => downloadCsv(`travelers-${c.name}`, ["first", "last", "title", "cost_center", "email", "phone", "dob", "nationality", "passport", "passport_expiry", "seat", "meal", "vip"], list.map((t) => [t.firstName, t.lastName, t.jobTitle, ccName(t.costCenterId), t.email, t.phone, t.dob, t.nationality, t.passportNo, t.passportExpiry, t.seatPref, t.mealPref, t.vip ? "yes" : ""])));
+  }
+  function travelerForm(c, t) {
+    t = t || { firstName: "", lastName: "", jobTitle: "", email: "", phone: "", dob: "", gender: "", nationality: "", passportNo: "", passportCountry: "", passportExpiry: "", seatPref: "", mealPref: "", costCenterId: "", approverId: "", vip: false, status: "active", notes: "", ff: [] };
+    const ccs = Object.fromEntries([["", "—"], ...DB.all("costCenters").filter((x) => x.companyId === c.id).map((x) => [x.id, x.name])]);
+    const apps = Object.fromEntries([["", "—"], ...DB.all("travelers").filter((x) => x.companyId === c.id && x.id !== t.id).map((x) => [x.id, `${x.firstName} ${x.lastName}`])]);
+    openModal(t.id ? `${t.firstName} ${t.lastName}` : T("مسافر جديد", "New traveler"), `<form id="tvForm" class="dr-form" novalidate>
+      <fieldset><legend>${T("البيانات (كما في الجواز)", "Details (as on passport)")}</legend><div class="f3">${inp("first_name", T("الاسم الأول", "First name"), t.firstName, "text", "ltr")}${inp("last_name", T("اسم العائلة", "Last name"), t.lastName, "text", "ltr")}${inp("job_title", T("الوظيفة", "Job title"), t.jobTitle)}
+        ${inp("dob", T("تاريخ الميلاد", "Date of birth"), t.dob, "date")}${sel("gender", T("الجنس", "Gender"), { "": "—", m: T("ذكر", "Male"), f: T("أنثى", "Female") }, t.gender)}${inp("nationality", T("الجنسية", "Nationality"), t.nationality)}
+        ${inp("email", T("البريد", "Email"), t.email, "email", "ltr")}${inp("phone", T("الهاتف", "Phone"), t.phone, "tel", "ltr")}${sel("status", T("الحالة", "Status"), { active: T("نشط", "Active"), inactive: T("غير نشط", "Inactive") }, t.status)}</div></fieldset>
+      <fieldset><legend>${T("الجواز", "Passport")}</legend><div class="f3">${inp("passport_no", T("رقم الجواز", "Passport number"), t.passportNo, "text", "ltr")}${inp("passport_country", T("بلد الإصدار", "Issuing country"), t.passportCountry)}${inp("passport_expiry", T("تاريخ الانتهاء", "Expiry"), t.passportExpiry, "date")}</div></fieldset>
+      <fieldset><legend>${T("التفضيلات والموافقة", "Preferences & approval")}</legend><div class="f3">${sel("seat_pref", T("المقعد", "Seat"), { "": "—", window: T("نافذة", "Window"), aisle: T("ممر", "Aisle") }, t.seatPref)}${sel("meal_pref", T("الوجبة", "Meal"), { "": "—", MOML: T("حلال", "Halal (MOML)"), VGML: T("نباتية", "Vegetarian"), DBML: T("سكري", "Diabetic"), CHML: T("أطفال", "Child") }, t.mealPref)}
+        ${inp("ff", T("برامج الولاء (مثل RJ:12345, TK:678)", "Frequent flyer (e.g. RJ:12345, TK:678)"), (t.ff || []).map((f) => `${f.airline}:${f.number}`).join(", "), "text", "ltr")}
+        ${sel("cost_center_id", T("القسم / مركز التكلفة", "Cost center"), ccs, t.costCenterId || "")}${sel("approver_id", T("المدير الذي يوافق على سفره", "Approver"), apps, t.approverId || "")}
+        <label class="perm"><input type="checkbox" name="vip" ${t.vip ? "checked" : ""}><span><b>VIP</b><small>${T("عناية خاصة", "Special care")}</small></span></label></div></fieldset>
+      ${area("notes", T("ملاحظات", "Notes"), t.notes)}
+      <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button>${t.id ? `<button type="button" class="btn btn--ghost danger" id="tvDel">${T("حذف", "Delete")}</button>` : ""}</div></form>`, true);
+    const f = $("#tvForm");
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(f));
+      if (!d.first_name.trim() || !d.last_name.trim()) return toast(T("الاسم الأول واسم العائلة مطلوبان", "First and last name are required"));
+      const ff = d.ff.split(",").map((x) => x.trim()).filter(Boolean).map((x) => { const [a, ...n] = x.split(":"); return { airline: a.trim().toUpperCase(), number: n.join(":").trim() }; });
+      const row = { company_id: c.id, first_name: d.first_name.trim(), last_name: d.last_name.trim(), job_title: d.job_title, email: d.email, phone: d.phone, dob: d.dob || null, gender: d.gender, nationality: d.nationality, passport_no: d.passport_no, passport_country: d.passport_country, passport_expiry: d.passport_expiry || null,
+        seat_pref: d.seat_pref, meal_pref: d.meal_pref, ff, cost_center_id: d.cost_center_id || null, approver_id: d.approver_id || null, vip: !!f.vip.checked, status: d.status, notes: d.notes };
+      try { await DB.saveRow("travelers", t.id ? Object.assign({ id: t.id }, row) : row); } catch (er) { return errToast(er); }
+      closeModal(); toast(T("تم الحفظ", "Saved")); route();
+    });
+    if ($("#tvDel")) $("#tvDel").addEventListener("click", async (e) => { const b = e.currentTarget; if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; } try { await DB.deleteRow("travelers", t.id); } catch (er) { return errToast(er); } closeModal(); route(); });
+  }
+  function coPolicy(el, c) {
+    const p = policyOf(c.id) || { cabinDomestic: "economy", cabinIntl: "economy", businessOverHours: 8, maxFareDomestic: 800, maxFareIntl: 2500, advanceDays: 7, requireApproval: "out_of_policy", notes: "" };
+    el.innerHTML = `<section class="of-card"><header class="of-card__h"><h3>${T("سياسة السفر", "Travel policy")}</h3></header>
+      <p class="hint">${icon("i-shield")}${T("تُطبَّق السياسة تلقائياً على كل طلب سفر من بوابة الشركة وعلى الحجوزات في المكتب: أي مخالفة تظهر بوضوح وتحتاج سبباً وموافقة المدير.", "The policy is applied automatically to every trip request from the company portal and to bookings in the back office: any violation is flagged and needs a reason and the manager's approval.")}</p>
+      <form id="poForm" class="dr-form" novalidate><div class="f3">
+        ${sel("cabin_domestic", T("الدرجة المسموحة: داخلي", "Allowed cabin: domestic"), CABIN(), p.cabinDomestic)}${sel("cabin_intl", T("الدرجة المسموحة: دولي", "Allowed cabin: international"), CABIN(), p.cabinIntl)}
+        ${inp("business_over_hours", T("رجال أعمال للرحلات من (ساعات) · 0 = أبداً", "Business allowed from (hours) · 0 = never"), p.businessOverHours, "number", "ltr")}
+        ${inp("max_fare_domestic", T("سقف السعر: داخلي (USD)", "Fare cap: domestic (USD)"), p.maxFareDomestic, "number", "ltr")}${inp("max_fare_intl", T("سقف السعر: دولي (USD)", "Fare cap: international (USD)"), p.maxFareIntl, "number", "ltr")}
+        ${inp("advance_days", T("الحجز المسبق (أيام على الأقل)", "Book at least (days ahead)"), p.advanceDays, "number", "ltr")}
+        ${sel("require_approval", T("متى تلزم موافقة المدير؟", "When is approval needed?"), { always: T("لكل رحلة", "Every trip"), out_of_policy: T("فقط عند مخالفة السياسة", "Only when out of policy"), never: T("لا تلزم", "Never") }, p.requireApproval)}</div>
+        ${area("notes", T("ملاحظات السياسة (فنادق، سيارات، بدلات…)", "Policy notes (hotels, cars, per diem…)"), p.notes)}
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ السياسة", "Save policy")}</button></div></form></section>`;
+    $("#poForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(e.target));
+      try { await DB.upsertRow("travel_policies", { company_id: c.id, cabin_domestic: d.cabin_domestic, cabin_intl: d.cabin_intl, business_over_hours: Math.max(0, +d.business_over_hours || 0), max_fare_domestic: +d.max_fare_domestic || 0, max_fare_intl: +d.max_fare_intl || 0, advance_days: Math.max(0, +d.advance_days || 0), require_approval: d.require_approval, notes: d.notes }); } catch (er) { return errToast(er); }
+      log(T("عدّل سياسة سفر", "Edited travel policy"), c.name); toast(T("تم حفظ السياسة", "Policy saved")); route();
+    });
+  }
+  function coCostCenters(el, c) {
+    const list = DB.all("costCenters").filter((x) => x.companyId === c.id);
+    const year = today().slice(0, 4);
+    el.innerHTML = `<section class="of-card"><header class="of-card__h"><h3>${T("الأقسام ومراكز التكلفة", "Departments & cost centers")}</h3></header>
+      <form id="ccForm" class="pay-form" novalidate>${inp("code", T("الرمز", "Code"), "", "text", "ltr")}${inp("name", T("الاسم", "Name"), "")}${inp("budget", T("الميزانية السنوية", "Annual budget"), "", "number", "ltr")}<button type="submit" class="btn btn--accent btn--sm">+ ${T("إضافة", "Add")}</button></form>
+      ${list.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الرمز", "Code")}</th><th>${T("القسم", "Name")}</th><th>${T("الميزانية", "Budget")}</th><th>${T("المصروف هذه السنة", "Spent this year")}</th><th>${T("المتبقي", "Left")}</th><th></th></tr></thead>
+        <tbody>${list.map((x) => { const spent = corpBookings(c.id).filter((b) => b.costCenterId === x.id && b.status === "ticketed" && (b.ticketedAt || b.created).startsWith(year)).reduce((s, b) => s + b.sell + b.serviceFee, 0); const left = +x.budget - spent;
+          return `<tr><td dir="ltr" class="mono">${esc(x.code)}</td><td><b>${esc(x.name)}</b></td><td>${money(x.budget)}</td><td>${money(spent)}</td><td class="${x.budget && left < 0 ? "neg" : ""}">${x.budget ? money(left) : "—"}</td><td><button type="button" class="x-btn" data-delcc="${x.id}" aria-label="${T("حذف", "Delete")}">×</button></td></tr>`; }).join("")}</tbody></table></div>` : `<p class="muted empty">${T("لا توجد أقسام بعد.", "No cost centers yet.")}</p>`}</section>`;
+    $("#ccForm").addEventListener("submit", async (e) => {
+      e.preventDefault(); const d = Object.fromEntries(new FormData(e.target));
+      if (!d.name.trim()) return toast(T("اكتب اسم القسم", "Enter a name"));
+      try { await DB.saveRow("cost_centers", { company_id: c.id, code: d.code.trim(), name: d.name.trim(), budget: +d.budget || 0 }); } catch (er) { return errToast(er); } route();
+    });
+    $$("[data-delcc]", el).forEach((b) => b.addEventListener("click", async () => { if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = "?"; return; } try { await DB.deleteRow("cost_centers", b.dataset.delcc); } catch (er) { return errToast(er); } route(); }));
+  }
+  function coUsers(el, c) {
+    const list = DB.all("companyUsers").filter((u) => u.companyId === c.id);
+    el.innerHTML = `<p class="hint">${icon("i-users")}${T("حسابات تدخل إلى «بوابة الشركات» (corporate.html): المنسق يدير المسافرين ويطلب الرحلات ويرى الفواتير، المدير يوافق أو يرفض، والمسافر يطلب رحلاته ويرى تذاكره. كل شركة ترى بياناتها فقط.", "Accounts for the Company portal (corporate.html): the coordinator manages travelers, requests trips and sees invoices; the approver approves or rejects; the traveler requests their own trips and sees their tickets. Each company sees only its own data.")}</p>
+      <div class="of-toolbar"><button type="button" class="btn btn--accent btn--sm" id="cuNew">+ ${T("حساب جديد", "New account")}</button></div>
+      <section class="of-card">${list.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الاسم", "Name")}</th><th>${T("البريد (اسم الدخول)", "Email (login)")}</th><th>${T("الدور", "Role")}</th><th>${T("ملف المسافر", "Traveler profile")}</th><th></th></tr></thead>
+        <tbody>${list.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td dir="ltr">${esc(u.email)}</td><td>${ROLE()[u.role]}</td><td>${esc(u.travelerId ? tvName(u.travelerId) : "—")}</td><td class="row-actions"><button type="button" class="btn btn--ghost btn--sm" data-cu="${u.id}">${T("تعديل", "Edit")}</button></td></tr>`).join("")}</tbody></table></div>` : `<p class="muted empty">${T("لا توجد حسابات بعد.", "No accounts yet.")}</p>`}</section>`;
+    $("#cuNew").addEventListener("click", () => companyUserForm(c, null));
+    $$("[data-cu]", el).forEach((b) => b.addEventListener("click", () => companyUserForm(c, DB.get("companyUsers", b.dataset.cu))));
+  }
+  function companyUserForm(c, u) {
+    u = u || { name: "", email: "", role: "coordinator", travelerId: "" };
+    const tvs = Object.fromEntries([["", "—"], ...DB.all("travelers").filter((t) => t.companyId === c.id).map((t) => [t.id, `${t.firstName} ${t.lastName}`])]);
+    openModal(u.id ? T("تعديل حساب البوابة", "Edit portal account") : T("حساب بوابة جديد", "New portal account"), `<form id="cuForm" class="dr-form" novalidate><div class="f3">
+      ${inp("name", T("الاسم", "Name"), u.name)}${inp("email", T("البريد (اسم الدخول)", "Email (login)"), u.email, "email", "ltr")}
+      <label class="fl"><span>${T("كلمة المرور", "Password")}</span><span class="pw-row"><input name="password" type="text" dir="ltr" value="${u.id ? "" : genPass()}" placeholder="${u.id ? T("اتركها فارغة للإبقاء عليها", "Leave empty to keep") : ""}" autocomplete="off"><button type="button" class="btn btn--ghost btn--sm" data-gen>${T("توليد", "Generate")}</button></span></label>
+      ${sel("role", T("الدور", "Role"), ROLE(), u.role)}${sel("traveler_id", T("ملف المسافر المرتبط", "Linked traveler profile"), tvs, u.travelerId || "")}${sel("status", T("الحالة", "Status"), { active: T("نشط", "Active"), suspended: T("موقوف", "Suspended") }, "active")}</div>
+      <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button>${u.id ? `<button type="button" class="btn btn--ghost danger" id="cuDel">${T("حذف الحساب", "Delete account")}</button>` : ""}</div></form>`, true);
+    const f = $("#cuForm");
+    $("[data-gen]", f).addEventListener("click", () => (f.password.value = genPass()));
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault(); const d = Object.fromEntries(new FormData(f));
+      if ((!u.id && d.password.length < 8) || (d.password && d.password.length < 8)) return toast(T("كلمة المرور 8 أحرف على الأقل", "Password must be 8+ characters"));
+      try { await DB.admin("save_company_user", { id: u.id, companyId: c.id, name: d.name, email: d.email, password: d.password || undefined, role: d.role, travelerId: d.traveler_id || null, status: d.status }); } catch (er) { return errToast(er); }
+      closeModal(); toast(T("تم الحفظ. أرسل بيانات الدخول للشركة.", "Saved. Send the login details to the company.")); route();
+    });
+    if ($("#cuDel")) $("#cuDel").addEventListener("click", async (e) => { const b = e.currentTarget; if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; } try { await DB.admin("delete_company_user", { id: u.id }); } catch (er) { return errToast(er); } closeModal(); route(); });
+  }
+  function tripTable(list) {
+    if (!list.length) return `<p class="muted empty">${T("لا توجد طلبات.", "No requests.")}</p>`;
+    return `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الطلب", "Request")}</th><th>${T("الشركة / المسافر", "Company / traveler")}</th><th>${T("الرحلة", "Trip")}</th><th>${T("الدرجة / السعر", "Cabin / fare")}</th><th>${T("السياسة", "Policy")}</th><th>${T("الحالة", "Status")}</th><th></th></tr></thead>
+      <tbody>${list.map((r) => `<tr><td dir="ltr" class="mono">${r.id}<br><small class="muted">${fmtDate(r.createdAt)}</small></td><td><b>${esc(coName(r.companyId))}</b><br><small>${esc(tvName(r.travelerId))} · ${esc(ccName(r.costCenterId))}</small></td>
+        <td dir="ltr">${esc(r.origin)} → ${esc(r.destination)}<br><small>${fmtDate(r.depart)}${r.ret ? " – " + fmtDate(r.ret) : ""}</small>${r.purpose ? `<br><small class="muted" dir="auto">${esc(r.purpose)}</small>` : ""}</td>
+        <td>${CABIN()[r.cabin] || r.cabin}<br><small>${money(r.estFare)}</small></td>
+        <td>${(r.violations || []).length ? (r.violations || []).map((v) => `<span class="tag tag--out">${esc(VIOL(v))}</span>`).join(" ") + (r.oopReason ? `<br><small class="muted">${T("السبب", "Reason")}: ${esc(r.oopReason)}</small>` : "") : `<span class="tag tag--in">${T("ضمن السياسة", "In policy")}</span>`}</td>
+        <td>${tripPill(r.status)}${r.decisionNote ? `<br><small class="muted">${esc(r.decisionNote)}</small>` : ""}</td>
+        <td class="row-actions">${r.status === "approved" ? `<button type="button" class="btn btn--accent btn--sm" data-tripbook="${r.id}">${T("احجز الآن", "Book now")}</button>` : ""}${r.bookingId ? `<button type="button" class="btn btn--ghost btn--sm" data-open="${r.bookingId}">${r.bookingId}</button>` : ""}${["pending", "approved"].includes(r.status) ? `<button type="button" class="btn btn--ghost btn--sm danger" data-tripcancel="${r.id}">${T("إلغاء", "Cancel")}</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+  function bindTrips(el) {
+    $$("[data-open]", el).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openBooking(a.dataset.open); }));
+    $$("[data-tripcancel]", el).forEach((b) => b.addEventListener("click", async () => { if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = T("تأكيد؟", "Sure?"); return; } try { await DB.saveRow("trip_requests", { id: b.dataset.tripcancel, status: "cancelled" }); } catch (er) { return errToast(er); } route(); }));
+    // An approved request becomes a booking linked to the company, traveler and cost center, with the company's service fee
+    $$("[data-tripbook]", el).forEach((b) => b.addEventListener("click", async () => {
+      const r = DB.get("trips", b.dataset.tripbook), t = DB.get("travelers", r.travelerId) || {}, c = DB.get("companies", r.companyId) || {};
+      b.disabled = true;
+      try {
+        const nb = await DB.addBooking({ source: "office", status: "new", companyId: r.companyId, travelerId: r.travelerId || "", costCenterId: r.costCenterId || "", tripId: r.id, serviceFee: +c.serviceFee || 0,
+          customer: { name: `${t.firstName || ""} ${t.lastName || ""}`.trim(), phone: t.phone || "", email: t.email || "" }, route: `${r.origin} → ${r.destination}`, cabin: r.cabin, depart: r.depart || "", ret: r.ret || "", pax: 1,
+          travelers: [`${t.firstName || ""} ${t.lastName || ""}`.trim().toUpperCase()], sell: +r.estFare || 0, notes: `${T("طلب سفر", "Trip request")} ${r.id}${r.purpose ? " · " + r.purpose : ""}${t.mealPref ? " · Meal " + t.mealPref : ""}${t.seatPref ? " · Seat " + t.seatPref : ""}${(t.ff || []).length ? " · FF " + t.ff.map((f) => f.airline + f.number).join(" ") : ""}` });
+        await DB.saveRow("trip_requests", { id: r.id, status: "booked", booking_id: nb.id });
+        log(T("حجز طلب سفر شركة", "Booked corporate trip"), `${r.id} → ${nb.id}`);
+        openBooking(nb.id);
+      } catch (er) { b.disabled = false; errToast(er); }
+    }));
+  }
+  function coTrips(el, c) { el.innerHTML = `<section class="of-card">${tripTable(DB.all("trips").filter((r) => r.companyId === c.id))}</section>`; bindTrips(el); }
+  let tf2 = "open";
+  function viewTrips(el) {
+    const list = DB.all("trips").filter((r) => tf2 === "all" || (tf2 === "open" ? ["pending", "approved"].includes(r.status) : r.status === tf2));
+    el.innerHTML = `<div class="of-toolbar"><div class="seg">${[["open", T("المفتوحة", "Open")], ["pending", T("بانتظار الموافقة", "Awaiting approval")], ["approved", T("جاهزة للحجز", "Ready to book")], ["booked", T("محجوزة", "Booked")], ["all", T("الكل", "All")]].map(([k, v]) => `<button type="button" data-tf="${k}" class="${tf2 === k ? "is-active" : ""}">${v}</button>`).join("")}</div></div>
+      <p class="hint">${icon("i-check")}${T("الطلبات تصل من بوابة الشركات. الموافقة من مدير الشركة نفسها؛ بعدها اضغط «احجز الآن» لإنشاء الحجز مرتبطاً بالشركة والمسافر والقسم.", "Requests come from the company portal. Approval is given by the company's own manager; then press Book now to create the booking linked to the company, traveler and cost center.")}</p>
+      <section class="of-card">${tripTable(list)}</section>`;
+    $$("[data-tf]", el).forEach((b) => b.addEventListener("click", () => { tf2 = b.dataset.tf; route(); }));
+    bindTrips(el);
+  }
+  function coBookings(el, c) {
+    el.innerHTML = `<div class="of-toolbar"><button type="button" class="btn btn--accent btn--sm" id="cbNew">+ ${T("حجز للشركة", "Booking for this company")}</button></div><section class="of-card" id="cbList"></section>`;
+    $("#cbList").innerHTML = bookingTable(corpBookings(c.id));
+    bindRows($("#cbList"));
+    $("#cbNew").addEventListener("click", () => openBooking(null, { companyId: c.id, serviceFee: c.serviceFee }));
+  }
+  function coInvoices(el, c) { invoicesView(el, c.id); }
+  function viewInvoices(el) { invoicesView(el, ""); }
+  function invoicesView(el, cid) {
+    const list = DB.all("invoices").filter((i) => !cid || i.companyId === cid);
+    const first = today().slice(0, 8) + "01", d0 = new Date(); d0.setDate(0);
+    const prevFrom = new Date(d0.getFullYear(), d0.getMonth(), 1).toISOString().slice(0, 10), prevTo = d0.toISOString().slice(0, 10);
+    const coOpts = Object.fromEntries(DB.all("companies").map((c) => [c.id, c.name]));
+    el.innerHTML = `<section class="of-card"><header class="of-card__h"><h3>${T("إصدار فاتورة مجمّعة", "Issue a consolidated invoice")}</h3></header>
+      <p class="muted">${T("تجمع الفاتورة كل التذاكر الصادرة للشركة في الفترة ولم تُفوتر من قبل، مع رسوم الخدمة.", "The invoice collects every ticket issued for the company in the period that hasn't been invoiced yet, plus service fees.")}</p>
+      <form id="ivForm" class="pay-form" novalidate>${cid ? `<input type="hidden" name="company" value="${cid}">` : sel("company", T("الشركة", "Company"), coOpts, Object.keys(coOpts)[0])}${inp("from", T("من", "From"), prevFrom, "date")}${inp("to", T("إلى", "To"), prevTo, "date")}<button type="submit" class="btn btn--accent btn--sm">${T("إصدار الفاتورة", "Issue invoice")}</button></form>
+      <small class="muted">${T("الفترة الافتراضية: الشهر الماضي. لهذا الشهر استخدم", "Default period: last month. For this month use")} ${fmtDate(first)} – ${fmtDate(today())}.</small></section>
+      <section class="of-card">${list.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الفاتورة", "Invoice")}</th><th>${T("الشركة", "Company")}</th><th>${T("الفترة", "Period")}</th><th>${T("الاستحقاق", "Due")}</th><th>${T("الإجمالي", "Total")}</th><th>${T("المدفوع", "Paid")}</th><th>${T("الحالة", "Status")}</th><th></th></tr></thead>
+        <tbody>${list.map((i) => { const paid = invPaid(i), late = i.status === "issued" && i.due < today(); return `<tr><td dir="ltr" class="mono">${i.id}</td><td>${esc(coName(i.companyId))}</td><td>${fmtDate(i.periodFrom)} – ${fmtDate(i.periodTo)}</td><td class="${late ? "neg" : ""}">${fmtDate(i.due)}${late ? ` · ${T("متأخرة", "overdue")}` : ""}</td><td>${money(i.total)}</td><td>${money(paid)}</td>
+          <td><span class="pill pill--${i.status === "paid" ? "ticketed" : i.status === "void" ? "cancelled" : late ? "cancelled" : "new"}">${{ issued: T("مستحقة", "Due"), paid: T("مدفوعة", "Paid"), void: T("ملغاة", "Void") }[i.status]}</span></td>
+          <td class="row-actions"><button type="button" class="btn btn--ghost btn--sm" data-ivprint="${i.id}">${T("طباعة / PDF", "Print / PDF")}</button><button type="button" class="btn btn--ghost btn--sm" data-ivxls="${i.id}">Excel</button>${i.status === "issued" ? `<button type="button" class="btn btn--accent btn--sm" data-ivpay="${i.id}">${T("تسجيل دفعة", "Record payment")}</button><button type="button" class="btn btn--ghost btn--sm danger" data-ivvoid="${i.id}">${T("إلغاء", "Void")}</button>` : ""}</td></tr>`; }).join("")}</tbody></table></div>` : `<p class="muted empty">${T("لا توجد فواتير بعد.", "No invoices yet.")}</p>`}</section>`;
+    $("#ivForm").addEventListener("submit", async (e) => {
+      e.preventDefault(); const d = Object.fromEntries(new FormData(e.target));
+      try { const id = await DB.rpc("generate_company_invoice", { p_company: d.company, p_from: d.from, p_to: d.to }); await DB.reload(); toast(T("صدرت الفاتورة ", "Invoice issued ") + id); route(); }
+      catch (er) { toast(/No uninvoiced/.test(er.message) ? T("لا توجد تذاكر غير مفوترة في هذه الفترة.", "No uninvoiced tickets in this period.") : er.message); }
+    });
+    $$("[data-ivprint]", el).forEach((b) => b.addEventListener("click", () => printHtml(invoiceHtml(DB.get("invoices", b.dataset.ivprint)))));
+    $$("[data-ivxls]", el).forEach((b) => b.addEventListener("click", () => { const i = DB.get("invoices", b.dataset.ivxls); downloadExcel(i.id, [[i.id, ["date", "booking", "traveler", "route", "airline", "pnr", "tickets", "cost_center", "fare", "service_fee", "total"], (i.lines || []).map((l) => [l.date, l.booking, l.traveler, l.route, l.airline, l.pnr, l.tickets, l.costCenter, +l.fare, +l.fee, +l.fare + +l.fee])]]); }));
+    $$("[data-ivpay]", el).forEach((b) => b.addEventListener("click", () => { const i = DB.get("invoices", b.dataset.ivpay);
+      openModal(T("دفعة على الفاتورة", "Invoice payment") + " " + i.id, `<form id="ipForm" class="dr-form" novalidate><div class="f3">${inp("amount", T("المبلغ", "Amount"), Math.max(0, +i.total - invPaid(i)), "number", "ltr")}${sel("method", T("الطريقة", "Method"), METHOD(), "bank")}${inp("date", T("التاريخ", "Date"), today(), "date")}${inp("ref", T("مرجع", "Reference"), "", "text", "ltr")}</div><div class="dr-actions"><button type="submit" class="btn btn--primary">${T("تسجيل", "Record")}</button></div></form>`);
+      $("#ipForm").addEventListener("submit", async (e) => {
+        e.preventDefault(); const d = Object.fromEntries(new FormData(e.target)); const amount = +d.amount;
+        if (!(amount > 0)) return toast(T("أدخل مبلغاً صحيحاً", "Enter a valid amount"));
+        try {
+          await DB.insert("payments", { date: d.date || today(), dir: "in", amount, method: d.method, companyId: i.companyId, invoiceId: i.id, ref: d.ref, note: T("دفعة فاتورة", "Invoice payment") + " " + i.id });
+          if (invPaid(i) + 0.5 >= +i.total) await DB.saveRow("company_invoices", { id: i.id, status: "paid" });
+        } catch (er) { return errToast(er); }
+        closeModal(); toast(T("تم تسجيل الدفعة", "Payment recorded")); route();
+      }); }));
+    $$("[data-ivvoid]", el).forEach((b) => b.addEventListener("click", async () => { if (b.dataset.confirm !== "1") { b.dataset.confirm = "1"; b.textContent = T("تأكيد؟", "Sure?"); return; } try { await DB.saveRow("company_invoices", { id: b.dataset.ivvoid, status: "void" }); } catch (er) { return errToast(er); } route(); }));
+  }
+  function invoiceHtml(i) {
+    const c = DB.get("companies", i.companyId) || {};
+    return `<div class="statement invoice"><header class="st-head"><img src="assets/img/logo.png" alt="" width="52" height="52"><div><b>Green Travel · جرين ترافيل</b><small>World Services dba Green Travel · info@greentravel.us</small><small dir="ltr">${COMPANY_PHONES.join(" · ")}</small></div>
+        <div class="st-meta"><b>${T("فاتورة مجمّعة", "Consolidated invoice")}</b><span dir="ltr">${esc(i.id)}</span><span>${fmtDate(i.issued)}</span></div></header>
+      <div class="inv-parties"><div><small>${T("إلى", "Bill to")}</small><b>${esc(c.legalName || c.name || "")}</b><small>${esc(c.address || "")}${c.taxId ? ` · EIN ${esc(c.taxId)}` : ""}</small></div><div><small>${T("الفترة · الاستحقاق", "Period · due")}</small><b>${fmtDate(i.periodFrom)} – ${fmtDate(i.periodTo)}</b><small>${T("تستحق في", "Due")} ${fmtDate(i.due)}</small></div></div>
+      <table class="of-table"><thead><tr><th>${T("التاريخ", "Date")}</th><th>${T("المسافر", "Traveler")}</th><th>${T("الرحلة", "Trip")}</th><th>PNR / ${T("التذكرة", "Ticket")}</th><th>${T("القسم", "Cost center")}</th><th>${T("السعر", "Fare")}</th><th>${T("رسوم", "Fee")}</th></tr></thead>
+        <tbody>${(i.lines || []).map((l) => `<tr><td>${fmtDate(l.date)}</td><td>${esc(l.traveler)}</td><td dir="ltr">${esc(l.route)}<br><small>${esc(l.airline)}</small></td><td dir="ltr" class="mono">${esc(l.pnr)}<br><small>${esc(l.tickets)}</small></td><td>${esc(l.costCenter)}</td><td>${money(l.fare)}</td><td>${money(l.fee)}</td></tr>`).join("")}</tbody>
+        <tfoot><tr><td colspan="5">${T("أسعار التذاكر", "Fares")}</td><td colspan="2">${money(i.subtotal)}</td></tr><tr><td colspan="5">${T("رسوم الخدمة", "Service fees")}</td><td colspan="2">${money(i.fees)}</td></tr><tr><td colspan="5"><b>${T("الإجمالي المستحق", "Total due")}</b></td><td colspan="2"><b>${money(i.total)}</b></td></tr></tfoot></table>
+      <p class="muted">${T("طرق الدفع: تحويل بنكي، Zelle، شيك باسم World Services dba Green Travel. شكراً لثقتكم.", "Payment: bank transfer, Zelle or check to World Services dba Green Travel. Thank you for your business.")}</p></div>`;
+  }
+
+  /* ---------- Duty of care: where are the travelers right now ---------- */
+  let APT = null;
+  async function airports() { if (APT) return APT; const rows = await (await fetch("assets/data/airports.json")).json(); APT = Object.fromEntries(rows.map((r) => [r[0], { lat: r[4], lon: r[5], city: r[2] }])); return APT; }
+  async function viewDuty(el) {
+    el.innerHTML = `<p class="muted">${T("جارٍ التحميل…", "Loading…")}</p>`;
+    let A = {};
+    try { A = await airports(); } catch (e) {}
+    const where = (b) => { const segs = segmentsOf(b); const now = today(); const past = segs.filter((s) => s.date && s.date <= now); const s = past[past.length - 1] || segs[0] || {}; return s.to || ""; };
+    const now = abroadNow().map((b) => ({ b, at: where(b) }));
+    const soon = corpBookings().filter((b) => b.status === "ticketed" && b.depart && daysUntil(b.depart) > 0 && daysUntil(b.depart) <= 7);
+    const W = 1000, H = 500, px = (lon) => ((lon + 180) / 360) * W, py = (lat) => ((90 - lat) / 180) * H;
+    const dots = now.map(({ b, at }) => A[at] ? `<g><circle cx="${px(A[at].lon)}" cy="${py(A[at].lat)}" r="9" class="dot-now"><title>${esc(tvName(b.travelerId) || b.customer.name)} · ${at}</title></circle><text x="${px(A[at].lon) + 12}" y="${py(A[at].lat) + 4}" class="dot-l">${esc(at)}</text></g>` : "").join("");
+    const grid = [...Array(7)].map((_, i) => `<line x1="0" x2="${W}" y1="${(H / 6) * i}" y2="${(H / 6) * i}" class="grid"/>`).join("") + [...Array(13)].map((_, i) => `<line y1="0" y2="${H}" x1="${(W / 12) * i}" x2="${(W / 12) * i}" class="grid"/>`).join("");
+    const bases = Object.keys(A).length ? ["ORD", "JFK", "LAX", "LHR", "DXB", "AMM", "CAI", "BEY", "IST", "DOH", "JED", "BGW", "CDG", "SIN", "GRU", "JNB", "SYD", "DEL", "NRT"].filter((k) => A[k]).map((k) => `<circle cx="${px(A[k].lon)}" cy="${py(A[k].lat)}" r="2.5" class="dot-base"/>`).join("") : "";
+    const row = (b, at) => `<tr><td><b>${esc(tvName(b.travelerId) || b.customer.name)}</b><br><small>${esc(coName(b.companyId))}</small></td><td dir="ltr"><b>${esc(at || "—")}</b> ${A[at] ? `<small>${esc(A[at].city)}</small>` : ""}</td><td dir="ltr">${esc(b.route)}<br><small>${esc(b.airline)} · ${esc(b.pnr)}</small></td><td>${fmtDate(b.depart)}${b.ret ? " – " + fmtDate(b.ret) : ""}</td><td dir="ltr"><small>${esc((DB.get("travelers", b.travelerId) || {}).phone || b.customer.phone || "")}</small></td><td><button type="button" class="btn btn--ghost btn--sm" data-open="${b.id}">${b.id}</button></td></tr>`;
+    el.innerHTML = `<div class="kpi-grid kpi-grid--3">${kpi(T("مسافرون الآن", "Traveling now"), count(now.length), T("بين الذهاب والعودة", "Between departure and return"), "", "i-globe")}${kpi(T("يسافرون خلال 7 أيام", "Departing within 7 days"), count(soon.length), "", "", "i-calendar")}${kpi(T("في دول مختلفة", "In different places"), count(new Set(now.map((x) => x.at)).size), "", "", "i-pin")}</div>
+      <section class="of-card"><header class="of-card__h"><h3>${T("خريطة المسافرين الآن", "Travelers right now")}</h3><button type="button" class="btn btn--ghost btn--sm" id="dcCsv">Excel / CSV</button></header>
+        <div class="duty-map" dir="ltr"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${T("خريطة أماكن المسافرين", "Map of traveler locations")}">${grid}${bases}${dots}</svg></div>
+        ${now.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("المسافر", "Traveler")}</th><th>${T("المكان الآن", "Now in")}</th><th>${T("الرحلة", "Trip")}</th><th>${T("التواريخ", "Dates")}</th><th>${T("الهاتف", "Phone")}</th><th></th></tr></thead><tbody>${now.map(({ b, at }) => row(b, at)).join("")}</tbody></table></div>` : `<p class="muted empty">${T("لا يوجد مسافرون من الشركات حالياً.", "No corporate travelers away right now.")}</p>`}</section>
+      ${soon.length ? `<section class="of-card"><header class="of-card__h"><h3>${T("يسافرون خلال 7 أيام", "Departing within 7 days")}</h3></header><div class="table-wrap"><table class="of-table"><tbody>${soon.map((b) => row(b, b.route.split("→")[1] ? b.route.split("→")[1].trim() : "")).join("")}</tbody></table></div></section>` : ""}`;
+    $$("[data-open]", el).forEach((a) => a.addEventListener("click", () => openBooking(a.dataset.open)));
+    $("#dcCsv").addEventListener("click", () => downloadCsv(`duty-of-care-${today()}`, ["traveler", "company", "now_in", "route", "airline", "pnr", "depart", "return", "phone"], now.map(({ b, at }) => [tvName(b.travelerId) || b.customer.name, coName(b.companyId), at, b.route, b.airline, b.pnr, b.depart, b.ret, (DB.get("travelers", b.travelerId) || {}).phone || b.customer.phone])));
+  }
+
+  /* ---------- Corporate reports ---------- */
+  let cr = { from: today().slice(0, 4) + "-01-01", to: today(), co: "" };
+  function viewCorpReports(el) {
+    const bk = corpBookings(cr.co).filter((b) => b.status === "ticketed" && (b.ticketedAt || b.created) >= cr.from && (b.ticketedAt || b.created) <= cr.to);
+    const trips = DB.all("trips").filter((r) => (!cr.co || r.companyId === cr.co) && r.createdAt.slice(0, 10) >= cr.from && r.createdAt.slice(0, 10) <= cr.to && r.status !== "cancelled");
+    const inPol = trips.filter((r) => !(r.violations || []).length);
+    const savings = inPol.reduce((s, r) => { const p = policyOf(r.companyId); return s + (p ? Math.max(0, (r.international ? +p.maxFareIntl : +p.maxFareDomestic) - +r.estFare) : 0); }, 0);
+    const unused = corpBookings(cr.co).filter((b) => b.status === "cancelled" && (b.tickets || []).length);
+    const spend = bk.reduce((s, b) => s + b.sell + b.serviceFee, 0);
+    const group = (key) => { const g = {}; bk.forEach((b) => { const k = key(b) || "—"; g[k] = g[k] || [0, 0]; g[k][0]++; g[k][1] += b.sell + b.serviceFee; }); return Object.entries(g).sort((a, b) => b[1][1] - a[1][1]); };
+    const block = (title, rows) => `<section class="of-card"><header class="of-card__h"><h3>${title}</h3></header>${rows.length ? `<table class="of-table"><thead><tr><th></th><th>${T("تذاكر", "Tickets")}</th><th>${T("الإنفاق", "Spend")}</th><th>%</th></tr></thead><tbody>${rows.map(([k, [n, v]]) => `<tr><td>${esc(k)}</td><td class="num">${n}</td><td>${money(v)}</td><td class="num">${spend ? Math.round((v / spend) * 100) : 0}%</td></tr>`).join("")}</tbody></table>` : `<p class="muted empty">${T("لا توجد بيانات.", "No data.")}</p>`}</section>`;
+    const sets = [[T("حسب الشركة", "By company"), group((b) => coName(b.companyId))], [T("حسب القسم", "By cost center"), group((b) => `${coName(b.companyId)} · ${ccName(b.costCenterId)}`)], [T("حسب المسافر", "By traveler"), group((b) => tvName(b.travelerId) || b.customer.name)], [T("حسب شركة الطيران", "By airline"), group((b) => b.airline)], [T("حسب الوجهة", "By route"), group((b) => b.route)]];
+    el.innerHTML = `<div class="of-toolbar ac-bar">${sel("co", T("الشركة", "Company"), Object.fromEntries([["", T("كل الشركات", "All companies")], ...DB.all("companies").map((c) => [c.id, c.name])]), cr.co).replace('class="fl"', 'class="fl fl--inline"')}
+        <label class="ac-date"><span>${T("من", "From")}</span><input type="date" id="crFrom" value="${cr.from}"></label><label class="ac-date"><span>${T("إلى", "To")}</span><input type="date" id="crTo" value="${cr.to}"></label><span class="spacer"></span>
+        <button type="button" class="btn btn--ghost btn--sm" id="crPrint">${T("طباعة / PDF", "Print / PDF")}</button><button type="button" class="btn btn--accent btn--sm" id="crXls">Excel</button></div>
+      <div class="kpi-grid kpi-grid--4">${kpi(T("إجمالي الإنفاق", "Total spend"), money(spend), `${bk.length} ${T("تذكرة", "tickets")} · ${T("متوسط", "avg")} ${usd.format(bk.length ? spend / bk.length : 0)}`, "", "i-card")}
+        ${kpi(T("الالتزام بالسياسة", "Policy compliance"), `<span class="num">${trips.length ? Math.round((inPol.length / trips.length) * 100) : 100}%</span>`, `${trips.length - inPol.length} ${T("طلبات خارج السياسة", "out of policy")}`, trips.length && inPol.length / trips.length < 0.8 ? "warn" : "good", "i-shield")}
+        ${kpi(T("التوفير مقابل سقف السياسة", "Savings vs policy cap"), money(savings), T("في الطلبات الملتزمة", "On in-policy requests"), "good", "i-tag")}
+        ${kpi(T("تذاكر غير مستخدمة", "Unused tickets"), count(unused.length), money(unused.reduce((s, b) => s + b.sell, 0)) + " " + T("قيمة قابلة للاستخدام", "reusable value"), unused.length ? "warn" : "", "i-ticket")}</div>
+      <div id="crBody"><div class="of-grid2">${block(sets[0][0], sets[0][1])}${block(sets[1][0], sets[1][1])}</div><div class="of-grid2">${block(sets[2][0], sets[2][1])}${block(sets[3][0], sets[3][1])}</div>
+      ${unused.length ? `<section class="of-card"><header class="of-card__h"><h3>${T("تذاكر غير مستخدمة (رصيد لدى شركات الطيران)", "Unused tickets (credit with airlines)")}</h3></header><table class="of-table"><thead><tr><th>${T("المسافر", "Traveler")}</th><th>${T("الشركة", "Company")}</th><th>${T("التذكرة", "Ticket")}</th><th>${T("الطيران", "Airline")}</th><th>${T("القيمة", "Value")}</th></tr></thead><tbody>${unused.map((b) => `<tr><td>${esc(tvName(b.travelerId) || b.customer.name)}</td><td>${esc(coName(b.companyId))}</td><td dir="ltr" class="mono">${esc(b.tickets.join(", "))}</td><td>${esc(b.airline)}</td><td>${money(b.sell)}</td></tr>`).join("")}</tbody></table></section>` : ""}</div>`;
+    $("[name=co]", el).addEventListener("change", (e) => { cr.co = e.target.value; route(); });
+    $("#crFrom").addEventListener("change", (e) => { cr.from = e.target.value || cr.from; route(); });
+    $("#crTo").addEventListener("change", (e) => { cr.to = e.target.value || cr.to; route(); });
+    $("#crPrint").addEventListener("click", () => printHtml(docWrap(T("تقرير سفر الشركات", "Corporate travel report"), $("#crBody").innerHTML, `${cr.co ? coName(cr.co) + " · " : ""}${fmtDate(cr.from)} – ${fmtDate(cr.to)}`)));
+    $("#crXls").addEventListener("click", () => downloadExcel(`corporate-report-${cr.from}-${cr.to}`, [
+      ...sets.map(([t, rows]) => [t, ["name", "tickets", "spend"], rows.map(([k, [n, v]]) => [k, n, Math.round(v)])]),
+      [T("التذاكر", "Tickets"), ["date", "booking", "company", "traveler", "cost_center", "route", "airline", "pnr", "fare", "fee"], bk.map((b) => [b.ticketedAt || b.created, b.id, coName(b.companyId), tvName(b.travelerId), ccName(b.costCenterId), b.route, b.airline, b.pnr, b.sell, b.serviceFee])],
+      [T("طلبات السفر", "Trip requests"), ["id", "company", "traveler", "route", "depart", "cabin", "fare", "in_policy", "reason", "status"], trips.map((r) => [r.id, coName(r.companyId), tvName(r.travelerId), `${r.origin}-${r.destination}`, r.depart, r.cabin, +r.estFare, (r.violations || []).length ? "no" : "yes", r.oopReason, r.status])],
+    ]));
   }
 
   /* ---------- Generic modal ---------- */

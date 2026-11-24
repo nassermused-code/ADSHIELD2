@@ -9,7 +9,7 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const PERMS = ["bookings_all", "bookings_create", "bookings_issue", "bookings_cancel", "payments", "customers", "agents", "agents_manage", "export"];
+const PERMS = ["bookings_all", "bookings_create", "bookings_issue", "bookings_cancel", "payments", "customers", "agents", "agents_manage", "export", "corporate"];
 const STAFF_DOMAIN = "staff.greentravel.us";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const fail = (msg: string, status = 400) => json({ error: msg }, status);
@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
   if (!me || me.status !== "active" || !(me.kind === "owner" || me.kind === "staff")) return fail("Not allowed", 403);
   const isOwner = me.kind === "owner";
   const canManageAgents = isOwner || (me.perms || []).includes("agents_manage");
+  const canCorporate = isOwner || (me.perms || []).includes("corporate");
   const log = (a: string, ref = "") => admin.from("activity_log").insert({ who: me.id, action: a, ref });
 
   // ---------- Staff ----------
@@ -140,6 +141,52 @@ Deno.serve(async (req) => {
     }
     await log(id ? "Edited agent account" : "Opened agent account", String(row.agency));
     return json({ ok: true, id: pid });
+  }
+
+  // ---------- Company portal logins (TMC): coordinator, approver or traveler of a client company ----------
+  if (action === "save_company_user") {
+    if (!canCorporate) return fail("Not allowed", 403);
+    const id = body.id ? str(body.id, 60) : null;
+    const email = str(body.email).toLowerCase();
+    const role = ["coordinator", "approver", "traveler"].includes(body.role) ? body.role : "traveler";
+    const { data: company } = await admin.from("companies").select("id, name").eq("id", str(body.companyId, 60)).maybeSingle();
+    if (!company) return fail("Company not found", 404);
+    if (!/^\S+@\S+\.\S+$/.test(email) || !str(body.name)) return fail("Name and a valid email are required");
+    if (body.password && String(body.password).length < 8) return fail("Password must be 8+ characters");
+    if (!id && !body.password) return fail("Password is required");
+    const status = body.status === "suspended" ? "suspended" : "active";
+    let traveler = body.travelerId ? str(body.travelerId, 60) : null;
+    if (traveler) { const { data: t } = await admin.from("travelers").select("id").eq("id", traveler).eq("company_id", company.id).maybeSingle(); if (!t) traveler = null; }
+    let uid = id;
+    if (id) {
+      const { data: cu } = await admin.from("company_users").select("user_id").eq("user_id", id).maybeSingle();
+      if (!cu) return fail("Not found", 404);
+      const upd: Record<string, unknown> = { email, ban_duration: status === "active" ? "none" : BAN };
+      if (body.password) upd.password = body.password;
+      const { error } = await admin.auth.admin.updateUserById(id, upd);
+      if (error) return fail(error.message);
+      await admin.from("profiles").update({ name: str(body.name, 120), email, status }).eq("id", id);
+      await admin.from("company_users").update({ role, traveler_id: traveler, name: str(body.name, 120), email }).eq("user_id", id);
+    } else {
+      const { data, error } = await admin.auth.admin.createUser({ email, password: body.password, email_confirm: true });
+      if (error) return fail(error.message);
+      uid = data.user.id;
+      const { error: e1 } = await admin.from("profiles").insert({ id: uid, kind: "company", name: str(body.name, 120), email, status });
+      const { error: e2 } = e1 ? { error: e1 } : await admin.from("company_users").insert({ user_id: uid, company_id: company.id, role, traveler_id: traveler, name: str(body.name, 120), email });
+      if (e2) { await admin.auth.admin.deleteUser(uid!); return fail(e2.message); }
+      if (status !== "active") await admin.auth.admin.updateUserById(uid!, { ban_duration: BAN });
+    }
+    await log(id ? "Edited company portal user" : "Added company portal user", `${company.name} · ${email}`);
+    return json({ ok: true, id: uid });
+  }
+  if (action === "delete_company_user") {
+    if (!canCorporate) return fail("Not allowed", 403);
+    const { data: cu } = await admin.from("company_users").select("user_id, email").eq("user_id", str(body.id, 60)).maybeSingle();
+    if (!cu) return fail("Not found", 404);
+    const { error } = await admin.auth.admin.deleteUser(cu.user_id);
+    if (error) return fail(error.message);
+    await log("Deleted company portal user", cu.email);
+    return json({ ok: true });
   }
 
   return fail("Unknown action");
