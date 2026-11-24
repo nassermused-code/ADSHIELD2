@@ -90,6 +90,7 @@
     payments: { icon: "i-card", t: () => T("المدفوعات", "Payments"), r: viewPayments, ok: () => can("payments") },
     agents: { icon: "i-handshake", t: () => T("وكلاء B2B", "B2B agents"), r: viewAgents, ok: () => can("agents") || can("agents_manage") },
     expenses: { icon: "i-briefcase", t: () => T("المصروفات", "Expenses"), r: viewExpenses, ok: isOwner, owner: true },
+    providers: { icon: "i-globe", t: () => T("مزودو الحجز (API)", "Booking providers (API)"), r: viewProviders, ok: isOwner, owner: true },
     accounting: { icon: "i-briefcase", t: () => T("النظام المحاسبي", "Accounting"), r: viewAccounting, ok: isOwner, owner: true },
     reports: { icon: "i-list", t: () => T("التقارير المالية", "Financial reports"), r: viewReports, ok: isOwner, owner: true },
     team: { icon: "i-shield", t: () => T("الموظفون والصلاحيات", "Team & permissions"), r: viewTeam, ok: isOwner, owner: true },
@@ -477,6 +478,8 @@
         <div class="${m.due ? "neg" : ""}"><span>${b.source === "b2b" ? T("مستحق على الوكيل", "Due from agent") : T("مستحق على العميل", "Due from customer")}</span>${money(m.due)}</div>
         ${owner ? `<div><span>${T("التكلفة", "Cost")}</span>${money(b.cost)}</div><div class="${m.payable ? "neg" : ""}"><span>${T("مستحق للمورد", "Owed to supplier")}</span>${money(m.payable)}</div>` : ""}
         ${prof ? `<div class="good"><span>${T("الربح", "Profit")}</span>${money(m.profit)}</div>` : ""}</div>` : ""}
+      ${b.provider ? `<div class="prov-box">${icon("i-globe")}<div><b>${T("محجوز لدى", "Held with")} ${esc(PROVIDER_NAMES[b.provider] || b.provider)}</b><small dir="ltr">${T("مرجع المزود", "Provider ref")}: ${esc(b.providerRef)}${b.holdExpires ? ` · ${T("ينتهي الحجز", "Hold expires")} ${fmtTime(b.holdExpires)}` : ""}</small></div>
+        <div class="prov-act">${b.status !== "ticketed" && can("bookings_issue") ? `<button type="button" class="btn btn--accent btn--sm" id="prTicket">${T("إصدار التذاكر عبر المزود", "Issue tickets with provider")}</button>` : ""}${!["cancelled", "refunded"].includes(b.status) && can("bookings_cancel") ? `<button type="button" class="btn btn--ghost btn--sm danger" id="prCancel">${T("إلغاء لدى المزود", "Cancel with provider")}</button>` : ""}</div></div>` : ""}
       <form id="bkForm" class="dr-form" novalidate>
         <fieldset><legend>${T("الحالة والمسؤول", "Status & owner")}</legend><div class="f3">
           <label class="fl"><span>${T("الحالة", "Status")}</span><select name="status">${Object.entries(STATUS()).map(([k, t]) => `<option value="${k}" ${k === b.status ? "selected" : ""} ${allowed(k) ? "" : "disabled"}>${t}</option>`).join("")}</select></label>
@@ -555,6 +558,14 @@
     if (id) {
       $("#bkInvoice").addEventListener("click", () => printInvoice(id));
       $("#bkTicket").addEventListener("click", () => openTicket(id));
+      const provAct = (btnId, action, okMsg) => { const btn = $(btnId); if (!btn) return; btn.addEventListener("click", async () => {
+        if (btn.dataset.confirm !== "1") { btn.dataset.confirm = "1"; btn.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
+        btn.disabled = true;
+        try { const r = await DB.flightsApi(action, { bookingId: id }); if (!r || !r.ok) throw new Error((r && (r.detail || r.error)) || "error"); await DB.reload(); toast(okMsg); openBooking(id); route(); }
+        catch (er) { btn.disabled = false; toast(/not_supported/.test(er.message) ? T("هذا المزود لا يدعم ذلك عبر الـ API بعد: نفّذها من نظام الحجز ثم أدخل الأرقام هنا.", "This provider doesn't support that through the API yet: do it in the booking system, then enter the numbers here.") : T("تعذّر التنفيذ لدى المزود: ", "Provider error: ") + er.message); }
+      }); };
+      provAct("#prTicket", "ticket", T("تم إصدار التذاكر", "Tickets issued"));
+      provAct("#prCancel", "cancel", T("تم الإلغاء لدى المزود", "Cancelled with the provider"));
       const del = $("#bkDelete");
       if (del) del.addEventListener("click", async () => {
         if (del.dataset.confirm !== "1") { del.dataset.confirm = "1"; del.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
@@ -1365,6 +1376,41 @@
         } };
     },
   };
+
+  /* =========================================================
+     Booking providers (owner): Travelport, Amadeus, Duffel... all at once
+     ========================================================= */
+  const PROVIDER_NAMES = { travelport: "Travelport (Universal API)", amadeus: "Amadeus", duffel: "Duffel" };
+  async function viewProviders(el) {
+    el.innerHTML = `<p class="muted">${T("جارٍ التحميل…", "Loading…")}</p>`;
+    let list = [];
+    try { list = (await DB.flightsApi("providers", {})).providers || []; } catch (e) { el.innerHTML = `<p class="hint hint--lock">${esc(e.message)}</p>`; return; }
+    const on = list.filter((p) => p.enabled && p.configured);
+    el.innerHTML = `
+      <p class="hint">${icon("i-globe")}${T("يمكن ربط أكثر من شركة في الوقت نفسه. عند البحث يسأل الموقع كل المزودين المفعّلين معاً، ويدمج النتائج ويرتبها بالسعر، وإن جاءت الرحلة نفسها من مزودين يعرض الأرخص (أو صاحب الأولوية). الحجز وإنشاء رقم الحجز يتمان داخل موقعك، والإصدار من هنا.", "Several companies can be connected at once. Each search asks every enabled provider together, merges the results and sorts them by price; when the same flight comes from two providers the cheaper one (or the preferred one) is shown. Booking and the PNR happen on your website; ticketing from here.")}</p>
+      <div class="kpi-grid kpi-grid--3">${kpi(T("مزودون يعملون الآن", "Providers live now"), count(on.length), on.length ? on.map((p) => PROVIDER_NAMES[p.code] || p.code).join("، ") : T("الموقع يعرض أسعاراً تقديرية حالياً", "The website shows estimated fares for now"), on.length ? "good" : "warn", "i-globe")}</div>
+      <div class="prov-grid">${list.map((p) => `<article class="of-card prov">
+        <header class="of-card__h"><h3>${esc(p.name)}</h3>${p.configured ? `<span class="pill pill--ticketed">${T("البيانات مضافة", "Credentials set")}</span>` : `<span class="pill pill--new">${T("بانتظار البيانات", "Waiting for credentials")}</span>`}</header>
+        <p class="muted">${esc(p.notes)}</p>
+        <div class="chips">${[[p.canSearch, T("بحث وأسعار", "Search & fares")], [p.canBook, T("حجز ورقم PNR", "Booking & PNR")], [p.canTicket, T("إصدار التذاكر", "Ticketing")], [p.canCancel, T("إلغاء", "Cancel")]].map(([ok, l]) => `<span class="chip ${ok ? "" : "chip--off"}">${ok ? "✓" : "—"} ${l}</span>`).join("")}</div>
+        ${p.configured ? "" : `<p class="hint hint--lock">${icon("i-lock")}<span>${T("أضف هذه الأسرار في Supabase ← Edge Functions ← Secrets:", "Add these secrets in Supabase → Edge Functions → Secrets:")} <code dir="ltr">${p.secrets.join(", ")}</code></span></p>`}
+        <form class="prov-form" data-prov="${p.code}">
+          <label class="perm"><input type="checkbox" name="enabled" ${p.enabled ? "checked" : ""}><span><b>${T("مفعّل في البحث", "Enabled in search")}</b><small>${p.configured ? "" : T("لن يعمل قبل إضافة البيانات", "Won't run until credentials are added")}</small></span></label>
+          <div class="f3">${sel("mode", T("البيئة", "Environment"), { test: T("تجريبي (Test)", "Test"), live: T("فعلي (Live)", "Live") }, p.mode)}${inp("priority", T("الأولوية (1 = الأعلى)", "Priority (1 = first)"), p.priority, "number", "ltr")}${inp("markup_pct", T("هامشك على السعر %", "Your markup %"), p.markup_pct, "number", "ltr")}</div>
+          <button type="submit" class="btn btn--primary btn--sm">${T("حفظ", "Save")}</button>
+        </form></article>`).join("")}</div>
+      <section class="of-card"><header class="of-card__h"><h3>${T("إضافة شركة أخرى", "Adding another company")}</h3></header>
+        <p class="muted">${T("أي شركة أخرى (Sabre، واجهة NDC لشركة طيران، موحّد تذاكر…) تُضاف بمحوّل صغير في ملف الخادم supabase/functions/flights/providers.ts بنفس الشكل، ثم تظهر هنا تلقائياً بعد إضافة سطر لها في جدول booking_providers.", "Any other company (Sabre, an airline NDC API, a consolidator…) is added as a small adapter in supabase/functions/flights/providers.ts, then appears here after a row is added to the booking_providers table.")}</p></section>`;
+    $$(".prov-form", el).forEach((f) => f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(f));
+      const row = { enabled: !!f.enabled.checked, mode: d.mode, priority: Math.max(1, +d.priority || 10), markup_pct: Math.max(0, Math.min(100, +d.markup_pct || 0)), updated_at: new Date().toISOString() };
+      const { error } = await DB.client.from("booking_providers").update(row).eq("code", f.dataset.prov);
+      if (error) return errToast(error);
+      log(T("عدّل إعدادات مزود حجز", "Edited booking provider"), f.dataset.prov);
+      toast(T("تم الحفظ", "Saved")); route();
+    }));
+  }
 
   /* ---------- Generic modal ---------- */
   function openModal(title, html, wide) {

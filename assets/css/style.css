@@ -1372,3 +1372,22 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 }
 .ac-date { display: inline-flex; align-items: center; gap: 6px; font-size: .84rem; color: var(--ink-3); }
 .ac-date input { border: 1.5px solid var(--line); border-radius: 999px; padding: .4em .8em; min-height: 38px; background: #fff; }
+
+/* Live fares from connected providers */
+.fl__live { display: inline-block; margin-top: 4px; font-size: .7rem; font-weight: 700; color: var(--g-600); background: var(--g-100); border-radius: 999px; padding: .15em .6em; }
+.fl__nums { display: block; font-family: var(--mono); font-size: .74rem; color: var(--ink-3); }
+.field--gender { max-width: 200px; }
+
+/* Booking providers */
+.prov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.prov { display: grid; gap: 10px; align-content: start; }
+.prov code { font-size: .78rem; word-break: break-all; }
+.prov-form { display: grid; gap: 10px; }
+.prov-form .btn { justify-self: start; }
+.chip--off { background: var(--paper); color: var(--ink-3); border-color: var(--line); }
+.prov-box { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: #eef6ff; border: 1px solid #d6e7ff; border-radius: 14px; padding: 10px 12px; margin-bottom: 12px; }
+.prov-box > .i { width: 22px; height: 22px; color: #2a5bd7; }
+.prov-box > div:first-of-type { flex: 1 1 220px; display: grid; }
+.prov-box small { color: var(--ink-3); }
+.prov-act { display: flex; gap: 6px; flex-wrap: wrap; }
+.prov-form .f3 { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }

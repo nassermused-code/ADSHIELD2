@@ -361,6 +361,35 @@
   const todayIso = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10); };
   const cityName = cname;
 
+  /* ---------- Live fares from the connected providers (server function "flights") ---------- */
+  const stubAirport = (code) => BY[code] || { code, name: code, city: code, ar: "", cc: "", lat: 0, lon: 0, rank: 3 };
+  const minsOf = (t) => +t.slice(11, 13) * 60 + +t.slice(14, 16);
+  function mapOffer(o, q) {
+    if (!o.slices || !o.slices.length) return null;
+    const legs = o.slices.map((s) => {
+      const a = s.segments[0], z = s.segments[s.segments.length - 1];
+      const plus = Math.round((Date.parse(z.arrAt.slice(0, 10)) - Date.parse(a.depAt.slice(0, 10))) / 864e5);
+      const lay = s.segments.length > 1 ? Math.max(0, Math.round((Date.parse(s.segments[1].depAt) - Date.parse(s.segments[0].arrAt)) / 6e4)) : 0;
+      return { from: stubAirport(a.from), to: stubAirport(z.to), via: s.segments.length > 1 ? stubAirport(s.segments[0].to) : null, stops: s.segments.length - 1,
+        dateIso: a.depAt.slice(0, 10), dep: minsOf(a.depAt), arr: minsOf(z.arrAt), plus, dur: s.duration || Math.round((Date.parse(z.arrAt) - Date.parse(a.depAt)) / 6e4), layover: lay,
+        flights: s.segments.map((g) => g.flight) };
+    });
+    const cr = CARRIERS.find((c) => c.c === o.carrier) || { c: o.carrier, n: o.carrierName || o.carrier, cc: "", hubs: [], col: "#5b6b82", tier: 1, type: "full" };
+    const paxF = q.pax.adults + q.pax.children * 0.78 + q.pax.infants * 0.12;
+    const per = Math.round(o.sell / paxF);
+    return { id: "L-" + o.id, offerId: o.id, live: true, canBook: !!o.canBook, provider: o.provider, cr, legs, stops: legs[0].stops, per, pub: per, total: Math.round(o.sell), dur: legs.reduce((s, l) => s + l.dur, 0) };
+  }
+  async function liveSearch(q) {
+    if (!window.GTDB || !window.GTDB.flightsApi) return null;
+    try {
+      const res = await Promise.race([
+        window.GTDB.flightsApi("search", { from: q.o.code, to: q.d.code, depart: q.depart, ret: q.ret, cabin: q.cabin, pax: q.pax }),
+        new Promise((r) => setTimeout(() => r(null), 30000)),
+      ]);
+      return res && res.offers && res.offers.length ? res.offers.map((o) => mapOffer(o, q)).filter(Boolean) : null;
+    } catch (e) { return null; }
+  }
+
   // Airline logos live in assets/img/airlines/<IATA code>.webp; a lettered tile is the fallback
   function logoHtml(cr) {
     if (cr.c) {
@@ -406,7 +435,7 @@
             </div>
             <p class="res-count" id="resCount" aria-live="polite"></p>
             <div class="res-list" id="resList"></div>
-            <p class="price-note"><svg class="i"><use href="#i-tag"/></svg>${T("الأسعار تقديرية وتتغير حسب التوفر وتاريخ الحجز. يؤكد وكيلنا السعر النهائي قبل إصدار التذكرة.", "Fares are estimates in US dollars and change with availability and booking date. Your agent confirms the final price before ticketing.")}</p>
+            <p class="price-note" id="priceNote"><svg class="i"><use href="#i-tag"/></svg><span data-est>${T("الأسعار تقديرية وتتغير حسب التوفر وتاريخ الحجز. يؤكد وكيلنا السعر النهائي قبل إصدار التذكرة.", "Fares are estimates in US dollars and change with availability and booking date. Your agent confirms the final price before ticketing.")}</span></p>
           </div>
         </div>
       </div>`;
@@ -514,9 +543,9 @@
     $("#resList").innerHTML = list.length
       ? list.map((r, i) => `<article class="fl" style="--d:${Math.min(i, 8) * 60}ms">
           ${r.id === byCheap.id ? `<span class="fl__badge">${T("الأرخص", "Cheapest")}</span>` : r.id === byFast.id ? `<span class="fl__badge fl__badge--fast">${T("الأسرع", "Fastest")}</span>` : ""}
-          <div class="fl__air">${logoHtml(r.cr)}<div><b>${esc(r.cr.n)}</b><small>${CABIN_AR[state.cabin]}${r.cr.type === "low" ? T(" · منخفض التكلفة", " · Low-cost") : ""}</small></div></div>
+          <div class="fl__air">${logoHtml(r.cr)}<div><b>${esc(r.cr.n)}</b><small>${CABIN_AR[state.cabin]}${r.cr.type === "low" ? T(" · منخفض التكلفة", " · Low-cost") : ""}</small>${r.live ? `<small class="fl__nums" dir="ltr">${esc(r.legs.map((l) => l.flights.join(" · ")).join("  /  "))}</small><span class="fl__live">${T("سعر مباشر", "Live fare")}</span>` : ""}</div></div>
           <div class="fl__legs">${r.legs.map((l, j) => legHtml(l, r.legs.length > 1 ? (j ? T("العودة", "Return") : T("الذهاب", "Depart")) : T("الذهاب", "Depart"))).join("")}</div>
-          ${b2b ? b2bPriceHtml(r, n) : `<div class="fl__price"><small>${T("تقديري للفرد", "Est. per person")}</small><b dir="ltr">${usd.format(r.per)}</b><small>${n > 1 ? `${T("الإجمالي", "Total")} <span dir="ltr">${usd.format(r.total)}</span> · ${n} ${T("مسافرين", "travelers")}` : r.legs.length > 1 ? T("ذهاب وعودة", "Round trip") : T("ذهاب فقط", "One way")}</small>
+          ${b2b ? b2bPriceHtml(r, n) : `<div class="fl__price"><small>${r.live ? T("السعر للفرد", "Per person") : T("تقديري للفرد", "Est. per person")}</small><b dir="ltr">${usd.format(r.per)}</b><small>${n > 1 ? `${T("الإجمالي", "Total")} <span dir="ltr">${usd.format(r.total)}</span> · ${n} ${T("مسافرين", "travelers")}` : r.legs.length > 1 ? T("ذهاب وعودة", "Round trip") : T("ذهاب فقط", "One way")}</small>
             <button type="button" class="btn btn--accent btn--sm" data-book-flight="${r.id}"><svg class="i"><use href="#i-ticket"/></svg>${T("احجز الآن", "Book now")}</button>
             <button type="button" class="btn btn--agent btn--sm" data-book-agent="${r.id}"><svg class="i"><use href="#i-headset"/></svg>${T("احجز عبر الوكيل", "Book with an agent")}</button></div>`}
         </article>`).join("")
@@ -530,6 +559,7 @@
       const dIso = addDays(state.depart, k);
       if (dIso < t) continue;
       const rIso = state.ret ? addDays(state.ret, k) : null;
+      if (state.live) { days.push([dIso, dIso === state.depart && state.results.length ? Math.min(...state.results.map((r) => r.per)) : null]); continue; }
       const res = generate(state, dIso, rIso);
       days.push([dIso, res.length ? Math.min(...res.map((r) => r.per)) : null]);
     }
@@ -560,13 +590,32 @@
     showLoading();
     if (!keepScroll) setTimeout(() => sec.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
     clearTimeout(run.t);
+    const token = (run.token = (run.token || 0) + 1);
     run.t = setTimeout(async () => {
-      // Partner portal: partner prices are worked out on the server. A first pass collects the public fares, then one call prices them.
-      if (window.GTB2B && window.GTB2B.active && window.GTB2B.prepare) {
-        for (let k = -3; k <= 3; k++) generate(state, addDays(state.depart, k), state.ret ? addDays(state.ret, k) : null);
-        await window.GTB2B.prepare();
+      // 1) Live fares from the connected booking providers, when any is set up
+      const live = await liveSearch(state);
+      if (token !== run.token) return;
+      state.live = !!live;
+      const b2b = window.GTB2B && window.GTB2B.active && window.GTB2B.prepare;
+      if (live) {
+        if (b2b) {
+          live.forEach((r) => window.GTB2B.price(r.pub));
+          await window.GTB2B.prepare();
+          live.forEach((r) => { const p = window.GTB2B.price(r.pub).partner; r.total = Math.round((r.total * p) / r.pub); r.per = p; });
+        }
+        state.results = live;
+      const pn = $("#priceNote [data-est]");
+      if (pn) pn.textContent = T("أسعار مباشرة من أنظمة الحجز، تشمل الضرائب، ومضمونة عند تأكيد الحجز خلال مدة صلاحية العرض.", "Live fares from the booking systems, taxes included, guaranteed when you confirm within the offer's validity.");
+      } else {
+        const pn = $("#priceNote [data-est]");
+        if (pn) pn.textContent = T("الأسعار تقديرية وتتغير حسب التوفر وتاريخ الحجز. يؤكد وكيلنا السعر النهائي قبل إصدار التذكرة.", "Fares are estimates in US dollars and change with availability and booking date. Your agent confirms the final price before ticketing.");
+        // 2) Otherwise estimated fares (partner prices are worked out on the server in one call)
+        if (b2b) {
+          for (let k = -3; k <= 3; k++) generate(state, addDays(state.depart, k), state.ret ? addDays(state.ret, k) : null);
+          await window.GTB2B.prepare();
+        }
+        state.results = generate(state, state.depart, state.ret);
       }
-      state.results = generate(state, state.depart, state.ret);
       state.sort = state.sort || "cheap";
       renderDates();
       initFilters();
@@ -603,7 +652,7 @@
       r.legs[1] ? [T("العودة", "Return"), legTxt(r.legs[1])] : null,
       [T("المسافرون", "Travelers"), $("#paxLabel") ? $("#paxLabel").textContent : String(n)],
       [T("الدرجة", "Cabin"), CABIN_AR[state.cabin]],
-      [T("السعر التقديري", "Estimated fare"), `${usd.format(r.per)} ${T("للفرد", "per person")}${n > 1 ? ` · ${usd.format(r.total)} ${T("إجمالي", "total")}` : ""}`],
+      [r.live ? T("السعر", "Fare") : T("السعر التقديري", "Estimated fare"), `${usd.format(r.per)} ${T("للفرد", "per person")}${n > 1 ? ` · ${usd.format(r.total)} ${T("إجمالي", "total")}` : ""}`],
     ].filter(Boolean);
   }
 
@@ -678,7 +727,9 @@
             <div class="field"><label for="bkFirst${i}">${T("الاسم الأول (بالإنجليزية)", "First name")}</label><input id="bkFirst${i}" name="first${i}" dir="ltr" autocomplete="${i === 1 ? "given-name" : "off"}" required></div>
             <div class="field"><label for="bkLast${i}">${T("اسم العائلة (بالإنجليزية)", "Last name")}</label><input id="bkLast${i}" name="last${i}" dir="ltr" autocomplete="${i === 1 ? "family-name" : "off"}" required></div>
             <div class="field"><label for="bkDob${i}">${T("تاريخ الميلاد", "Date of birth")}</label><input id="bkDob${i}" name="dob${i}" type="date" max="${todayIso()}" required></div>
-          </div><input type="hidden" name="type${i}" value="${lab}"></fieldset>`;
+          </div>
+          <div class="field field--gender"><label for="bkGender${i}">${T("الجنس", "Gender")}</label><select id="bkGender${i}" name="gender${i}" required><option value="m">${T("ذكر", "Male")}</option><option value="f">${T("أنثى", "Female")}</option></select></div>
+          <input type="hidden" name="type${i}" value="${lab}"><input type="hidden" name="ptype${i}" value="${k === "adults" ? "adult" : k === "children" ? "child" : "infant"}"></fieldset>`;
       }
     });
     return html;
@@ -716,6 +767,17 @@
       const i = k.slice(5);
       return `${i}. ${d["first" + i]} ${d["last" + i]} (${d["type" + i]}${T("، ", ", ")}${d["dob" + i]})`;
     });
+    // Live fare: book the seat with the provider right here (hold → PNR); the booking lands in the back office
+    if (r.live && r.canBook && window.GTDB && window.GTDB.flightsApi) {
+      const btnL = $('button[type="submit"]', form);
+      btnL.disabled = true;
+      const passengers = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => { const i = k.slice(5); return { given: d["first" + i], family: d["last" + i], dob: d["dob" + i], gender: d["gender" + i], type: d["ptype" + i] }; });
+      let res = null;
+      try { res = await window.GTDB.flightsApi("book", { offerId: r.offerId, passengers, contact: { email: d.email, phone: d.phone }, notes: d.notes || "" }); } catch (err) { res = { error: err.message }; }
+      btnL.disabled = false;
+      if (res && res.ok) { liveDone(res, r, d); return; }
+      toast(res && res.error === "offer_expired" ? T("انتهت صلاحية هذا السعر، أرسلنا طلبك للفريق ليؤكد لك أفضل سعر.", "This fare has expired; your request went to our team to confirm the best price.") : T("لم يتأكد المقعد تلقائياً، أرسلنا طلبك للفريق لتأكيده.", "The seat couldn't be confirmed automatically; your request went to our team."));
+    }
     // Record the request in the shared system so it appears in the back office; its number is the reference
     let ref = "GT-" + todayIso().slice(2).replace(/-/g, "") + "-" + String(hash(r.id + Date.now()) % 9000 + 1000);
     if (window.GTDB && window.GTDB.websiteBooking) {
@@ -749,13 +811,26 @@
       } catch (err) { sent = false; }
       btn.disabled = false;
     }
-    $("#bkRef").textContent = ref;
+    $(".bk-ref", bookingModal).innerHTML = `${T("رقم الطلب", "Request number")} <b id="bkRef" dir="ltr">${esc(ref)}</b>`;
     $("#bkDoneTitle").textContent = sent ? T("تم إرسال طلب حجزك", "Your booking request was sent") : T("طلبك جاهز، أرسله للوكيل", "Your request is ready, send it to an agent");
     $("#bkDoneNote").textContent = sent
       ? T("وصل طلبك إلى فريقنا. سيتواصل معك الوكيل قريباً لتأكيد السعر النهائي وطريقة الدفع ثم إصدار التذكرة.", "Our team has your request. An agent will contact you shortly to confirm the final price and payment, then issue your ticket.")
       : T("خطوة أخيرة: أرسل الطلب إلى وكيلنا على واتساب أو البريد الإلكتروني بضغطة واحدة (التفاصيل جاهزة في الرسالة)، وسيؤكد لك السعر النهائي ويصدر التذكرة.", "Last step: send the request to our agent on WhatsApp or by email with one tap (the details are already in the message). They'll confirm the final price and issue your ticket.");
     $("#bkWaList").innerHTML = typeof waButtons === "function" ? waButtons(msg) : "";
     if (typeof putMail === "function") putMail($("#bkWaList"), "bkMail", T(`طلب حجز ${ref}`, `Booking request ${ref}`) + " — Green Travel", msg);
+    $('[data-step="form"]', bookingModal).hidden = true;
+    $('[data-step="done"]', bookingModal).hidden = false;
+    $(".modal__dialog", bookingModal).scrollTop = 0;
+  }
+
+  function liveDone(res, r, d) {
+    const until = res.expires ? new Date(res.expires).toLocaleString(I18N.locale, { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "";
+    const msg = T(`حجز مؤكد عبر الموقع — رقم الحجز (PNR) ${res.pnr || "—"} · المرجع ${res.id}\n`, `Booking confirmed on the website — PNR ${res.pnr || "—"} · ref ${res.id}\n`) + flightRows(r).map(([k, v]) => `• ${k}: ${v}`).join("\n") + `\n${T("الجوال", "Mobile")}: ${d.phone} · ${d.email}`;
+    $(".bk-ref", bookingModal).innerHTML = `${T("رقم الحجز (PNR)", "Booking reference (PNR)")} <b id="bkRef" dir="ltr">${esc(res.pnr || res.id)}</b>`;
+    $("#bkDoneTitle").textContent = T("تم حجز مقعدك", "Your seat is booked");
+    $("#bkDoneNote").textContent = T(`رقم حجزك لدى شركة الطيران هو ${res.pnr || ""}، والسعر محجوز لك${until ? " حتى " + until : ""}. سيتواصل معك فريقنا لإتمام الدفع، ثم نصدر التذكرة ونرسلها إلى بريدك.`, `Your airline booking reference is ${res.pnr || ""} and the fare is held for you${until ? " until " + until : ""}. Our team will contact you to complete payment, then we issue the ticket and email it to you.`);
+    $("#bkWaList").innerHTML = typeof waButtons === "function" ? waButtons(msg) : "";
+    if (typeof putMail === "function") putMail($("#bkWaList"), "bkMail", `PNR ${res.pnr || res.id} — Green Travel`, msg);
     $('[data-step="form"]', bookingModal).hidden = true;
     $('[data-step="done"]', bookingModal).hidden = false;
     $(".modal__dialog", bookingModal).scrollTop = 0;
