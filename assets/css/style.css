@@ -1391,3 +1391,31 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 .prov-box small { color: var(--ink-3); }
 .prov-act { display: flex; gap: 6px; flex-wrap: wrap; }
 .prov-form .f3 { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+
+/* Online payment + manage my booking */
+.bk-pay { margin: 14px 0; padding: 14px; border: 1.5px solid var(--line); border-radius: 16px; background: #fff; text-align: start; }
+.bk-pay h4 { margin: 0 0 10px; }
+.bk-pay__mount { min-height: 120px; }
+.bk-paid { display: flex; gap: 12px; align-items: flex-start; }
+.bk-paid .i { width: 34px; height: 34px; color: var(--g-600); flex: 0 0 auto; }
+.bk-paid p { margin: 2px 0 0; }
+.bk-policy { text-align: start; margin: 12px 0; padding: 12px 14px 12px 30px; background: var(--g-50); border: 1px solid var(--g-100); border-radius: 14px; font-size: .86rem; display: grid; gap: 6px; }
+[dir="rtl"] .bk-policy { padding: 12px 30px 12px 14px; }
+.bk-policy a { color: var(--g-600); font-weight: 700; }
+#mgForm { align-items: end; }
+.mg-card { margin-top: 14px; border: 1.5px solid var(--line); border-radius: 16px; padding: 14px; text-align: start; }
+.mg-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.mg-head small { display: block; color: var(--ink-3); font-size: .78rem; }
+.mg-head b { font-family: var(--mono); font-size: 1.4rem; }
+.mg-air { margin: 6px 0; font-weight: 600; }
+.mg-segs { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mg-segs li { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 10px; background: var(--paper); border-radius: 10px; font-size: .9rem; }
+.mg-pax { font-size: .88rem; color: var(--ink-2); }
+.mg-policy { margin: 8px 0 0; padding-inline-start: 18px; font-size: .84rem; color: var(--ink-2); display: grid; gap: 4px; }
+.mg-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.mg-change { display: grid; gap: 8px; text-align: start; }
+.mg-change textarea { border: 1.5px solid var(--line); border-radius: 12px; padding: .6em .8em; font: inherit; }
+.mg-change .btn { justify-self: start; }
+.tk-share { margin-top: -6px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.st-head small + small { display: block; }
+.prov-pay { border-inline-start: 4px solid var(--amber); }

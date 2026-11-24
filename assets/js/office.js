@@ -969,7 +969,7 @@
     const segs = segmentsOf(b), pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "—"];
     const m = bookingMoney(b);
     return `<div class="statement ticket-doc" id="ticketDoc">
-      <header class="st-head"><img src="assets/img/logo.png" alt="" width="52" height="52"><div><b>Green Travel · جرين ترافيل</b><small>World Services dba Green Travel · +1 (708) 963-2552 · info@greentravel.us</small></div>
+      <header class="st-head"><img src="assets/img/logo.png" alt="" width="52" height="52"><div><b>Green Travel · جرين ترافيل</b><small>World Services dba Green Travel · info@greentravel.us · greentravel.us</small><small dir="ltr">${COMPANY_PHONES.join(" · ")}</small></div>
         <div class="st-meta"><b>${b.status === "ticketed" ? "E-TICKET RECEIPT" : "ITINERARY"}</b><span>${b.status === "ticketed" ? "إيصال التذكرة الإلكترونية" : "خط سير الرحلة"}</span><span dir="ltr">${fmtDate(today())}</span></div></header>
       <div class="tk-ids">
         <div>${L("رقم الحجز", "Booking ref (PNR)")}<strong dir="ltr" class="mono">${esc(b.pnr || "—")}</strong></div>
@@ -1008,6 +1008,29 @@
       return true;
     } catch (e) { toast(T("تعذّر إنشاء PDF، استخدم «طباعة» ثم «حفظ كـ PDF».", "Couldn't create the PDF; use Print, then Save as PDF.")); return false; }
   }
+  const COMPANY_PHONES = ["+1 (708) 963-2552", "+1 (708) 940-2929", "+1 (331) 213-3768", "+1 (708) 953-2244"];
+  const ticketTextFull = (b) => {
+    const segs = segmentsOf(b), pax = (b.travelers || []).length ? b.travelers : [b.customer.name || ""];
+    const lines = [
+      `✈️ ${T("جرين ترافيل — تفاصيل رحلتك", "Green Travel — your trip details")}`,
+      `${T("رقم الحجز", "Booking ref")} (PNR): ${b.pnr || "—"} · ${T("المرجع", "Ref")}: ${b.id}`,
+      `${T("شركة الطيران", "Airline")}: ${b.airline || "—"} · ${CABIN()[b.cabin] || ""}`,
+      "",
+      `${T("الرحلات", "Flights")}:`,
+      ...segs.map((s, i) => `${i + 1}) ${s.flight || ""} ${s.from} → ${s.to}\n   ${fmtDate(s.date)}${s.dep ? ` · ${T("إقلاع", "dep")} ${s.dep}` : ""}${s.arr ? ` · ${T("وصول", "arr")} ${s.arr}` : ""}`),
+      "",
+      `${T("المسافرون", "Travelers")}:`,
+      ...pax.map((n, i) => `• ${n}${(b.tickets || [])[i] ? ` — ${T("تذكرة", "ticket")} ${b.tickets[i]}` : ""}`),
+      b.baggage ? `${T("الأمتعة", "Baggage")}: ${b.baggage}` : "",
+      "",
+      b.status === "ticketed" ? T("بعد الإصدار: التعديل والإلغاء حسب شروط شركة الطيران ورسومها.", "After ticketing: changes and cancellations follow the airline's rules and fees.") : T("قبل الإصدار يمكن الإلغاء أو التعديل دون رسوم.", "Before ticketing you can cancel or change free of charge."),
+      T("احضر للمطار قبل 3 ساعات للرحلات الدولية.", "Arrive 3 hours early for international flights."),
+      "",
+      `Green Travel · ${COMPANY_PHONES.join(" / ")}`,
+      `info@greentravel.us · greentravel.us/#manage`,
+    ];
+    return lines.filter((x, i, a) => x !== "" || a[i - 1] !== "").join("\n");
+  };
   const ticketText = (b) => {
     const segs = segmentsOf(b);
     return `${T("جرين ترافيل — تفاصيل رحلتك", "Green Travel — your trip details")}\nPNR: ${b.pnr || "—"} · ${b.airline || ""}\n` +
@@ -1023,11 +1046,36 @@
         <button type="button" class="btn btn--primary btn--sm" id="tkPrint">${icon("i-list")}${T("طباعة", "Print")}</button>
         <button type="button" class="btn btn--ghost btn--sm" id="tkPdf">${icon("i-ticket")}${T("حفظ PDF على الكمبيوتر", "Save PDF to computer")}</button>
         <span class="tk-mail"><input type="email" id="tkTo" dir="ltr" placeholder="${T("بريد العميل", "Customer email")}" value="${esc(b.customer.email || "")}"><button type="button" class="btn btn--accent btn--sm" id="tkEmail">${icon("i-mail")}${T("إرسال بالبريد", "Email")}</button></span>
-        ${b.customer.phone ? `<a class="btn btn--ghost btn--sm" target="_blank" rel="noopener" href="https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(ticketText(b))}">${icon("i-whatsapp")}WhatsApp</a>` : ""}
+      </div>
+      <div class="tk-actions tk-share">
+        <button type="button" class="btn btn--accent btn--sm" id="tkShare">${icon("i-ticket")}${T("إرسال PDF (واتساب / رسائل)", "Send PDF (WhatsApp / Messages)")}</button>
+        <a class="btn btn--ghost btn--sm" target="_blank" rel="noopener" href="https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(ticketTextFull(b))}">${icon("i-whatsapp")}${T("واتساب: التفاصيل كاملة", "WhatsApp: full details")}</a>
+        <a class="btn btn--ghost btn--sm" href="sms:${esc(b.customer.phone || "")}?&body=${encodeURIComponent(ticketTextFull(b))}">${icon("i-chat")}${T("رسالة نصية SMS", "Text message (SMS)")}</a>
+        <button type="button" class="btn btn--ghost btn--sm" id="tkCopy">${T("نسخ التفاصيل", "Copy details")}</button>
       </div>
       ${b.reminders && b.reminders.ticket ? `<p class="hint">${icon("i-check")}${T("أُرسلت التذكرة بالبريد في", "Ticket emailed on")} ${fmtTime(b.reminders.ticket)}</p>` : ""}
       ${ticketDocHtml(b)}`, true);
     $("#tkPrint").addEventListener("click", () => { printHtml(ticketDocHtml(b)); log(T("طبع تذكرة", "Printed ticket"), b.id); });
+    $("#tkCopy").addEventListener("click", () => (navigator.clipboard ? navigator.clipboard.writeText(ticketTextFull(b)) : Promise.reject()).then(() => toast(T("تم النسخ", "Copied"))).catch(() => toast(T("تعذّر النسخ", "Couldn't copy"))));
+    // The PDF goes straight to WhatsApp / Messages / Mail through the phone's or computer's share sheet; otherwise it is saved and WhatsApp opens
+    $("#tkShare").addEventListener("click", async (e) => {
+      const btn = e.currentTarget; btn.disabled = true;
+      const name = `GreenTravel-${b.pnr || b.id}.pdf`;
+      try {
+        await loadPdfLib();
+        const blob = await window.html2pdf().set({ margin: 8, filename: name, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4" } }).from($("#ticketDoc")).outputPdf("blob");
+        const file = new File([blob], name, { type: "application/pdf" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: name, text: ticketTextFull(b) });
+          log(T("أرسل التذكرة PDF", "Shared ticket PDF"), b.id);
+        } else {
+          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+          toast(T("حُفظ ملف PDF: أرفقه في محادثة واتساب التي ستُفتح الآن.", "PDF saved: attach it in the WhatsApp chat that opens now."));
+          if (b.customer.phone) window.open(`https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(ticketTextFull(b))}`, "_blank", "noopener");
+        }
+      } catch (er) { if (er && er.name !== "AbortError") toast(T("تعذّر تجهيز الملف، استخدم «حفظ PDF».", "Couldn't prepare the file; use Save PDF.")); }
+      btn.disabled = false;
+    });
     $("#tkPdf").addEventListener("click", async (e) => { const btn = e.currentTarget; btn.disabled = true; if (await savePdf($("#ticketDoc"), `GreenTravel-${b.pnr || b.id}.pdf`)) log(T("حفظ تذكرة PDF", "Saved ticket PDF"), b.id); btn.disabled = false; });
     $("#tkEmail").addEventListener("click", async (e) => {
       const to = $("#tkTo").value.trim(), btn = e.currentTarget;
@@ -1384,10 +1432,14 @@
   async function viewProviders(el) {
     el.innerHTML = `<p class="muted">${T("جارٍ التحميل…", "Loading…")}</p>`;
     let list = [];
-    try { list = (await DB.flightsApi("providers", {})).providers || []; } catch (e) { el.innerHTML = `<p class="hint hint--lock">${esc(e.message)}</p>`; return; }
+    let pay = { configured: false, secrets: [] };
+    try { const r = await DB.flightsApi("providers", {}); list = r.providers || []; pay = r.payments || pay; } catch (e) { el.innerHTML = `<p class="hint hint--lock">${esc(e.message)}</p>`; return; }
     const on = list.filter((p) => p.enabled && p.configured);
     el.innerHTML = `
       <p class="hint">${icon("i-globe")}${T("يمكن ربط أكثر من شركة في الوقت نفسه. عند البحث يسأل الموقع كل المزودين المفعّلين معاً، ويدمج النتائج ويرتبها بالسعر، وإن جاءت الرحلة نفسها من مزودين يعرض الأرخص (أو صاحب الأولوية). الحجز وإنشاء رقم الحجز يتمان داخل موقعك، والإصدار من هنا.", "Several companies can be connected at once. Each search asks every enabled provider together, merges the results and sorts them by price; when the same flight comes from two providers the cheaper one (or the preferred one) is shown. Booking and the PNR happen on your website; ticketing from here.")}</p>
+      <section class="of-card prov-pay"><header class="of-card__h"><h3>${T("الحجز الذاتي الكامل: الدفع أونلاين والإصدار التلقائي", "Full self-service: online payment and automatic ticketing")}</h3>${pay.configured ? `<span class="pill pill--ticketed">${T("الدفع أونلاين يعمل", "Online payment live")}</span>` : `<span class="pill pill--new">${T("بانتظار إعداد Stripe", "Waiting for Stripe setup")}</span>`}</header>
+        <p class="muted">${T("العميل يبحث ويختار ويحجز ويدفع داخل موقعك، ثم تُصدر التذكرة تلقائياً عبر المزود وتصله بالبريد، دون تدخل أي موظف. إن تعذّر الإصدار التلقائي تُنشأ مهمة عاجلة للفريق.", "The customer searches, books and pays on your website; the ticket is then issued automatically with the provider and emailed, with no staff involved. If automatic ticketing fails, an urgent task is created for the team.")}</p>
+        ${pay.configured ? "" : `<p class="hint hint--lock">${icon("i-lock")}<span>${T("أنشئ حساب Stripe، ثم أضف في Supabase ← Edge Functions ← Secrets:", "Create a Stripe account, then add in Supabase → Edge Functions → Secrets:")} <code dir="ltr">${(pay.secrets || []).join(", ")}</code>. ${T("وأضف في Stripe ← Webhooks عنواناً يستقبل الحدث checkout.session.completed:", "And in Stripe → Webhooks add an endpoint for checkout.session.completed:")} <code dir="ltr">https://qlhtjnhuhkaapzufxvzd.supabase.co/functions/v1/flights</code></span></p>`}</section>
       <div class="kpi-grid kpi-grid--3">${kpi(T("مزودون يعملون الآن", "Providers live now"), count(on.length), on.length ? on.map((p) => PROVIDER_NAMES[p.code] || p.code).join("، ") : T("الموقع يعرض أسعاراً تقديرية حالياً", "The website shows estimated fares for now"), on.length ? "good" : "warn", "i-globe")}</div>
       <div class="prov-grid">${list.map((p) => `<article class="of-card prov">
         <header class="of-card__h"><h3>${esc(p.name)}</h3>${p.configured ? `<span class="pill pill--ticketed">${T("البيانات مضافة", "Credentials set")}</span>` : `<span class="pill pill--new">${T("بانتظار البيانات", "Waiting for credentials")}</span>`}</header>
@@ -1396,6 +1448,7 @@
         ${p.configured ? "" : `<p class="hint hint--lock">${icon("i-lock")}<span>${T("أضف هذه الأسرار في Supabase ← Edge Functions ← Secrets:", "Add these secrets in Supabase → Edge Functions → Secrets:")} <code dir="ltr">${p.secrets.join(", ")}</code></span></p>`}
         <form class="prov-form" data-prov="${p.code}">
           <label class="perm"><input type="checkbox" name="enabled" ${p.enabled ? "checked" : ""}><span><b>${T("مفعّل في البحث", "Enabled in search")}</b><small>${p.configured ? "" : T("لن يعمل قبل إضافة البيانات", "Won't run until credentials are added")}</small></span></label>
+          <label class="perm"><input type="checkbox" name="auto_ticket" ${p.autoTicket ? "checked" : ""} ${p.canTicket ? "" : "disabled"}><span><b>${T("إصدار تلقائي بعد الدفع", "Auto-issue after payment")}</b><small>${p.canTicket ? T("التذكرة تُصدر وتُرسل للعميل فور الدفع", "Ticket issued and emailed right after payment") : T("هذا المزود لا يدعم الإصدار عبر الـ API بعد", "This provider can't issue through the API yet")}</small></span></label>
           <div class="f3">${sel("mode", T("البيئة", "Environment"), { test: T("تجريبي (Test)", "Test"), live: T("فعلي (Live)", "Live") }, p.mode)}${inp("priority", T("الأولوية (1 = الأعلى)", "Priority (1 = first)"), p.priority, "number", "ltr")}${inp("markup_pct", T("هامشك على السعر %", "Your markup %"), p.markup_pct, "number", "ltr")}</div>
           <button type="submit" class="btn btn--primary btn--sm">${T("حفظ", "Save")}</button>
         </form></article>`).join("")}</div>
@@ -1404,7 +1457,7 @@
     $$(".prov-form", el).forEach((f) => f.addEventListener("submit", async (e) => {
       e.preventDefault();
       const d = Object.fromEntries(new FormData(f));
-      const row = { enabled: !!f.enabled.checked, mode: d.mode, priority: Math.max(1, +d.priority || 10), markup_pct: Math.max(0, Math.min(100, +d.markup_pct || 0)), updated_at: new Date().toISOString() };
+      const row = { enabled: !!f.enabled.checked, auto_ticket: !!f.auto_ticket.checked, mode: d.mode, priority: Math.max(1, +d.priority || 10), markup_pct: Math.max(0, Math.min(100, +d.markup_pct || 0)), updated_at: new Date().toISOString() };
       const { error } = await DB.client.from("booking_providers").update(row).eq("code", f.dataset.prov);
       if (error) return errToast(error);
       log(T("عدّل إعدادات مزود حجز", "Edited booking provider"), f.dataset.prov);
@@ -1430,11 +1483,24 @@
     document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if (!$("#ofModal").hidden) closeModal(); else if (!$("#drawer").hidden) closeDrawer(); });
     $("#navToggle").addEventListener("click", () => document.body.classList.toggle("nav-open"));
     window.addEventListener("hashchange", route);
-    DB.onChange(() => { if (!me || !$("#drawer").hidden || !$("#ofModal").hidden) return; refreshMe(); if (me) route(); else showApp(); });
+    let knownIds = null;
+    const notifyNew = () => {
+      if (!me) { knownIds = null; return; }
+      const list = visibleBookings();
+      if (knownIds) list.filter((b) => !knownIds.has(b.id)).forEach((b) => {
+        const msg = `${T("حجز جديد", "New booking")} ${b.id} · ${b.route} · ${SOURCE()[b.source] || ""}${b.customer.name ? " · " + b.customer.name : ""}`;
+        toast(msg);
+        try { if ("Notification" in window && Notification.permission === "granted") new Notification("Green Travel", { body: msg, icon: "assets/img/logo.png" }); } catch (e) {}
+      });
+      knownIds = new Set(list.map((b) => b.id));
+    };
+    document.addEventListener("click", () => { try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch (e) {} }, { once: true });
+    DB.onChange(() => { notifyNew(); if (!me || !$("#drawer").hidden || !$("#ofModal").hidden) return; refreshMe(); if (me) route(); else showApp(); });
     document.body.classList.add("is-loading");
     DB.ready.then(async () => {
       document.body.classList.remove("is-loading");
       showApp();
+      notifyNew(); // remember what exists now, so only bookings arriving later are announced
       if (!me) { try { if (!(await DB.hasOwner())) showSetup(); } catch (e) {} }
     });
   });

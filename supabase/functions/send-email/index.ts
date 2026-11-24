@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
   if (!me || me.status !== "active" || !["owner", "staff"].includes(me.kind)) return json({ error: "Not allowed" }, 403);
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "Bad JSON" }, 400); }
-  const kind: Kind = ["ticket", "week", "day"].includes(body.kind) ? body.kind : "ticket";
+  const kind: Kind = ["booking", "ticket", "week", "day"].includes(body.kind) ? body.kind : "ticket";
   const { data: b } = await admin.from("bookings").select("*").eq("id", String(body.bookingId || "")).single();
   if (!b) return json({ error: "Booking not found" }, 404);
   const perms: string[] = me.perms || [];

@@ -704,6 +704,8 @@
           <h3 id="bkDoneTitle"></h3>
           <p class="bk-ref">${T("رقم الطلب", "Request number")} <b id="bkRef" dir="ltr"></b></p>
           <p class="modal__note" id="bkDoneNote"></p>
+          <div class="bk-pay" id="bkPay" hidden></div>
+          <ul class="bk-policy" id="bkPolicy" hidden></ul>
           <div class="wa-list" id="bkWaList"></div>
           <button type="button" class="btn btn--ghost btn--block" data-close>${T("إغلاق", "Close")}</button>
         </div>
@@ -831,9 +833,47 @@
     $("#bkDoneNote").textContent = T(`رقم حجزك لدى شركة الطيران هو ${res.pnr || ""}، والسعر محجوز لك${until ? " حتى " + until : ""}. سيتواصل معك فريقنا لإتمام الدفع، ثم نصدر التذكرة ونرسلها إلى بريدك.`, `Your airline booking reference is ${res.pnr || ""} and the fare is held for you${until ? " until " + until : ""}. Our team will contact you to complete payment, then we issue the ticket and email it to you.`);
     $("#bkWaList").innerHTML = typeof waButtons === "function" ? waButtons(msg) : "";
     if (typeof putMail === "function") putMail($("#bkWaList"), "bkMail", `PNR ${res.pnr || res.id} — Green Travel`, msg);
+    const pol = $("#bkPolicy");
+    pol.hidden = !(res.policy && res.policy.length);
+    pol.innerHTML = (res.policy || []).map((p) => `<li>${esc(T(p[0], p[1]))}</li>`).join("") + `<li><a href="#manage">${T("إدارة حجزي: إلغاء أو تعديل أو طباعة", "Manage my booking: cancel, change or print")}</a></li>`;
     $('[data-step="form"]', bookingModal).hidden = true;
     $('[data-step="done"]', bookingModal).hidden = false;
     $(".modal__dialog", bookingModal).scrollTop = 0;
+    startPay(res, d.email);
+  }
+
+  // Pay online inside this page (Stripe embedded checkout). After payment the server issues the ticket and emails it.
+  function loadScript(src) { return new Promise((ok, no) => { if (document.querySelector(`script[src="${src}"]`)) return ok(); const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); }
+  async function startPay(res, email) {
+    const box = $("#bkPay");
+    let r = null;
+    try { r = await window.GTDB.flightsApi("checkout", { bookingId: res.id, email }); } catch (e) { r = null; }
+    if (!r || !r.ok) { box.hidden = true; return; }   // online payment not set up yet: the team collects payment
+    $("#bkDoneNote").textContent = T(`رقم حجزك لدى شركة الطيران هو ${res.pnr || ""}. ادفع الآن بأمان لإصدار تذكرتك فوراً، وستصلك على بريدك الإلكتروني.`, `Your airline booking reference is ${res.pnr || ""}. Pay securely now to have your ticket issued instantly and emailed to you.`);
+    box.hidden = false;
+    box.innerHTML = `<h4>${T("الدفع الآمن", "Secure payment")} · <span dir="ltr">${usd.format(r.amount)}</span></h4><div id="bkPayMount" class="bk-pay__mount"><p class="muted">${T("جارٍ تحميل نموذج الدفع…", "Loading the payment form…")}</p></div>`;
+    try {
+      await loadScript("https://js.stripe.com/v3/");
+      const stripe = window.Stripe(r.publishableKey);
+      const co = await stripe.initEmbeddedCheckout({ clientSecret: r.clientSecret, onComplete: () => { try { co.destroy(); } catch (e) {} paidWait(res, email); } });
+      $("#bkPayMount").innerHTML = "";
+      co.mount("#bkPayMount");
+    } catch (e) { box.innerHTML = `<p class="muted">${T("تعذّر تحميل نموذج الدفع. سيتواصل معك فريقنا لإتمام الدفع.", "Couldn't load the payment form. Our team will contact you to complete payment.")}</p>`; }
+  }
+  async function paidWait(res, email) {
+    const box = $("#bkPay");
+    box.innerHTML = `<div class="bk-paid"><svg class="i"><use href="#i-check"/></svg><div><b>${T("تم استلام الدفع", "Payment received")}</b><p>${T("جارٍ إصدار تذكرتك…", "Issuing your ticket…")}</p></div></div>`;
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      let s = null;
+      try { s = await window.GTDB.flightsApi("pay_status", { bookingId: res.id, email }); } catch (e) {}
+      if (s && s.status === "ticketed") {
+        box.innerHTML = `<div class="bk-paid"><svg class="i"><use href="#i-ticket"/></svg><div><b>${T("تم إصدار تذكرتك", "Your ticket is issued")}</b><p>${T("أرقام التذاكر", "Ticket numbers")}: <span dir="ltr">${esc((s.tickets || []).join(", "))}</span></p><p>${T("أرسلنا التذكرة إلى بريدك. رحلة سعيدة!", "We emailed your ticket. Have a great trip!")}</p></div></div>`;
+        $("#bkDoneTitle").textContent = T("تم إصدار تذكرتك", "Your ticket is issued");
+        return;
+      }
+    }
+    box.querySelector("p").textContent = T("استلمنا الدفع، وستصلك التذكرة على بريدك خلال دقائق.", "Payment received; your ticket will arrive by email within minutes.");
   }
 
   /* ---------- Public API ---------- */
