@@ -33,7 +33,7 @@
     ["customer_service", "اكتب ردوداً جاهزة لأكثر 8 أسئلة يطرحها العملاء (الأمتعة، الإلغاء، تغيير الموعد، التأشيرة…)."],
   ];
 
-  const state = { staff: [], jobs: [], actions: [], docs: [], memory: [], cfg: null, view: "office", filter: "all", panel: null };
+  const state = { staff: [], jobs: [], actions: [], docs: [], memory: [], schedules: [], cfg: null, view: "office", filter: "all", panel: null };
   const driving = new Set();
   const staffBy = (code) => state.staff.find((s) => s.code === code) || { code, name: code, title: "" };
   const av = (code, busy) => { const s = staffBy(code); return `<span class="aio-av${busy ? " is-busy" : ""}" style="--c:${COLORS[code] || "#14713a"}">${esc((s.name || "?").trim().charAt(0))}</span>`; };
@@ -81,16 +81,17 @@
     return data;
   }
   async function load() {
-    const [st, jb, ac, dc, mm] = await Promise.all([
+    const [st, jb, ac, dc, mm, sc] = await Promise.all([
       sb.from("ai_staff").select("*").order("sort"),
       sb.from("ai_jobs").select("id,parent_id,employee,title,request,status,steps,result,error,usage,created_at,updated_at,done_at").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_actions").select("*").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_documents").select("*").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_memory").select("*").order("created_at", { ascending: false }),
+      sb.from("ai_schedules").select("*").order("created_at"),
     ]);
-    const e = st.error || jb.error || ac.error || dc.error || mm.error;
+    const e = st.error || jb.error || ac.error || dc.error || mm.error || sc.error;
     if (e) throw new Error(e.message);
-    state.staff = st.data; state.jobs = jb.data; state.actions = ac.data; state.docs = dc.data; state.memory = mm.data;
+    state.staff = st.data; state.jobs = jb.data; state.actions = ac.data; state.docs = dc.data; state.memory = mm.data; state.schedules = sc.data;
     render();
   }
   let reloadT = null;
@@ -141,16 +142,16 @@
   const active = (j) => ["queued", "running", "waiting"].includes(j.status);
   const pending = () => state.actions.filter((a) => a.status === "pending");
 
-  function render() {
+  function render(force) {
     $("#tJobs").textContent = topJobs().filter(active).length || "";
     $("#tAppr").textContent = pending().length || "";
     $$("#aioTabs a").forEach((a) => a.classList.toggle("is-active", a.getAttribute("href") === "#" + state.view));
     const st = $("#aioStatus");
     if (state.cfg) { st.className = "aio-status " + (state.cfg.configured ? "ok" : "bad"); st.textContent = state.cfg.configured ? "الموظفون متصلون" : "غير مفعّل"; }
-    const v = { office: viewOffice, jobs: viewJobs, approvals: viewApprovals, docs: viewDocs, team: viewTeam }[state.view] || viewOffice;
+    const v = { office: viewOffice, jobs: viewJobs, approvals: viewApprovals, docs: viewDocs, schedule: viewSchedule, team: viewTeam }[state.view] || viewOffice;
     // Keep what the owner is typing when the page refreshes itself
     const typing = (document.activeElement && $("#aioView").contains(document.activeElement) && /TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName)) || $("#aioView [data-dirty]");
-    if (!typing) $("#aioView").innerHTML = v();
+    if (force || !typing) $("#aioView").innerHTML = v();
     if (state.panel) state.panel();
   }
 
@@ -242,6 +243,42 @@
     return `<h2 class="aio-h">المستندات <small>كل ما كتبه الموظفون: خطابات، عقود، تقارير…</small></h2>
       ${kinds.length > 1 ? `<div class="aio-filter"><button type="button" data-filter="all" class="${!KIND[f] ? "is-on" : ""}">الكل</button>${kinds.map((k) => `<button type="button" data-filter="${k}" class="${f === k ? "is-on" : ""}">${KIND[k] || k}</button>`).join("")}</div>` : ""}
       ${list.length ? `<div class="aio-list">${list.map((d) => `<button type="button" class="aio-card aio-row" data-doc="${d.id}">${av(d.employee)}<span><b>${esc(d.title)}</b><small>${esc(KIND[d.kind] || d.kind)} · ${esc(staffBy(d.employee).name)} · ${fmt(d.created_at)}</small></span><span class="aio-badge">${esc(KIND[d.kind] || d.kind)}</span></button>`).join("")}</div>` : `<p class="aio-card aio-empty">لا توجد مستندات بعد.</p>`}`;
+  }
+
+  const FREQ = { daily: "كل يوم", weekdays: "أيام العمل (الإثنين–الجمعة)", weekly: "كل أسبوع", monthly: "كل شهر" };
+  const DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const hourLabel = (h) => `${((h + 11) % 12) + 1}:00 ${h < 12 ? "صباحاً" : "مساءً"}`;
+  const when = (s) => `${FREQ[s.freq]}${s.freq === "weekly" ? ` يوم ${DAYS[s.weekday]}` : s.freq === "monthly" ? ` يوم ${s.monthday}` : ""} الساعة ${hourLabel(s.at_hour)} (شيكاغو)`;
+  const SCHED_IDEAS = [
+    ["gm", "تقرير الصباح", "daily", 8, "أعطني تقرير الصباح: ما الذي يحتاج انتباهي اليوم؟ الحجوزات الجديدة، الرحلات خلال 3 أيام، المهام المتأخرة، والمبالغ المستحقة. اختصر في نقاط."],
+    ["accountant", "التقرير المالي الأسبوعي", "weekly", 9, "جهّز التقرير المالي للأسبوع الماضي مقارنة بالأسبوع الذي قبله، مع قائمة المستحقات المتأخرة أكثر من 14 يوماً، واحفظه كمستند."],
+    ["operations", "مراجعة رحلات الغد", "weekdays", 16, "راجع رحلات الغد وبعد الغد: هل كل التذاكر صادرة؟ أنشئ مهام عاجلة لأي حجز ناقص، وجهّز رسائل تذكير للعملاء."],
+    ["legal", "فحص الامتثال الشهري", "monthly", 10, "افحص الجوازات التي تنتهي خلال 6 أشهر وحدود الائتمان للشركات والوكلاء، واكتب تقريراً بالمخاطر والإجراءات المقترحة."],
+  ];
+
+  function viewSchedule() {
+    const opts = (sel) => state.staff.filter((s) => s.enabled).map((s) => `<option value="${s.code}" ${s.code === sel ? "selected" : ""}>${esc(s.name)} — ${esc(s.title)}</option>`).join("");
+    const hours = (sel) => Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${h === sel ? "selected" : ""}>${hourLabel(h)}</option>`).join("");
+    return `<h2 class="aio-h">المهام المجدولة <small>أعمال يكررها الموظفون تلقائياً، حتى والصفحة مغلقة</small></h2>
+      ${state.cfg && !state.cfg.configured ? setupNote() : ""}
+      <div class="aio-list">${state.schedules.length ? state.schedules.map((s) => `<div class="aio-card">
+        <div class="aio-row" style="cursor:default">${av(s.employee)}<span><b>${esc(s.title)}</b><small>${esc(staffBy(s.employee).name)} · ${when(s)}${s.email_to ? ` · يُرسل التقرير إلى <span dir="ltr">${esc(s.email_to)}</span>` : ""}</small>
+          <span class="aio-sub"><span class="aio-badge ${s.enabled ? "" : "cancelled"}">${s.enabled ? "مفعّل" : "متوقف"}</span>${s.enabled && s.next_run ? `<span class="aio-badge">التشغيل القادم: ${fmt(s.next_run)}</span>` : ""}${s.last_run ? `<span class="aio-badge cancelled">آخر تشغيل: ${fmt(s.last_run)}</span>` : ""}</span></span><span></span></div>
+        <p class="small" style="margin:8px 0">${esc(s.request)}</p>
+        <div class="aio-actions"><button type="button" class="btn btn--accent btn--sm" data-run-sched="${s.id}">شغّل الآن</button><button type="button" class="btn btn--ghost btn--sm" data-toggle-sched="${s.id}">${s.enabled ? "إيقاف" : "تفعيل"}</button><button type="button" class="btn btn--danger btn--sm" data-del-sched="${s.id}">حذف</button></div></div>`).join("") : `<p class="aio-card aio-empty">لا توجد مهام مجدولة بعد. أضف واحدة بالأسفل، أو اختر من الاقتراحات.</p>`}</div>
+      <h2 class="aio-h">إضافة مهمة مجدولة</h2>
+      <div class="aio-filter">${SCHED_IDEAS.map((x, k) => `<button type="button" data-sched-idea="${k}">${esc(x[1])}</button>`).join("")}</div>
+      <form class="aio-card aio-form" id="schedForm">
+        <div class="aio-grid2"><label class="aio-field"><span>الموظف</span><select name="employee">${opts("gm")}</select></label>
+          <label class="aio-field"><span>العنوان</span><input name="title" required maxlength="120" placeholder="مثال: تقرير الصباح"></label></div>
+        <label class="aio-field"><span>المطلوب في كل مرة</span><textarea name="request" required rows="3"></textarea></label>
+        <div class="aio-grid2"><label class="aio-field"><span>التكرار</span><select name="freq">${Object.entries(FREQ).map(([k, t]) => `<option value="${k}">${t}</option>`).join("")}</select></label>
+          <label class="aio-field"><span>الساعة (توقيت شيكاغو)</span><select name="at_hour">${hours(8)}</select></label>
+          <label class="aio-field"><span>اليوم (للأسبوعي)</span><select name="weekday">${DAYS.map((d, k) => `<option value="${k}" ${k === 1 ? "selected" : ""}>${d}</option>`).join("")}</select></label>
+          <label class="aio-field"><span>يوم الشهر (للشهري)</span><input name="monthday" type="number" min="1" max="28" value="1"></label></div>
+        <label class="aio-field"><span>أرسل التقرير بالبريد إلى (اختياري)</span><input name="email_to" type="email" dir="ltr" placeholder="you@example.com"></label>
+        <button class="btn btn--accent btn--sm" type="submit" style="justify-self:start">إضافة</button>
+      </form>`;
   }
 
   function viewTeam() {
@@ -354,7 +391,7 @@
 
   /* ---------------- Events ---------------- */
   document.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-close],[data-emp],[data-idea],[data-job],[data-doc],[data-filter],[data-approve],[data-reject],[data-drive],[data-cancel],[data-retry],[data-del-job],[data-print-job],[data-copy-job],[data-print-doc],[data-word-doc],[data-copy-doc],[data-edit-doc],[data-del-doc],[data-del-mem],[data-save-doc]");
+    const t = e.target.closest("[data-close],[data-emp],[data-idea],[data-job],[data-doc],[data-filter],[data-approve],[data-reject],[data-drive],[data-cancel],[data-retry],[data-del-job],[data-print-job],[data-copy-job],[data-print-doc],[data-word-doc],[data-copy-doc],[data-edit-doc],[data-del-doc],[data-del-mem],[data-save-doc],[data-run-sched],[data-toggle-sched],[data-del-sched],[data-sched-idea]");
     if (!t) return;
     const d = t.dataset;
     if ("close" in d) return closePanel();
@@ -362,7 +399,7 @@
     if (d.idea) { const [c, txt] = IDEAS[+d.idea]; $("#cmdTo").value = c; $("#cmdText").value = txt; $("#cmdText").focus(); return; }
     if (d.job) { e.preventDefault(); return openJob(d.job); }
     if (d.doc) return openDoc(d.doc);
-    if (d.filter) { state.filter = d.filter; return render(); }
+    if (d.filter) { state.filter = d.filter; return render(true); }
     try {
       if (d.approve || d.reject) {
         const id = d.approve || d.reject;
@@ -397,6 +434,10 @@
         $("#aioPanelBody").dataset.mode = "view"; toast("حُفظ"); await load(); return openDoc(d.saveDoc);
       }
       if (d.delDoc) { if (!confirm("حذف المستند؟")) return; const { error } = await sb.from("ai_documents").delete().eq("id", d.delDoc); if (error) throw error; closePanel(); return load(); }
+      if (d.schedIdea) { const [c, ttl, fq, h, req] = SCHED_IDEAS[+d.schedIdea], f = $("#schedForm").elements; f.employee.value = c; f.title.value = ttl; f.freq.value = fq; f.at_hour.value = h; f.request.value = req; f.request.focus(); return; }
+      if (d.runSched) { const { id } = await call("run_schedule", { id: d.runSched }); toast("بدأ التنفيذ"); await load(); openJob(id); return drive(id); }
+      if (d.toggleSched) { const x = state.schedules.find((y) => y.id === d.toggleSched); const { error } = await sb.from("ai_schedules").update({ enabled: !x.enabled }).eq("id", x.id); if (error) throw error; return load(); }
+      if (d.delSched) { if (!confirm("حذف هذه المهمة المجدولة؟")) return; const { error } = await sb.from("ai_schedules").delete().eq("id", d.delSched); if (error) throw error; return load(); }
       if (d.delMem) { const { error } = await sb.from("ai_memory").delete().eq("id", d.delMem); if (error) throw error; return load(); }
     } catch (er) { toast(er.message || String(er)); t.disabled = false; }
   });
@@ -421,6 +462,14 @@
         box.value = ""; box.blur();
         await load(); return drive(id);
       }
+      if (f.id === "schedForm") {
+        const el = f.elements;
+        const row = { employee: el.employee.value, title: el.title.value.trim(), request: el.request.value.trim(), freq: el.freq.value, at_hour: +el.at_hour.value, weekday: +el.weekday.value, monthday: Math.min(28, Math.max(1, +el.monthday.value || 1)), email_to: el.email_to.value.trim() || null };
+        if (!row.title || !row.request) return toast("اكتب العنوان والمطلوب");
+        const { error } = await sb.from("ai_schedules").insert(row);
+        if (error) throw error;
+        f.reset(); document.activeElement && document.activeElement.blur(); clean(); toast("أُضيفت المهمة المجدولة"); return load();
+      }
       if (f.id === "memForm") {
         const { error } = await sb.from("ai_memory").insert({ topic: f.elements.topic.value.trim(), note: f.elements.note.value.trim() });
         if (error) throw error;
@@ -435,9 +484,9 @@
       }
     } catch (er) { toast(er.message || String(er)); $$("button[type=submit]", f).forEach((b) => (b.disabled = false)); }
   });
-  document.addEventListener("input", (e) => { if (e.target.matches("[data-f], [data-staff] *")) e.target.dataset.dirty = "1"; });
+  document.addEventListener("input", (e) => { if (e.target.matches("[data-f], [data-staff] *, #schedForm *")) e.target.dataset.dirty = "1"; });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.panel) closePanel(); if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && e.target.id === "cmdText") $("#cmdForm").requestSubmit(); });
-  window.addEventListener("hashchange", () => { clean(); state.view = location.hash.slice(1) || "office"; state.filter = "all"; closePanel(); render(); window.scrollTo(0, 0); });
+  window.addEventListener("hashchange", () => { clean(); state.view = location.hash.slice(1) || "office"; state.filter = "all"; closePanel(); document.activeElement && document.activeElement.blur(); render(true); window.scrollTo(0, 0); });
 
   /* ---------------- Start ---------------- */
   async function start() {
@@ -447,7 +496,8 @@
     await load();
     sb.channel("ai-office").on("postgres_changes", { event: "*", schema: "public", table: "ai_jobs" }, () => reloadSoon())
       .on("postgres_changes", { event: "*", schema: "public", table: "ai_actions" }, () => reloadSoon())
-      .on("postgres_changes", { event: "*", schema: "public", table: "ai_documents" }, () => reloadSoon()).subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "ai_documents" }, () => reloadSoon())
+      .on("postgres_changes", { event: "*", schema: "public", table: "ai_schedules" }, () => reloadSoon()).subscribe();
     setInterval(() => { if (state.jobs.some(active)) reloadSoon(0); }, 5000);
     resumeOpen();
   }

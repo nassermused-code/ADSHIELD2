@@ -530,6 +530,7 @@ async function runJob(db: any, anthropic: Anthropic, me: Record<string, any>, jo
       const done = res.stop_reason !== "max_tokens";
       await save({ status: done ? "done" : "failed", result: text || "(لا يوجد تقرير)", messages, usage, done_at: new Date().toISOString(), error: done ? null : "max_tokens",
         steps: [...steps, step(done ? "done" : "error", done ? "أنهى العمل وسلّم التقرير" : "انقطع الرد لطوله")] });
+      if (done && job.schedule_id && !job.parent_id) await emailReport(db, job, text);
       return { status: done ? "done" : "failed" };
     }
     if (text) steps = [...steps, step("note", text)];
@@ -609,11 +610,84 @@ async function execute(db: any, me: Record<string, any>, a: Record<string, any>)
 }
 
 /* ------------------------------------------------------------------ */
+/* Background worker and schedules                                      */
+/* ------------------------------------------------------------------ */
+// A scheduled job's report goes by email to the address the owner chose for that schedule.
+async function emailReport(db: any, job: Record<string, any>, text: string) {
+  try {
+    const { data: s } = await db.from("ai_schedules").select("email_to,title").eq("id", job.schedule_id).maybeSingle();
+    const to = str(s?.email_to, 200);
+    if (!/^\S+@\S+\.\S+$/.test(to)) return;
+    const esc = (x: string) => x.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]!));
+    const html = `<div dir="rtl" style="font-family:Arial,sans-serif;font-size:15px;line-height:1.8;white-space:pre-wrap">${esc(text)}</div><p style="color:#667;font-size:13px">المكتب الإلكتروني · Green Travel</p>`;
+    await sendEmail(to, { subject: `${job.title} · ${today()}`, html, text });
+  } catch (_) { /* the report stays in the AI office either way */ }
+}
+
+// Runs every minute from pg_cron, so the work goes on with no browser open:
+// starts due schedules, then continues up to 3 jobs that are waiting to run.
+async function tick(db: any, started: number) {
+  const key = Deno.env.get("ANTHROPIC_API_KEY");
+  const { data: owner } = await db.from("profiles").select("*").eq("kind", "owner").eq("status", "active").limit(1).maybeSingle();
+  if (!owner) return { idle: "no owner" };
+  const created: string[] = [];
+  const { data: due } = await db.from("ai_schedules").select("*").eq("enabled", true).lte("next_run", new Date().toISOString());
+  for (const s of due || []) {
+    // Move the schedule forward first, so a slow tick never starts it twice
+    const { data: took } = await db.rpc("ai_schedule_take", { p_id: s.id, p_expected: s.next_run });
+    if (took !== true) continue;
+    if (!key) continue;
+    const { data: j } = await db.from("ai_jobs").insert({ employee: s.employee, title: s.title, request: s.request, schedule_id: s.id, created_by: owner.id, steps: [step("info", "بدأ تلقائياً حسب الجدول")] }).select("id").single();
+    if (j) created.push(j.id);
+  }
+  if (!key) return { idle: "no ANTHROPIC_API_KEY", schedules: (due || []).length };
+  const anthropic = new Anthropic({ apiKey: key, maxRetries: 2, timeout: 120_000 });
+  const ran: unknown[] = [];
+  // Several short rounds while time allows: departments first, then the manager who waits for them
+  for (let round = 0; round < 4 && Date.now() - started < 45_000; round++) {
+    const r = await tickRound(db, anthropic, owner, started);
+    ran.push(...r);
+    if (!r.length) break;
+  }
+  return { created, ran };
+}
+
+async function tickRound(db: any, anthropic: Anthropic, owner: Record<string, any>, started: number) {
+  const stale = new Date(Date.now() - 170_000).toISOString();
+  const { data: cand } = await db.from("ai_jobs").select("id,status,pending,updated_at").or(`status.eq.queued,status.eq.waiting,and(status.eq.running,updated_at.lt.${stale})`).order("created_at").limit(30);
+  const ready: string[] = [];
+  for (const j of cand || []) {
+    if (j.status === "waiting") {
+      const kids = Object.values(j.pending?.waits || {}) as string[];
+      if (kids.length) {
+        const { data: k } = await db.from("ai_jobs").select("status").in("id", kids);
+        if ((k || []).some((x: any) => !["done", "failed", "cancelled"].includes(x.status))) continue;
+      }
+    }
+    ready.push(j.id);
+    if (ready.length >= 3) break;
+  }
+  const results = await Promise.all(ready.map(async (id) => {
+    const { data: claimed } = await db.rpc("ai_claim_job", { p_id: id });
+    const job = (claimed || [])[0];
+    if (!job) return { id, skipped: true };
+    try { return { id, ...(await runJob(db, anthropic, owner, job, started)) }; }
+    catch (e) { await db.from("ai_jobs").update({ status: "failed", error: String((e as Error).message || e), updated_at: new Date().toISOString() }).eq("id", id); return { id, status: "failed" }; }
+  }));
+  return results.filter((x: any) => !x.skipped);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return fail("POST only", 405);
   const started = Date.now();
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+  const workerKey = req.headers.get("x-worker-key");
+  if (workerKey) {
+    const { data: ok } = await db.rpc("ai_worker_check", { p_key: workerKey });
+    if (ok !== true) return fail("Bad worker key", 403);
+    return json(await tick(db, started));
+  }
   const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   const { data: who } = await db.auth.getUser(token);
   if (!who?.user) return fail("Not signed in", 401);
@@ -623,7 +697,16 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return fail("Bad JSON"); }
   const log = (action: string, ref = "") => db.from("activity_log").insert({ who: me.id, action, ref });
 
-  if (body.action === "status") return json({ configured: !!Deno.env.get("ANTHROPIC_API_KEY"), model: MODEL, effort: EFFORT, email: !!Deno.env.get("RESEND_API_KEY") });
+  if (body.action === "status") return json({ configured: !!Deno.env.get("ANTHROPIC_API_KEY"), model: MODEL, effort: EFFORT, email: !!Deno.env.get("RESEND_API_KEY"), background: true });
+
+  if (body.action === "run_schedule") {
+    const { data: s } = await db.from("ai_schedules").select("*").eq("id", str(body.id, 60)).maybeSingle();
+    if (!s) return fail("Schedule not found", 404);
+    const { data, error } = await db.from("ai_jobs").insert({ employee: s.employee, title: s.title, request: s.request, schedule_id: s.id, created_by: me.id, steps: [step("info", "بدأ يدوياً من الجدول")] }).select("id").single();
+    if (error) return fail(error.message);
+    await db.from("ai_schedules").update({ last_run: new Date().toISOString() }).eq("id", s.id);
+    return json({ ok: true, id: data.id });
+  }
 
   if (body.action === "create") {
     const employee = str(body.employee, 30) || "gm";
