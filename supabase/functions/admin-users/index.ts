@@ -9,7 +9,7 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const PERMS = ["bookings_all", "bookings_create", "bookings_issue", "bookings_cancel", "payments", "customers", "agents", "agents_manage", "export", "corporate"];
+const PERMS = ["bookings_all", "bookings_create", "bookings_issue", "bookings_cancel", "payments", "customers", "agents", "agents_manage", "export", "corporate", "ai_office"];
 const STAFF_DOMAIN = "staff.greentravel.us";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const fail = (msg: string, status = 400) => json({ error: msg }, status);
