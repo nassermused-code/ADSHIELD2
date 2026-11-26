@@ -107,7 +107,8 @@
     const items = Object.entries(VIEWS).filter(([, v]) => v.ok());
     const main = items.filter(([, v]) => !v.owner && !v.group), own = items.filter(([, v]) => v.owner), corpItems = items.filter(([, v]) => v.group === "corp");
     const link = ([k, v]) => { const n = v.badge ? v.badge() : 0; return `<a href="#${k}">${icon(v.icon)}<span>${v.t()}</span>${n ? `<em class="nav-badge">${n}</em>` : ""}</a>`; };
-    $("#ofNav").innerHTML = main.map(link).join("") + (corpItems.length ? `<p class="of-nav__label">${T("سفر الشركات", "Corporate travel")}</p>` + corpItems.map(link).join("") : "") + (own.length ? `<p class="of-nav__label">${T("للمالك فقط", "Owner only")}</p>` + own.map(link).join("") : "");
+    $("#ofNav").innerHTML = main.map(link).join("") + (corpItems.length ? `<p class="of-nav__label">${T("سفر الشركات", "Corporate travel")}</p>` + corpItems.map(link).join("") : "") + (own.length ? `<p class="of-nav__label">${T("للمالك فقط", "Owner only")}</p>` + own.map(link).join("") : "")
+      + (isOwner() ? `<a href="ai-office.html" class="of-nav__ai">${icon("i-users")}<span>${T("المكتب الإلكتروني (موظفون أذكياء)", "AI office (AI employees)")}</span></a>` : "");
   }
 
   /* ---------- App shell ---------- */

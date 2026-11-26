@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>المكتب الإلكتروني | جرين ترافيل</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#062014">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Readex+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/ai-office.css">
+</head>
+<body class="aio">
+  <!-- Sign in (same account as the back office; the AI office is for the owner) -->
+  <section class="aio-login" id="aioLogin" hidden>
+    <form class="b2b-card aio-login__card" id="aioLoginForm" novalidate>
+      <h2>المكتب الإلكتروني</h2>
+      <p class="muted">موظفون أذكياء يعملون على بيانات جرين ترافيل. الدخول بحساب المالك.</p>
+      <label class="aio-field"><span>اسم المستخدم</span><input id="aioUser" type="text" dir="ltr" autocomplete="username" autocapitalize="none" required></label>
+      <label class="aio-field"><span>كلمة المرور</span><input id="aioPass" type="password" dir="ltr" autocomplete="current-password" required></label>
+      <button type="submit" class="btn btn--accent btn--block">دخول</button>
+      <p class="form-status err" id="aioLoginStatus" role="status" aria-live="polite"></p>
+      <p class="muted small"><a href="office.html">العودة إلى المكتب الخلفي</a></p>
+    </form>
+  </section>
+
+  <div class="aio-app" id="aioApp" hidden>
+    <header class="aio-top">
+      <a class="aio-brand" href="#office"><img src="assets/img/favicon.svg" alt="" width="34" height="34"><span><b>المكتب الإلكتروني</b><small>Green Travel · AI office</small></span></a>
+      <nav class="aio-tabs" id="aioTabs" aria-label="الأقسام">
+        <a href="#office">المكتب</a>
+        <a href="#jobs">المهام <em id="tJobs"></em></a>
+        <a href="#approvals">بانتظار موافقتك <em id="tAppr"></em></a>
+        <a href="#docs">المستندات</a>
+        <a href="#team">الفريق والإعدادات</a>
+      </nav>
+      <div class="aio-top__end">
+        <span class="aio-status" id="aioStatus"></span>
+        <a class="btn btn--ghost btn--sm" href="office.html">المكتب الخلفي</a>
+      </div>
+    </header>
+    <main class="aio-main" id="aioView"></main>
+  </div>
+
+  <!-- Side panel: one job, one document or one approval -->
+  <div class="aio-panel" id="aioPanel" hidden>
+    <div class="aio-panel__backdrop" data-close></div>
+    <aside class="aio-panel__body" role="dialog" aria-modal="true">
+      <button type="button" class="aio-x" data-close aria-label="إغلاق">×</button>
+      <div id="aioPanelBody"></div>
+    </aside>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <script src="assets/js/store.js" defer></script>
+  <script src="assets/js/ai-office.js" defer></script>
+</body>
+</html>
