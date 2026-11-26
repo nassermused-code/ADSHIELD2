@@ -1436,3 +1436,10 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 .duty-map .dot-base { fill: rgba(11, 61, 31, .25); }
 .duty-map .dot-now { fill: var(--amber); stroke: #fff; stroke-width: 3; }
 .duty-map .dot-l { font: 700 14px var(--font-display); fill: var(--g-800); }
+
+/* AI assistant (back office, staff) */
+.ai-job { border-top: 1px solid var(--line); padding: 10px 0; }
+.ai-job summary { cursor: pointer; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ai-result { white-space: pre-wrap; line-height: 1.8; background: var(--paper); border-radius: 12px; padding: 12px 14px; margin: 8px 0; overflow-wrap: anywhere; }
+.ai-doc { margin: 6px 0; }
+.ai-doc summary { cursor: pointer; font-weight: 600; }

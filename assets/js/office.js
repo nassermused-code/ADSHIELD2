@@ -69,6 +69,7 @@
     ["agents_manage", T("فتح حسابات الوكلاء", "Open agent accounts"), T("إنشاء وتعديل دخول الوكلاء (بدون التسعير)", "Create and edit agent logins (not pricing)")],
     ["export", T("تصدير CSV", "Export CSV"), T("تنزيل قائمة الحجوزات", "Download the bookings list")],
     ["corporate", T("سفر الشركات (TMC)", "Corporate travel (TMC)"), T("الشركات والمسافرون والسياسات والموافقات وفواتير الشركات", "Companies, travelers, policies, approvals and company invoices")],
+    ["ai_office", T("المساعد الذكي", "AI assistant"), T("يطلب من الموظفين الأذكياء: ردود، خطابات، مراجعات (بدون التكاليف والأرباح، وما يحتاج موافقة يذهب للمالك)", "Asks the AI employees for replies, letters and reviews (no costs or profit; anything needing approval goes to the owner)")],
   ];
   const pill = (st) => `<span class="pill pill--${st}">${STATUS()[st] || st}</span>`;
   const partnerName = (id) => (DB.get("partners", id) || {}).agency || "—";
@@ -84,6 +85,7 @@
   /* ---------- Navigation ---------- */
   const VIEWS = {
     dashboard: { icon: "i-target", t: () => T("لوحة التحكم", "Dashboard"), r: viewDashboard, ok: () => true },
+    assistant: { icon: "i-chat", t: () => T("المساعد الذكي", "AI assistant"), r: viewAssistant, ok: () => !isOwner() && can("ai_office") },
     tasks: { icon: "i-check", t: () => (isOwner() ? T("المهام", "Tasks") : T("مهامي", "My tasks")), r: viewTasks, ok: () => true, badge: () => myOpenTasks().length },
     alerts: { icon: "i-calendar", t: () => T("تنبيهات السفر", "Travel alerts"), r: viewAlerts, ok: () => true, badge: () => upcoming(7).filter(needsReminder).length },
     bookings: { icon: "i-ticket", t: () => T("الحجوزات", "Bookings"), r: viewBookings, ok: () => true, badge: () => visibleBookings().filter((b) => b.status === "new").length },
@@ -972,6 +974,58 @@
     el.innerHTML = `<section class="of-card">${list.length ? `<div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الوقت", "Time")}</th><th>${T("الموظف", "Employee")}</th><th>${T("العملية", "Action")}</th><th>${T("التفاصيل", "Details")}</th></tr></thead>
       <tbody>${list.slice(0, 200).map((l) => `<tr><td>${fmtTime(l.at)}</td><td><span class="who">${avatar(DB.get("staff", l.who) || { name: whoName(l.who) }, "xs")}${esc(whoName(l.who))}</span></td><td>${esc(ACTIONS()[l.action] || l.action)}</td><td dir="auto">${esc(l.ref)}</td></tr>`).join("")}</tbody></table></div>`
       : `<p class="muted empty">${T("لا يوجد نشاط مسجّل بعد. سيظهر هنا كل دخول وكل تعديل يقوم به الموظفون.", "No activity yet. Every sign-in and change made by staff will appear here.")}</p>`}</section>`;
+  }
+
+  /* ---------- AI assistant (staff with "ai_office") ----------
+     Staff ask the AI employees for help with their work. The server keeps costs,
+     profit and expenses out of these requests, and anything that needs approval
+     (emails, money, booking changes) waits for the owner. */
+  let aiTimer = null;
+  async function aiCall(action, payload = {}) {
+    const { data, error } = await DB.client.functions.invoke("ai-office", { body: Object.assign({ action }, payload) });
+    if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch (e) {} throw new Error(m); }
+    if (data && data.error) throw new Error(data.error);
+    return data;
+  }
+  function viewAssistant(el) {
+    clearInterval(aiTimer);
+    const AI_ST = { queued: T("في الانتظار", "Queued"), running: T("يعمل الآن", "Working"), waiting: T("بانتظار الأقسام", "Waiting on departments"), done: T("منجز", "Done"), failed: T("تعذّر", "Failed"), cancelled: T("أُلغي", "Cancelled") };
+    el.innerHTML = `
+      <section class="of-card"><header class="of-card__h"><h3>${T("اطلب من الموظفين الأذكياء", "Ask the AI employees")}</h3></header>
+        <p class="muted">${T("مثال: اكتب رداً على عميل يطلب تغيير موعد رحلته، أو راجع بيانات الحجز رقم ...، أو جهّز رسالة تذكير للمسافرين غداً. الرسائل والمبالغ وتعديل الحجوزات تحتاج موافقة المالك.", "For example: write a reply to a customer who wants to change a flight, check booking ..., or prepare a reminder for tomorrow's travelers. Emails, money and booking changes need the owner's approval.")}</p>
+        <form id="aiForm" class="dr-form" novalidate>
+          <label class="fl fl--wide"><span>${T("إلى", "To")}</span><select name="employee" id="aiTo"><option>…</option></select></label>
+          <label class="fl fl--wide"><span>${T("الطلب", "Request")}</span><textarea name="request" rows="4" required></textarea></label>
+          <button class="btn btn--accent btn--sm" type="submit">${T("أرسل", "Send")}</button>
+        </form></section>
+      <section class="of-card"><header class="of-card__h"><h3>${T("طلباتي", "My requests")}</h3></header><div id="aiList"><p class="muted">…</p></div></section>`;
+    const paint = async () => {
+      if (!document.body.contains(el) || location.hash.replace("#", "") !== "assistant") { clearInterval(aiTimer); return; }
+      let r;
+      try { r = await aiCall("my_jobs"); } catch (e) { $("#aiList").innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+      const open = $("#aiList details[open]") ? $("#aiList details[open]").dataset.id : "";
+      $("#aiList").innerHTML = r.jobs.length ? r.jobs.map((j) => `<details class="ai-job" data-id="${j.id}" ${j.id === open ? "open" : ""}><summary><b>${esc(j.title)}</b> <span class="pill pill--${j.status === "done" ? "ticketed" : j.status === "failed" ? "cancelled" : "new"}">${AI_ST[j.status] || j.status}</span> <small class="muted">${fmtTime(j.created_at)}</small></summary>
+        ${j.result ? `<div class="ai-result" dir="auto">${esc(j.result)}</div>` : j.error ? `<p class="muted">${esc(j.error)}</p>` : `<p class="muted">${T("يعمل عليه… تتحدث هذه الصفحة تلقائياً.", "In progress… this page updates by itself.")}</p>`}
+        ${(j.documents || []).map((d) => `<details class="ai-doc"><summary>📄 ${esc(d.title)}</summary><div class="ai-result" dir="auto">${esc(d.body)}</div><button type="button" class="btn btn--ghost btn--sm" data-ai-copy="${d.id}">${T("نسخ", "Copy")}</button></details>`).join("")}</details>`).join("")
+        : `<p class="muted empty">${T("لا توجد طلبات بعد.", "No requests yet.")}</p>`;
+      $$("[data-ai-copy]", el).forEach((b) => b.addEventListener("click", () => { const d = r.jobs.flatMap((j) => j.documents || []).find((x) => x.id === b.dataset.aiCopy); navigator.clipboard.writeText(d.body).then(() => toast(T("نُسخ", "Copied"))); }));
+    };
+    aiCall("staff_list").then((r) => { $("#aiTo").innerHTML = r.staff.map((x) => `<option value="${x.code}">${esc(x.name)} — ${esc(x.title)}</option>`).join(""); $("#aiTo").value = "customer_service"; }).catch((e) => toast(e.message));
+    $("#aiForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const f = e.target, text = f.request.value.trim();
+      if (text.length < 3) return toast(T("اكتب الطلب", "Write the request"));
+      f.querySelector("button").disabled = true;
+      try {
+        const { id } = await aiCall("create", { employee: f.employee.value, request: text });
+        f.request.value = ""; toast(T("أُرسل الطلب", "Request sent"));
+        paint();
+        aiCall("run", { id }).catch(() => {}).finally(paint); // starts at once; the background worker finishes it in any case
+      } catch (er) { toast(er.message); }
+      f.querySelector("button").disabled = false;
+    });
+    paint();
+    aiTimer = setInterval(paint, 8000);
   }
 
   /* ---------- Settings (owner) ---------- */

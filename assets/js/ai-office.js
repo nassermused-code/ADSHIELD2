@@ -18,7 +18,7 @@
   const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : "");
   const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("is-visible"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("is-visible"), 3500); };
 
-  const COLORS = { gm: "#0f4227", secretary: "#b5487a", accountant: "#2459c7", legal: "#6b4bc4", operations: "#d97a00", customer_service: "#0e8f8f", marketing: "#d4463c", hr: "#5a7a1f" };
+  const COLORS = { gm: "#0f4227", secretary: "#b5487a", accountant: "#2459c7", legal: "#6b4bc4", operations: "#d97a00", customer_service: "#0e8f8f", marketing: "#d4463c", hr: "#5a7a1f", auditor: "#7a3e1d" };
   const STATUS = { queued: "في الانتظار", running: "يعمل الآن", waiting: "بانتظار الأقسام", done: "منجز", failed: "تعذّر", cancelled: "أُلغي" };
   const KIND = { letter: "خطاب", contract: "عقد", report: "تقرير", memo: "مذكرة", email: "بريد", policy: "سياسة", offer: "عرض", invoice: "فاتورة", minutes: "محضر", other: "مستند" };
   const ACT = { send_email: "إرسال بريد", record_expense: "تسجيل مصروف", journal_entry: "قيد يومية", update_booking: "تعديل حجز" };
@@ -31,9 +31,11 @@
     ["hr", "اكتب وصفاً وظيفياً وإعلان توظيف لموظف حجوزات طيران يتحدث العربية والإنجليزية في شيكاغو."],
     ["secretary", "اكتب خطاباً رسمياً لشركة طيران نطلب فيه اتفاقية أسعار خاصة للمجموعات، وأنشئ مهمة متابعة بعد أسبوع."],
     ["customer_service", "اكتب ردوداً جاهزة لأكثر 8 أسئلة يطرحها العملاء (الأمتعة، الإلغاء، تغيير الموعد، التأشيرة…)."],
+    ["auditor", "دقّق في عمل الفريق خلال آخر 7 أيام: الحجوزات والتذاكر والمدفوعات والمهام، وأعطني تقييماً لكل موظف."],
   ];
 
-  const state = { staff: [], jobs: [], actions: [], docs: [], memory: [], schedules: [], cfg: null, view: "office", filter: "all", panel: null };
+  const SOURCE = { staff: "طلب موظف", schedule: "مجدول", watch: "تلقائي 24/7" };
+  const state = { staff: [], jobs: [], actions: [], docs: [], memory: [], schedules: [], settings: null, people: [], cfg: null, view: "office", filter: "all", panel: null };
   const driving = new Set();
   const staffBy = (code) => state.staff.find((s) => s.code === code) || { code, name: code, title: "" };
   const av = (code, busy) => { const s = staffBy(code); return `<span class="aio-av${busy ? " is-busy" : ""}" style="--c:${COLORS[code] || "#14713a"}">${esc((s.name || "?").trim().charAt(0))}</span>`; };
@@ -81,17 +83,19 @@
     return data;
   }
   async function load() {
-    const [st, jb, ac, dc, mm, sc] = await Promise.all([
+    const [st, jb, ac, dc, mm, sc, se, pp] = await Promise.all([
       sb.from("ai_staff").select("*").order("sort"),
-      sb.from("ai_jobs").select("id,parent_id,employee,title,request,status,steps,result,error,usage,created_at,updated_at,done_at").order("created_at", { ascending: false }).limit(300),
+      sb.from("ai_jobs").select("id,parent_id,employee,title,request,status,steps,result,error,usage,created_at,updated_at,done_at,source,requested_by").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_actions").select("*").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_documents").select("*").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_memory").select("*").order("created_at", { ascending: false }),
       sb.from("ai_schedules").select("*").order("created_at"),
+      sb.from("ai_settings").select("*").eq("id", 1).maybeSingle(),
+      sb.from("profiles").select("id,name,username").in("kind", ["owner", "staff"]),
     ]);
     const e = st.error || jb.error || ac.error || dc.error || mm.error || sc.error;
     if (e) throw new Error(e.message);
-    state.staff = st.data; state.jobs = jb.data; state.actions = ac.data; state.docs = dc.data; state.memory = mm.data; state.schedules = sc.data;
+    state.staff = st.data; state.jobs = jb.data; state.actions = ac.data; state.docs = dc.data; state.memory = mm.data; state.schedules = sc.data; state.settings = se.data; state.people = pp.data || [];
     render();
   }
   let reloadT = null;
@@ -199,7 +203,7 @@
       const acts = state.actions.filter((a) => a.job_id === j.id || kids.some((k) => k.id === a.job_id)).filter((a) => a.status === "pending").length;
       return `<button type="button" class="aio-card aio-row" data-job="${j.id}">${av(j.employee, j.status === "running")}
         <span><b>${esc(j.title)}</b><small>${esc(staffBy(j.employee).name)} · ${fmt(j.created_at)}</small>
-          <span class="aio-sub">${kids.length ? `<span class="aio-badge">الأقسام ${kidsDone}/${kids.length}</span>` : ""}${acts ? `<span class="aio-badge waiting">${acts} بانتظار موافقتك</span>` : ""}</span></span>
+          <span class="aio-sub">${SOURCE[j.source] ? `<span class="aio-badge cancelled">${SOURCE[j.source]}${j.source === "staff" ? ": " + esc((state.people.find((x) => x.id === j.requested_by) || {}).name || "") : ""}</span>` : ""}${kids.length ? `<span class="aio-badge">الأقسام ${kidsDone}/${kids.length}</span>` : ""}${acts ? `<span class="aio-badge waiting">${acts} بانتظار موافقتك</span>` : ""}</span></span>
         ${badge(j.status)}</button>`;
     }).join("")}</div>`;
   }
@@ -288,6 +292,15 @@
         ${c.email ? "<br>✓ إرسال البريد مفعّل." : "<br>✗ إرسال البريد غير مفعّل بعد (RESEND_API_KEY): الرسائل الموافق عليها لن تُرسل حتى يُفعَّل."}</p>
         ${c.configured ? "" : setupNote()}
         <p class="small muted">تكلفة التشغيل تُدفع لـ Anthropic حسب الاستخدام. يمكن تغيير النموذج بإضافة السر <code dir="ltr">AI_MODEL</code> (مثل claude-sonnet-5-5 الأقل تكلفة)، ومستوى التفكير بالسر <code dir="ltr">AI_EFFORT</code> (low / medium / high).</p></div>
+      <h2 class="aio-h">العمل 24/7 والتعاون مع فريقك <small>تعمل في الخلفية كل دقيقة، ولا تكلف شيئاً إلا عندما يحدث ما يستحق</small></h2>
+      ${state.settings ? `<form class="aio-card aio-form" id="watchForm">
+        <label class="aio-switch"><input type="checkbox" name="watch_bookings" ${state.settings.watch_bookings ? "checked" : ""}> كل حجز جديد يراجعه «${esc(staffBy("operations").name)}» خلال دقائق: يتأكد من البيانات ويقترح إسناده لموظف وينشئ له مهمة المتابعة</label>
+        <label class="aio-switch"><input type="checkbox" name="watch_holds" ${state.settings.watch_holds ? "checked" : ""}> الحجوزات المؤقتة التي تنتهي خلال 6 ساعات: مهمة عاجلة للموظف المسؤول</label>
+        <label class="aio-field"><span>المدقق الداخلي «${esc(staffBy("auditor").name)}» يراجع عمل الفريق البشري كل</span>
+          <select name="audit_hours">${[[0, "متوقف"], [2, "ساعتين"], [4, "4 ساعات"], [6, "6 ساعات"], [12, "12 ساعة"], [24, "يوم"]].map(([v, t]) => `<option value="${v}" ${+state.settings.audit_hours === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+        <p class="small muted" style="margin:0">المدقق يراجع: التذاكر بلا PNR أو أرقام تذاكر، الإصدار بلا دفع، البيع تحت التكلفة، الحجوزات المتروكة أو غير المسندة، الرحلات القريبة بلا تذاكر، الاستردادات والمدفوعات غير المتطابقة، والمهام المتأخرة. ثم ينشئ مهام تصحيح للموظف المسؤول ويحفظ تقريراً${state.settings.last_audit ? ` · آخر تدقيق: ${fmt(state.settings.last_audit)}` : ""}.</p>
+        <p class="small muted" style="margin:0">ليطلب موظفوك من الموظفين الأذكياء: المكتب الخلفي ← الموظفون والصلاحيات ← فعّل صلاحية «المساعد الذكي». لا يرون التكاليف والأرباح، وما يحتاج موافقة يصلك أنت.</p>
+        <button class="btn btn--ghost btn--sm" type="submit" style="justify-self:start">حفظ</button></form>` : ""}
       <h2 class="aio-h">الموظفون <small>غيّر الأسماء والمسميات، وأضف تعليماتك الخاصة لكل موظف</small></h2>
       <div class="aio-grid2">${state.staff.map((s) => `<form class="aio-card aio-form" data-staff="${s.code}">
         <div class="aio-row" style="cursor:default;grid-template-columns:auto 1fr auto">${av(s.code)}<b>${esc(s.title)}</b><label class="aio-switch"><input type="checkbox" name="enabled" ${s.enabled ? "checked" : ""} ${s.code === "gm" ? "disabled" : ""}> يعمل</label></div>
@@ -462,6 +475,12 @@
         box.value = ""; box.blur();
         await load(); return drive(id);
       }
+      if (f.id === "watchForm") {
+        const el = f.elements;
+        const { error } = await sb.from("ai_settings").update({ watch_bookings: el.watch_bookings.checked, watch_holds: el.watch_holds.checked, audit_hours: +el.audit_hours.value, updated_at: new Date().toISOString() }).eq("id", 1);
+        if (error) throw error;
+        clean(); toast("حُفظ"); return load();
+      }
       if (f.id === "schedForm") {
         const el = f.elements;
         const row = { employee: el.employee.value, title: el.title.value.trim(), request: el.request.value.trim(), freq: el.freq.value, at_hour: +el.at_hour.value, weekday: +el.weekday.value, monthday: Math.min(28, Math.max(1, +el.monthday.value || 1)), email_to: el.email_to.value.trim() || null };
@@ -484,7 +503,7 @@
       }
     } catch (er) { toast(er.message || String(er)); $$("button[type=submit]", f).forEach((b) => (b.disabled = false)); }
   });
-  document.addEventListener("input", (e) => { if (e.target.matches("[data-f], [data-staff] *, #schedForm *")) e.target.dataset.dirty = "1"; });
+  document.addEventListener("input", (e) => { if (e.target.matches("[data-f], [data-staff] *, #schedForm *, #watchForm *")) e.target.dataset.dirty = "1"; });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.panel) closePanel(); if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && e.target.id === "cmdText") $("#cmdForm").requestSubmit(); });
   window.addEventListener("hashchange", () => { clean(); state.view = location.hash.slice(1) || "office"; state.filter = "all"; closePanel(); document.activeElement && document.activeElement.blur(); render(true); window.scrollTo(0, 0); });
 

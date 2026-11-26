@@ -2,13 +2,17 @@
 // A team of AI employees (general manager, secretary, accountant, legal, operations, customer service,
 // marketing, HR) who work on the company's real data in Supabase.
 //
-// - Only the owner can use it (it spends Anthropic API credit).
+// - The owner uses all of it (it spends Anthropic API credit); staff get a limited part (see below).
 // - Each job is one employee working on one request. The general manager can delegate parts of a request
 //   to other employees: each delegation becomes a child job, and the manager continues once they finish.
 // - Safe actions run at once: reading data, writing documents, creating tasks for the human team, notes.
 // - Actions that change money or reach customers (sending an email, recording an expense or a journal entry,
 //   changing a booking) are saved as "waiting for approval"; they run only when the owner approves them.
 // - The conversation of every job is saved after each step, so a job that is cut off resumes where it stopped.
+// - Staff with the "ai_office" permission can also ask the AI employees from the back office; their jobs never
+//   see costs, profit or expenses, and anything that needs approval still waits for the owner.
+// - Always on: a worker (pg_cron, every minute) runs waiting jobs, starts schedules, reviews new bookings and
+//   expiring held seats, and has the internal auditor review the human team's work every few hours.
 //
 // Secrets (Supabase → Edge Functions → Secrets): ANTHROPIC_API_KEY (required), AI_MODEL (optional,
 // default claude-opus-5-5), AI_EFFORT (optional: low | medium | high, default medium).
@@ -62,7 +66,7 @@ const ROLES: Record<string, { duty: string; tools: string[] }> = {
 delegate each part to the right department with the delegate tool (you may delegate several parts at once). When the reports come back,
 check them, combine them and give the owner one clear executive answer: what was done, the key numbers, decisions that need the owner,
 and next steps. Do small things yourself when delegating would be slower. Departments: secretary, accountant, legal, operations,
-customer_service, marketing, hr.`,
+customer_service, marketing, hr, auditor.`,
     tools: ["delegate", "create_task", "save_document", "send_email"],
   },
   secretary: {
@@ -105,6 +109,17 @@ leave and attendance procedures, and performance reviews. You look at the staff 
 and propose a fair distribution of work.`,
     tools: ["staff_workload", "save_document", "create_task", "send_email"],
   },
+  auditor: {
+    duty: `You are the Internal Auditor. You review the work of the human team: bookings, tickets, payments, refunds and tasks.
+Use audit_review to get the facts for the period, then check them: missing ticket numbers, tickets issued without payment,
+sales below cost, bookings left new or unassigned, departures without tickets, refunds and payments that do not match,
+duplicate payments, overdue tasks, and unusual actions in the activity log. Be fair and precise: separate real errors from
+risks and from normal work, name the booking or task and the staff member, and never accuse without evidence.
+For each real problem create a correction task for the responsible staff member (specific and polite, with a due date).
+Save an audit report as a document, with a short score per staff member and what went well, and tell the owner clearly
+about anything involving money.`,
+    tools: ["audit_review", "staff_workload", "upcoming_departures", "financial_report", "receivables", "list_payments", "create_task", "save_document"],
+  },
 };
 // Every employee can read the business data and keep notes.
 const COMMON = ["business_snapshot", "search_bookings", "get_booking", "list_customers", "list_staff", "list_tasks", "remember", "recall"];
@@ -130,7 +145,7 @@ const TOOLS: Record<string, Anthropic.Beta.BetaTool> = {
   recall: T("recall", "Search the office memory.", { query: S("Optional text to search") }),
 
   delegate: T("delegate", "Assign part of the work to a department. The department works on it and you receive its report as the result of this call.", {
-    employee: { type: "string", enum: ["secretary", "accountant", "legal", "operations", "customer_service", "marketing", "hr"] },
+    employee: { type: "string", enum: ["secretary", "accountant", "legal", "operations", "customer_service", "marketing", "hr", "auditor"] },
     title: S("Short title of the assignment (Arabic)"),
     instructions: S("Complete instructions: what to do, what to deliver, any data or limits. The department sees only this text."),
   }, ["employee", "title", "instructions"]),
@@ -169,7 +184,13 @@ const TOOLS: Record<string, Anthropic.Beta.BetaTool> = {
   }, ["id"]),
   sales_stats: T("sales_stats", "Sales analysis for a period: by route, airline, source, month; top customers; customers who have not booked for 6+ months.", { from: S("YYYY-MM-DD (default: 12 months ago)"), to: S("YYYY-MM-DD (default: today)") }),
   staff_workload: T("staff_workload", "Each staff member with permissions, last login, open and overdue tasks, and bookings assigned."),
+  audit_review: T("audit_review", "Facts for auditing the human team since a date: their actions from the activity log, booking problems, payment problems, overdue tasks, tasks finished, and a summary per staff member.", {
+    since: S("Start of the period, YYYY-MM-DD or an ISO time (default: 24 hours ago)"),
+  }),
 };
+
+// What a staff member's request may not see (costs, profit and expenses are owner-only)
+const OWNER_ONLY_TOOLS = ["financial_report", "receivables", "list_expenses", "record_expense", "journal_entry", "audit_review"];
 
 function systemPrompt(code: string, staff: Record<string, any>, all: Record<string, any>[]) {
   const role = ROLES[code];
@@ -201,7 +222,7 @@ function volatileContext(memory: Record<string, any>[]) {
 /* ------------------------------------------------------------------ */
 /* Tools                                                                */
 /* ------------------------------------------------------------------ */
-type Ctx = { db: any; job: Record<string, any>; me: Record<string, any> };
+type Ctx = { db: any; job: Record<string, any>; me: Record<string, any>; restricted?: boolean };
 
 const pickBooking = (b: Record<string, any>) => ({
   id: b.id, created: b.created, source: b.source, status: b.status, customer: b.customer, route: b.route, airline: b.airline, cabin: b.cabin,
@@ -266,7 +287,9 @@ async function runTool(name: string, i: Record<string, any>, ctx: Ctx): Promise<
       const { data: b } = await db.from("bookings").select("*").eq("id", id).maybeSingle();
       if (!b) return { error: "Booking not found" };
       const [{ data: pays }, { data: cost }] = await Promise.all([db.from("payments").select("date,dir,amount,method,ref,note").eq("booking_id", id), db.from("booking_costs").select("cost,fee").eq("booking_id", id).maybeSingle()]);
-      return { ...pickBooking(b), travelers: b.travelers, segments: b.segments, baggage: b.baggage, cost: cost ? num(cost.cost) : null, b2b_fee: cost ? num(cost.fee) : null, payments: pays || [] };
+      const full = { ...pickBooking(b), travelers: b.travelers, segments: b.segments, baggage: b.baggage, cost: cost ? num(cost.cost) : null, b2b_fee: cost ? num(cost.fee) : null, payments: pays || [] };
+      if (ctx.restricted) { delete (full as any).cost; delete (full as any).b2b_fee; }
+      return full;
     }
     case "list_customers": {
       const bk = await allRows(db, "bookings", "customer,sell,status,created");
@@ -439,6 +462,59 @@ async function runTool(name: string, i: Record<string, any>, ctx: Ctx): Promise<
         open_tasks: tk.filter((t) => t.assignee === s.id && t.status === "open").length, overdue_tasks: tk.filter((t) => t.assignee === s.id && t.status === "open" && t.due && t.due < today()).length,
         active_bookings: bk.filter((b) => b.assigned_to === s.id && !["ticketed", "cancelled", "refunded"].includes(b.status)).length }));
     }
+    case "audit_review": {
+      const since = /^\d{4}-\d{2}-\d{2}/.test(String(i.since || "")) ? new Date(String(i.since)).toISOString() : new Date(Date.now() - 864e5).toISOString();
+      const [staff, logRes, bk, costs, pay, tk] = await Promise.all([staffMap(db), db.from("activity_log").select("at,who,action,ref").gte("at", since).not("action", "like", "AI office%").order("at").limit(1000),
+        allRows(db, "bookings"), allRows(db, "booking_costs"), allRows(db, "payments"), allRows(db, "tasks")]);
+      const log: any[] = logRes.data || [];
+      const who = new Map(staff.map((s) => [s.id, s.username || s.name]));
+      const name = (id: string) => who.get(id) || (id ? "unknown" : "system/website");
+      const cost = new Map(costs.map((c) => [c.booking_id, num(c.cost)]));
+      const paidIn = new Map<string, number>(), refunded = new Map<string, number>();
+      pay.forEach((x) => { if (!x.booking_id) return; if (x.dir === "in") paidIn.set(x.booking_id, (paidIn.get(x.booking_id) || 0) + num(x.amount)); if (x.dir === "refund") refunded.set(x.booking_id, (refunded.get(x.booking_id) || 0) + num(x.amount)); });
+      const issues: any[] = [];
+      const add = (b: any, problem: string, severity: "high" | "medium" | "low") => issues.push({ booking: b.id, assigned_to: name(b.assigned_to), status: b.status, problem, severity });
+      const t0 = today(), soon = addDays(t0, 3);
+      for (const b of bk) {
+        const pax = num(b.pax) || 1;
+        if (b.status === "ticketed") {
+          if (!b.pnr) add(b, "ticketed without a PNR", "high");
+          if ((b.tickets || []).filter(Boolean).length < pax) add(b, `ticketed with ${(b.tickets || []).filter(Boolean).length} ticket numbers for ${pax} travelers`, "high");
+          if (cost.has(b.id) && num(b.sell) + num(b.service_fee) < cost.get(b.id)!) add(b, `sold below cost (sell ${num(b.sell)}, cost ${cost.get(b.id)})`, "high");
+          const due = num(b.sell) + num(b.service_fee) - (paidIn.get(b.id) || 0);
+          const days = b.ticketed_at ? Math.floor((Date.now() - Date.parse(b.ticketed_at)) / 864e5) : 0;
+          if (due > 0.009 && days > 7 && !b.partner_id && !b.company_id) add(b, `customer still owes ${r2(due)} after ${days} days`, "medium");
+        }
+        if (b.status === "new" && b.created_at && Date.now() - Date.parse(b.created_at) > 24 * 36e5) add(b, "left as new for more than 24 hours", "medium");
+        if (!["ticketed", "cancelled", "refunded"].includes(b.status) && !b.assigned_to) add(b, "not assigned to anyone", "low");
+        if (!["ticketed", "cancelled", "refunded"].includes(b.status) && b.depart && b.depart >= t0 && b.depart <= soon) add(b, `departs ${b.depart} and is not ticketed`, "high");
+        if (["cancelled", "refunded"].includes(b.status) && (paidIn.get(b.id) || 0) > (refunded.get(b.id) || 0) + 0.009) add(b, `cancelled but ${r2((paidIn.get(b.id) || 0) - (refunded.get(b.id) || 0))} received and not refunded`, "medium");
+        if ((refunded.get(b.id) || 0) > (paidIn.get(b.id) || 0) + 0.009) add(b, "refunded more than was received", "high");
+        if (b.assigned_to && staff.find((s) => s.id === b.assigned_to && s.status !== "active")) add(b, "assigned to an inactive staff member", "medium");
+      }
+      const recentPay = pay.filter((x) => (x.created_at || x.date) >= since);
+      const payIssues: any[] = [];
+      const seen = new Map<string, any>();
+      recentPay.forEach((x) => {
+        if (!x.booking_id && !x.partner_id && !x.company_id && x.dir === "in") payIssues.push({ date: x.date, amount: num(x.amount), by: name(x.created_by), problem: "payment not linked to a booking, agent or company" });
+        const k = `${x.booking_id}|${x.dir}|${num(x.amount)}|${x.date}`;
+        if (x.booking_id && seen.has(k)) payIssues.push({ date: x.date, amount: num(x.amount), booking: x.booking_id, by: name(x.created_by), problem: "possible duplicate payment (same booking, amount and day)" });
+        seen.set(k, x);
+      });
+      const open = tk.filter((t) => t.status === "open");
+      const overdue = open.filter((t) => t.due && t.due < t0).map((t) => ({ title: t.title, assignee: name(t.assignee), due: t.due, priority: t.priority, from_ai: /\(AI office\)/.test(t.details || "") }));
+      const finished = tk.filter((t) => t.status === "done" && t.done_at && t.done_at >= since.slice(0, 10)).map((t) => ({ title: t.title, assignee: name(t.assignee), done_at: t.done_at }));
+      const per: Record<string, any> = {};
+      const P = (u: string) => (per[u] = per[u] || { actions: 0, tasks_done: 0, tasks_overdue: 0, booking_issues: 0, payments_recorded: 0 });
+      log.forEach((l: any) => P(name(l.who)).actions++);
+      finished.forEach((t) => P(t.assignee).tasks_done++);
+      overdue.forEach((t) => P(t.assignee).tasks_overdue++);
+      issues.forEach((x) => P(x.assigned_to).booking_issues++);
+      recentPay.forEach((x) => P(name(x.created_by)).payments_recorded++);
+      const rank: Record<string, number> = { high: 0, medium: 1, low: 2 };
+      issues.sort((a, b) => rank[a.severity] - rank[b.severity]);
+      return { since, activity: log.slice(-300).map((l: any) => ({ at: l.at, by: name(l.who), action: l.action, ref: l.ref })), booking_issues: issues.slice(0, 200), payment_issues: payIssues, overdue_tasks: overdue, tasks_finished: finished, per_staff: per };
+    }
   }
   return { error: `Unknown tool ${name}` };
 }
@@ -453,7 +529,7 @@ const TOOL_LABEL: Record<string, string> = {
   create_task: "أنشأ مهمة للفريق", save_document: "حفظ مستنداً", send_email: "جهّز بريداً (بانتظار موافقتك)", financial_report: "أعدّ تقريراً مالياً",
   receivables: "راجع الذمم والمستحقات", list_payments: "راجع المدفوعات", list_expenses: "راجع المصروفات", record_expense: "سجّل مصروفاً (بانتظار موافقتك)",
   journal_entry: "جهّز قيد يومية (بانتظار موافقتك)", compliance_check: "فحص الامتثال", list_companies: "راجع الشركات العميلة", upcoming_departures: "راجع الرحلات القادمة",
-  update_booking: "جهّز تعديل حجز (بانتظار موافقتك)", sales_stats: "حلّل المبيعات", staff_workload: "راجع عبء العمل",
+  update_booking: "جهّز تعديل حجز (بانتظار موافقتك)", sales_stats: "حلّل المبيعات", staff_workload: "راجع عبء العمل", audit_review: "دقّق في عمل الفريق",
 };
 
 async function runJob(db: any, anthropic: Anthropic, me: Record<string, any>, job: Record<string, any>, started: number) {
@@ -485,12 +561,19 @@ async function runJob(db: any, anthropic: Anthropic, me: Record<string, any>, jo
   const [{ data: staffAll }, { data: memory }] = await Promise.all([db.from("ai_staff").select("*").order("sort"), db.from("ai_memory").select("topic,note").order("created_at", { ascending: false }).limit(40)]);
   const staff = (staffAll || []).find((s: any) => s.code === job.employee);
   if (!staff || !ROLES[job.employee]) { await save({ status: "failed", error: "Unknown employee" }); return { status: "failed" }; }
-  const names = [...COMMON, ...ROLES[job.employee].tools];
+  const restricted = job.source === "staff";
+  const names = [...COMMON, ...ROLES[job.employee].tools].filter((n) => !restricted || !OWNER_ONLY_TOOLS.includes(n));
   const tools = names.map((n) => TOOLS[n]);
   const system: any[] = [
     { type: "text", text: systemPrompt(job.employee, staff, staffAll || []), cache_control: { type: "ephemeral" } },
     { type: "text", text: volatileContext(memory || []) },
   ];
+  if (restricted) {
+    const { data: asker } = await db.from("profiles").select("name,username,title").eq("id", job.requested_by).maybeSingle();
+    system.push({ type: "text", text: `This request comes from a staff member, not the owner: ${asker?.name || "staff"} (${asker?.username || ""}${asker?.title ? ", " + asker.title : ""}). Help them with their work. Never reveal costs, profit, margins, supplier payments, expenses or other staff members' performance. Anything that needs approval still goes to the owner.` });
+  } else if (job.source === "watch") {
+    system.push({ type: "text", text: "This job was started automatically by the office's 24/7 monitoring, not by a person. Act on what needs action, keep the report short, and do not create duplicate tasks: check list_tasks first." });
+  }
   if (messages.length === 0) messages = [{ role: "user", content: job.request }];
 
   while (true) {
@@ -535,7 +618,7 @@ async function runJob(db: any, anthropic: Anthropic, me: Record<string, any>, jo
     }
     if (text) steps = [...steps, step("note", text)];
 
-    const ctx: Ctx = { db, job, me };
+    const ctx: Ctx = { db, job, me, restricted };
     const results: any[] = [];
     const waits: Record<string, string> = {};
     for (const c of calls) {
@@ -543,7 +626,7 @@ async function runJob(db: any, anthropic: Anthropic, me: Record<string, any>, jo
       if (c.name === "delegate" && job.employee === "gm") {
         const emp = str(input.employee, 30);
         if (!ROLES[emp] || emp === "gm" || !(staffAll || []).find((s: any) => s.code === emp && s.enabled)) { results.push({ type: "tool_result", tool_use_id: c.id, content: `Unknown or disabled department "${emp}"`, is_error: true }); continue; }
-        const { data: kid, error } = await db.from("ai_jobs").insert({ parent_id: job.id, employee: emp, title: str(input.title, 200) || "مهمة", request: String(input.instructions || "").slice(0, 20000), created_by: me.id }).select("id").single();
+        const { data: kid, error } = await db.from("ai_jobs").insert({ parent_id: job.id, employee: emp, title: str(input.title, 200) || "مهمة", request: String(input.instructions || "").slice(0, 20000), created_by: me.id, source: job.source, requested_by: job.requested_by || null }).select("id").single();
         if (error) { results.push({ type: "tool_result", tool_use_id: c.id, content: error.message, is_error: true }); continue; }
         waits[c.id] = kid.id;
         const nm = (staffAll || []).find((s: any) => s.code === emp);
@@ -641,6 +724,7 @@ async function tick(db: any, started: number) {
     if (j) created.push(j.id);
   }
   if (!key) return { idle: "no ANTHROPIC_API_KEY", schedules: (due || []).length };
+  created.push(...(await watch(db, owner)));
   const anthropic = new Anthropic({ apiKey: key, maxRetries: 2, timeout: 120_000 });
   const ran: unknown[] = [];
   // Several short rounds while time allows: departments first, then the manager who waits for them
@@ -650,6 +734,56 @@ async function tick(db: any, started: number) {
     if (!r.length) break;
   }
   return { created, ran };
+}
+
+// Always-on monitoring. It costs nothing while nothing happens: an AI job starts only when there is something to do.
+async function watch(db: any, owner: Record<string, any>) {
+  const { data: cfg } = await db.from("ai_settings").select("*").eq("id", 1).maybeSingle();
+  if (!cfg) return [];
+  const started: string[] = [];
+  const claim = async (keys: string[]) => {
+    if (!keys.length) return [];
+    const { data } = await db.from("ai_watch").upsert(keys.map((key) => ({ key })), { onConflict: "key", ignoreDuplicates: true }).select("key");
+    return (data || []).map((r: any) => r.key as string);
+  };
+  const newJob = async (employee: string, title: string, request: string) => {
+    const { data } = await db.from("ai_jobs").insert({ employee, title, request, source: "watch", created_by: owner.id, steps: [step("info", "بدأ تلقائياً من المراقبة الدائمة")] }).select("id").single();
+    if (data) started.push(data.id);
+  };
+  const { data: staffOn } = await db.from("ai_staff").select("code").eq("enabled", true);
+  const on = (code: string) => (staffOn || []).some((x: any) => x.code === code);
+
+  // 1) New bookings from the website, agents or staff: review them a few minutes after they arrive
+  if (cfg.watch_bookings && on("operations")) {
+    const { data: fresh } = await db.from("bookings").select("id").eq("status", "new").lt("created_at", new Date(Date.now() - 3 * 6e4).toISOString()).gt("created_at", new Date(Date.now() - 3 * 864e5).toISOString()).limit(30);
+    const ids = (await claim((fresh || []).map((b: any) => "booking:" + b.id))).map((k: string) => k.slice(8));
+    if (ids.length) await newJob("operations", `مراجعة ${ids.length === 1 ? "حجز جديد" : ids.length + " حجوزات جديدة"}`,
+      `وصلت حجوزات جديدة: ${ids.join("، ")}.\nافتح كل حجز وتأكد من اكتمال البيانات (أسماء المسافرين كما في الجواز، التواريخ، وسيلة التواصل). إن لم يكن الحجز مسنداً لموظف فاقترح إسناده لموظف مناسب حسب عبء العمل، وأنشئ مهمة متابعة واضحة للموظف المسؤول. اكتب ملخصاً قصيراً.`);
+  }
+  // 2) Held seats that expire within 6 hours and are not ticketed: urgent follow-up
+  if (cfg.watch_holds && on("operations")) {
+    const { data: holds } = await db.from("bookings").select("id,hold_expires").not("status", "in", "(ticketed,cancelled,refunded)").gt("hold_expires", new Date().toISOString()).lt("hold_expires", new Date(Date.now() + 6 * 36e5).toISOString()).limit(30);
+    const ids = (await claim((holds || []).map((b: any) => "hold:" + b.id))).map((k: string) => k.slice(5));
+    if (ids.length) await newJob("operations", `عاجل: حجوزات مؤقتة تنتهي قريباً (${ids.length})`,
+      `هذه الحجوزات المؤقتة تنتهي خلال 6 ساعات ولم تُصدر تذاكرها: ${ids.join("، ")}.\nلكل حجز: أنشئ مهمة عاجلة (priority high) للموظف المسند إليه، أو للمالك إن لم يكن مسنداً، تذكر موعد الانتهاء وما يلزم (الدفع ثم الإصدار، أو التواصل مع العميل).`);
+  }
+  // 3) The internal auditor reviews the human team's work every N hours, when there was work to review
+  if (cfg.audit_hours > 0 && on("auditor")) {
+    const last = cfg.last_audit ? Date.parse(cfg.last_audit) : 0;
+    if (Date.now() - last >= cfg.audit_hours * 36e5) {
+      const since = new Date(last || Date.now() - 864e5).toISOString();
+      const [{ count: acts }, { count: pays }] = await Promise.all([
+        db.from("activity_log").select("id", { count: "exact", head: true }).gte("at", since).not("who", "is", null).not("action", "like", "AI office%"),
+        db.from("payments").select("id", { count: "exact", head: true }).gte("created_at", since)]);
+      // The clock moves only when an audit starts: a quiet period does not delay the next one
+      if ((acts || 0) + (pays || 0) > 0 && (await claim(["audit:" + since])).length) {
+        await db.from("ai_settings").update({ last_audit: new Date().toISOString() }).eq("id", 1);
+        await newJob("auditor", `تدقيق عمل الفريق منذ ${since.slice(0, 16).replace("T", " ")}`,
+        `دقّق في عمل الفريق البشري منذ ${since}. استخدم audit_review بهذا التاريخ. أنشئ مهام تصحيح للمسؤولين عن الأخطاء الحقيقية، واحفظ تقرير التدقيق كمستند، وأعطني الخلاصة.`);
+      }
+    }
+  }
+  return started;
 }
 
 async function tickRound(db: any, anthropic: Anthropic, owner: Record<string, any>, started: number) {
@@ -692,12 +826,41 @@ Deno.serve(async (req) => {
   const { data: who } = await db.auth.getUser(token);
   if (!who?.user) return fail("Not signed in", 401);
   const { data: me } = await db.from("profiles").select("*").eq("id", who.user.id).single();
-  if (!me || me.status !== "active" || me.kind !== "owner") return fail("The AI office is for the owner only", 403);
+  const isOwner = me?.kind === "owner";
+  if (!me || me.status !== "active" || !(isOwner || (me.kind === "staff" && (me.perms || []).includes("ai_office")))) return fail("Not allowed", 403);
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return fail("Bad JSON"); }
+  // A staff member works only with the jobs they asked for (and the departments' parts of those jobs)
+  const mine = async (id: string) => {
+    if (isOwner) return true;
+    const { data: j } = await db.from("ai_jobs").select("requested_by,parent_id").eq("id", id).maybeSingle();
+    if (!j) return false;
+    if (j.requested_by === me.id) return true;
+    if (!j.parent_id) return false;
+    const { data: p } = await db.from("ai_jobs").select("requested_by").eq("id", j.parent_id).maybeSingle();
+    return p?.requested_by === me.id;
+  };
+  if (!isOwner && !["status", "staff_list", "create", "run", "my_jobs", "followup", "cancel"].includes(body.action)) return fail("Only the owner can do this", 403);
+  if (["run", "followup", "cancel"].includes(body.action) && !(await mine(str(body.id, 60)))) return fail("Not your request", 403);
   const log = (action: string, ref = "") => db.from("activity_log").insert({ who: me.id, action, ref });
 
   if (body.action === "status") return json({ configured: !!Deno.env.get("ANTHROPIC_API_KEY"), model: MODEL, effort: EFFORT, email: !!Deno.env.get("RESEND_API_KEY"), background: true });
+
+  if (body.action === "staff_list") {
+    const { data } = await db.from("ai_staff").select("code,name,title").eq("enabled", true).order("sort");
+    return json({ staff: (data || []).filter((s: any) => isOwner || s.code !== "auditor") });
+  }
+
+  if (body.action === "my_jobs") {
+    // For the back office: a staff member's own requests, their results and documents
+    const { data: jobs } = await db.from("ai_jobs").select("id,employee,title,request,status,result,error,created_at,done_at").eq("requested_by", me.id).is("parent_id", null).order("created_at", { ascending: false }).limit(50);
+    const ids = (jobs || []).map((j: any) => j.id);
+    const { data: kids } = ids.length ? await db.from("ai_jobs").select("id,parent_id").in("parent_id", ids) : { data: [] };
+    const all = [...ids, ...(kids || []).map((k: any) => k.id)];
+    const { data: docs } = all.length ? await db.from("ai_documents").select("id,job_id,kind,title,body,created_at").in("job_id", all) : { data: [] };
+    const top = new Map((kids || []).map((k: any) => [k.id, k.parent_id]));
+    return json({ jobs: (jobs || []).map((j: any) => ({ ...j, documents: (docs || []).filter((d: any) => (top.get(d.job_id) || d.job_id) === j.id) })) });
+  }
 
   if (body.action === "run_schedule") {
     const { data: s } = await db.from("ai_schedules").select("*").eq("id", str(body.id, 60)).maybeSingle();
@@ -710,11 +873,11 @@ Deno.serve(async (req) => {
 
   if (body.action === "create") {
     const employee = str(body.employee, 30) || "gm";
-    if (!ROLES[employee]) return fail("Unknown employee");
+    if (!ROLES[employee] || (!isOwner && employee === "auditor")) return fail("Unknown employee");
     const request = String(body.request || "").trim().slice(0, 20000);
     if (request.length < 2) return fail("Write the request");
     const title = str(body.title, 200) || request.split("\n")[0].slice(0, 90);
-    const { data, error } = await db.from("ai_jobs").insert({ employee, title, request, created_by: me.id, steps: [step("info", "استلم الطلب")] }).select("id").single();
+    const { data, error } = await db.from("ai_jobs").insert({ employee, title, request, created_by: me.id, requested_by: me.id, source: isOwner ? "owner" : "staff", steps: [step("info", isOwner ? "استلم الطلب" : `استلم الطلب من ${me.name}`)] }).select("id").single();
     if (error) return fail(error.message);
     await log("AI office: new request", `${employee}: ${title}`);
     return json({ ok: true, id: data.id });
