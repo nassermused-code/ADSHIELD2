@@ -1454,3 +1454,39 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 
 /* A card alone on the last row of the services grid takes the full width */
 .bento__card--wide { grid-column: 1 / -1; }
+
+/* Passport details in the booking form (international trips) */
+.bk-passport { margin-top: 8px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.bk-pp-note { margin: 6px 0 4px; font-size: .9rem; color: var(--ink-2); background: #fff8e6; border: 1px solid #f5d27a; border-radius: 12px; padding: 10px 12px; }
+
+/* ---------- Company letterhead, invoice and passports (back office) ---------- */
+.doc-head { align-items: flex-start; border-bottom: 3px solid var(--g-700, #0b3d1f); }
+.doc-head img { flex: none; }
+.doc-co { display: grid; gap: 1px; }
+.doc-co b { font-size: 1.2rem; color: var(--g-800, #0b3d1f); }
+.invoice-doc { background: #fff; color: #10231a; padding: 6px 4px; }
+.invoice-doc .st-meta b { font-size: 1.6rem; letter-spacing: .08em; color: var(--g-800, #0b3d1f); }
+.inv-stamp { justify-self: end; padding: 6px 14px; border-radius: 999px; font-size: .9rem; border: 2px solid; }
+.inv-stamp.is-due { color: #a33a12; border-color: #f0b48f; background: #fff4ec; }
+.inv-stamp.is-paid { color: #1b6b3a; border-color: #9fd3b1; background: #eef9f1; }
+.inv-parties > div { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #fafcfa; }
+.inv-parties b { font-size: 1.02rem; }
+.inv-lines th:not(:first-child), .inv-lines td.num { text-align: end; white-space: nowrap; }
+.inv-lines tfoot td { font-weight: 600; }
+.inv-lines .inv-pay td { font-weight: 400; color: var(--ink-3); font-size: .9rem; }
+.inv-lines .inv-due td { background: #f1f7f2; font-size: 1.05rem; }
+.inv-box { border: 1px dashed var(--line); border-radius: 12px; padding: 10px 14px; }
+.inv-box p { margin: 4px 0 0; font-size: .9rem; color: var(--ink-2); }
+.inv-thanks { text-align: center; color: var(--ink-2); margin: 6px 0 0; display: grid; gap: 2px; }
+.inv-thanks small { color: var(--ink-3); font-size: .75rem; }
+.pp-ed { margin-top: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 12px; background: #fbfdfb; }
+.pp-ed__h { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; flex-wrap: wrap; }
+.pp-ed__h .pp-need { color: #a33a12; font-weight: 600; }
+.pp-ed__head, .pp-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr auto; gap: 8px; align-items: center; }
+.pp-ed__head { font-size: .75rem; color: var(--ink-3); padding: 0 2px 4px; }
+.pp-row { padding: 6px 0; border-top: 1px solid var(--line); }
+.pp-row input { font: inherit; padding: .45em .6em; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.pp-st { font-size: .75rem; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.pp-st.ok { background: #eef9f1; color: #1b6b3a; } .pp-st.warn { background: #fff6df; color: #8a5a00; } .pp-st.bad { background: #fdecec; color: #a3231a; }
+@media (max-width: 760px) { .pp-ed__head { display: none; } .pp-row { grid-template-columns: 1fr 1fr; } .pp-row b { grid-column: 1 / -1; } }
+@media print { .inv-stamp, .inv-parties > div, .inv-lines .inv-due td, .pp-st { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

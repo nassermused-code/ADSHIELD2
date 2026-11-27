@@ -19,6 +19,11 @@ window.GTDB = (() => {
 
   const cache = { staff: [], partners: [], bookings: [], payments: [], expenses: [], tasks: [], log: [], journal: [],
     companies: [], costCenters: [], travelers: [], policies: [], trips: [], invoices: [], companyUsers: [] };
+  // The company's own details (letterhead of invoices, tickets and emails); defaults until loaded
+  const COMPANY_DEFAULT = { tradeName: "Green Travel", tradeNameAr: "جرين ترافيل", legalName: "World Services dba Green Travel", address: "", city: "Chicago", state: "IL", zip: "", country: "United States",
+    phones: ["+1 (708) 963-2552", "+1 (708) 940-2929", "+1 (331) 213-3768", "+1 (708) 953-2244"], email: "info@greentravel.us", website: "greentravel.us", taxId: "", iata: "", sellerOfTravel: "",
+    invoiceTerms: "Payment is due on receipt unless agreed otherwise. All bookings are subject to the airline's fare rules.", paymentInfo: "" };
+  let company = Object.assign({}, COMPANY_DEFAULT);
   // snake_case row -> camelCase object (TMC tables)
   const camel = (r) => Object.fromEntries(Object.entries(r || {}).map(([k, v]) => [k.replace(/_([a-z])/g, (m, c) => c.toUpperCase()), v]));
   const listeners = [];
@@ -31,11 +36,11 @@ window.GTDB = (() => {
   const mapPricing = (p) => (p ? { mode: p.mode, flatAll: +p.flat_all, pctAll: +p.pct_all, flat: +p.flat, threshold: +p.threshold, pct: +p.pct, publicMarkup: +p.public_markup } : {});
   const mapPartner = (r, pr) => ({ id: r.id, email: r.email, agency: r.agency, contact: r.contact, phone: r.phone, contactEmail: r.contact_email, website: r.website, logo: r.logo, sellMarkup: +r.sell_markup, status: r.status, creditLimit: +r.credit_limit, created: (r.created_at || "").slice(0, 10), pricing: mapPricing(pr) });
   const mapBooking = (r, c) => ({ id: r.id, created: r.created, source: r.source, partnerId: r.partner_id, status: r.status, customer: Object.assign({ name: "", phone: "", email: "" }, r.customer || {}), route: r.route, airline: r.airline, cabin: r.cabin, depart: r.depart || "", ret: r.ret || "", pax: r.pax, travelers: r.travelers || [], pnr: r.pnr, tickets: r.tickets || [], sell: +r.sell, notes: r.notes, assignedTo: r.assigned_to || "", cost: c ? +c.cost : 0, fee: c ? +c.fee : 0, segments: r.segments || [], baggage: r.baggage || "", ticketedAt: r.ticketed_at || "", reminders: r.reminders || {}, provider: r.provider || "", providerRef: r.provider_ref || "", holdExpires: r.hold_expires || "",
-    companyId: r.company_id || "", travelerId: r.traveler_id || "", costCenterId: r.cost_center_id || "", tripId: r.trip_id || "", invoiceId: r.invoice_id || "", serviceFee: +r.service_fee || 0 });
+    companyId: r.company_id || "", travelerId: r.traveler_id || "", costCenterId: r.cost_center_id || "", tripId: r.trip_id || "", invoiceId: r.invoice_id || "", serviceFee: +r.service_fee || 0, passports: Array.isArray(r.passports) ? r.passports : [] });
   const bookingRow = (b) => {
     const r = {};
     const m = { status: "status", source: "source", partnerId: "partner_id", customer: "customer", route: "route", airline: "airline", cabin: "cabin", depart: "depart", ret: "ret", pax: "pax", travelers: "travelers", pnr: "pnr", tickets: "tickets", sell: "sell", notes: "notes", assignedTo: "assigned_to", segments: "segments", baggage: "baggage",
-      companyId: "company_id", travelerId: "traveler_id", costCenterId: "cost_center_id", tripId: "trip_id", serviceFee: "service_fee" };
+      companyId: "company_id", travelerId: "traveler_id", costCenterId: "cost_center_id", tripId: "trip_id", serviceFee: "service_fee", passports: "passports" };
     Object.entries(m).forEach(([k, col]) => { if (k in b) r[col] = b[k]; });
     if ("depart" in r) r.depart = r.depart || null;
     if ("ret" in r) r.ret = r.ret || null;
@@ -227,6 +232,7 @@ window.GTDB = (() => {
     if (!profile || profile.kind === "partner" || profile.status !== "active") { notify(); return; }
     const owner = profile.kind === "owner";
     const q = (t, sel = "*") => sb.from(t).select(sel).range(0, 9999);
+    sb.from("company_profile").select("*").eq("id", 1).maybeSingle().then(({ data }) => { if (data) { company = Object.assign({}, COMPANY_DEFAULT, camel(data)); delete company.id; notify(); } }, () => {});
     const [st, pa, bk, pay, tk, costs, pricing, exp, lg, jr] = await Promise.all([
       q("profiles").in("kind", ["owner", "staff"]).order("created_at"),
       q("partners").order("agency"),
@@ -276,6 +282,17 @@ window.GTDB = (() => {
     client: sb,
     ready,
     get profile() { return profile; },
+    get company() { return company; },
+    // Owner: save the company's details (letterhead)
+    async saveCompany(c) {
+      const row = { trade_name: c.tradeName, trade_name_ar: c.tradeNameAr, legal_name: c.legalName, address: c.address, city: c.city, state: c.state, zip: c.zip, country: c.country,
+        phones: c.phones, email: c.email, website: c.website, tax_id: c.taxId, iata: c.iata, seller_of_travel: c.sellerOfTravel, invoice_terms: c.invoiceTerms, payment_info: c.paymentInfo, updated_at: new Date().toISOString() };
+      const { data, error } = await sb.from("company_profile").update(row).eq("id", 1).select().single();
+      fail(error);
+      company = Object.assign({}, COMPANY_DEFAULT, camel(data)); delete company.id;
+      notify();
+      return company;
+    },
     reload: () => load(),
     all: (col) => cache[col] || [],
     get: (col, id) => (cache[col] || []).find((x) => x.id === id || (id && x.email === id)) || null,

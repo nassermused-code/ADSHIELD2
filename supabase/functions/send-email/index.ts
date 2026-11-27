@@ -2,7 +2,7 @@
 // The caller must be signed in (with two-step verification when their account has it) and allowed to see the booking.
 // The email carries the employee's name, and the customer's reply goes to the employee's email (or info@).
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
-import { ticketEmail, sendEmail, PHONES, type Kind } from "./ticket.ts";
+import { ticketEmail, sendEmail, PHONES, type Kind, type Attachment } from "./ticket.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -34,7 +34,18 @@ Deno.serve(async (req) => {
   { const { data: mfa } = await admin.rpc("mfa_ok_for", { p_uid: who.user.id, p_aal: tokenAal(token) }); if (mfa !== true) return json({ error: "Two-step verification needed" }, 403); }
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "Bad JSON" }, 400); }
-  const custom = body.kind === "message";
+  const custom = body.kind === "message", invoice = body.kind === "invoice";
+  // A PDF made in the back office (invoice or ticket) to attach: checked to be a real PDF of reasonable size
+  let attachments: Attachment[] = [];
+  if (body.pdf) {
+    let bytes: Uint8Array;
+    try { bytes = Uint8Array.from(atob(String(body.pdf)), (c) => c.charCodeAt(0)); } catch { return json({ error: "Bad PDF" }, 400); }
+    if (bytes.length > 4_500_000) return json({ error: "The PDF is too large" }, 413);
+    if (String.fromCharCode(...bytes.subarray(0, 5)) !== "%PDF-") return json({ error: "Bad PDF" }, 400);
+    const fname = (String(body.filename || "document.pdf").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+/, "").slice(0, 80) || "document").replace(/(\.pdf)?$/i, ".pdf");
+    attachments = [{ filename: fname, content: bytes, contentType: "application/pdf" }];
+  }
+  if (invoice && !attachments.length) return json({ error: "The invoice PDF is missing" }, 400);
   const kind: Kind = ["booking", "ticket", "week", "day"].includes(body.kind) ? body.kind : "ticket";
   const subject = String(body.subject || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200);
   const message = String(body.message || "").trim().slice(0, 20000);
@@ -47,9 +58,12 @@ Deno.serve(async (req) => {
   const to = String(body.to || b.customer?.email || "").trim();
   if (!/^\S+@\S+\.\S+$/.test(to)) return json({ error: "no_email" }, 400);
   const sender = String(me.name || "Green Travel");
-  const r = await sendEmail(to, custom ? messageEmail(b, subject, message, sender) : ticketEmail(b, kind), { fromName: sender, replyTo: me.email || "" });
+  const total = (+b.sell || 0) + (+b.service_fee || 0);
+  const invoiceMsg = () => messageEmail(b, `Invoice INV-${b.id} · فاتورة — Green Travel`,
+    `Hello ${b.customer?.name || ""},\n\nPlease find attached your invoice INV-${b.id}${b.pnr ? " (PNR " + b.pnr + ")" : ""}, total USD ${total.toFixed(2)}.\nIf you have any question, reply to this email or call us.\n\nمرحباً ${b.customer?.name || ""}،\nمرفق فاتورتكم رقم INV-${b.id}${b.pnr ? " (رقم الحجز " + b.pnr + ")" : ""}، بإجمالي ${total.toFixed(2)} دولار أمريكي.\nلأي استفسار ردّوا على هذه الرسالة أو اتصلوا بنا.`, sender);
+  const r = await sendEmail(to, custom ? messageEmail(b, subject, message, sender) : invoice ? invoiceMsg() : ticketEmail(b, kind), { fromName: sender, replyTo: me.email || "", attachments });
   if (!r.ok) return json({ error: r.error }, r.error === "email_not_configured" ? 412 : 502);
-  if (!custom) await admin.from("bookings").update({ reminders: { ...(b.reminders || {}), [kind]: new Date().toISOString() } }).eq("id", b.id);
-  await admin.from("activity_log").insert({ who: me.id, action: custom ? "Emailed customer: " + subject.slice(0, 120) : kind === "ticket" ? "Emailed ticket" : "Emailed travel reminder", ref: `${b.id} → ${to}` });
+  if (!custom) await admin.from("bookings").update({ reminders: { ...(b.reminders || {}), [invoice ? "invoice" : kind]: new Date().toISOString() } }).eq("id", b.id);
+  await admin.from("activity_log").insert({ who: me.id, action: custom ? "Emailed customer: " + subject.slice(0, 120) : invoice ? "Emailed invoice (PDF)" : kind === "ticket" ? (attachments.length ? "Emailed ticket (PDF)" : "Emailed ticket") : "Emailed travel reminder", ref: `${b.id} → ${to}` });
   return json({ ok: true, to });
 });

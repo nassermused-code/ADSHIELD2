@@ -103,6 +103,7 @@
     reports: { icon: "i-list", t: () => T("التقارير المالية", "Financial reports"), r: viewReports, ok: isOwner, owner: true },
     team: { icon: "i-shield", t: () => T("الموظفون والصلاحيات", "Team & permissions"), r: viewTeam, ok: isOwner, owner: true },
     activity: { icon: "i-clock", t: () => T("سجل النشاط", "Activity log"), r: viewActivity, ok: isOwner, owner: true },
+    company: { icon: "i-briefcase", t: () => T("بيانات الشركة (الفواتير والتذاكر)", "Company details (invoices & tickets)"), r: viewCompany, ok: isOwner, owner: true },
     settings: { icon: "i-lock", t: () => T("الإعدادات", "Settings"), r: viewSettings, ok: isOwner, owner: true },
   };
   function renderNav() {
@@ -508,7 +509,10 @@
         <fieldset><legend>${T("الرحلة", "Trip")}</legend><div class="f3">
           ${inp("route", T("المسار (مثل ORD → AMM)", "Route (e.g. ORD → AMM)"), b.route, "text", "ltr", ro(edit))}${inp("airline", T("شركة الطيران", "Airline"), b.airline, "text", "", ro(edit))}${sel("cabin", T("الدرجة", "Cabin"), CABIN(), b.cabin)}
           ${inp("depart", T("الذهاب", "Depart"), b.depart, "date", "", ro(edit))}${inp("ret", T("العودة", "Return"), b.ret, "date", "", ro(edit))}${inp("pax", T("عدد المسافرين", "Travelers"), b.pax, "number", "ltr", ro(edit))}</div>
-          ${area("travelers", T("أسماء المسافرين (سطر لكل مسافر)", "Traveler names (one per line)"), (b.travelers || []).join("\n"), ro(edit))}</fieldset>
+          ${area("travelers", T("أسماء المسافرين (سطر لكل مسافر)", "Traveler names (one per line)"), (b.travelers || []).join("\n"), ro(edit))}
+          <div class="pp-ed"><p class="pp-ed__h">${icon("i-shield")}<b>${T("جوازات السفر", "Passports")}</b> <small class="muted" id="ppIntl">${T("مطلوبة للرحلات الدولية", "Required for international trips")}</small></p>
+            <div class="pp-ed__head"><span>${T("المسافر", "Traveler")}</span><span>${T("رقم الجواز", "Passport no.")}</span><span>${T("تاريخ الانتهاء", "Expiry")}</span><span>${T("الدولة المُصدِرة", "Issuing country")}</span><span></span></div>
+            <div id="ppRows"></div></div></fieldset>
         <fieldset><legend>${T("الإصدار", "Ticketing")}${issue ? "" : ` <small class="muted">· ${T("لا تملك صلاحية الإصدار", "You can't issue tickets")}</small>`}</legend><div class="f3">
           ${inp("pnr", "PNR", b.pnr, "text", "ltr", ro(issue))}${inp("tickets", T("أرقام التذاكر (بنفس ترتيب المسافرين، افصل بفاصلة)", "Ticket numbers (same order as travelers, comma-separated)"), (b.tickets || []).join(", "), "text", "ltr", ro(issue))}${inp("baggage", T("الأمتعة", "Baggage"), b.baggage, "text", "", `${ro(segEdit)} placeholder="${T("مثال: حقيبتان 23 كغ", "e.g. 2 × 23 kg")}"`)}</div>
           <div class="seg-ed"><div class="seg-ed__h"><span>${T("الرحلة", "Flight")}</span><span>${T("من", "From")}</span><span>${T("إلى", "To")}</span><span>${T("التاريخ", "Date")}</span><span>${T("الإقلاع", "Departs")}</span><span>${T("الوصول", "Arrives")}</span><span></span></div>
@@ -551,6 +555,39 @@
       f.travelerId.addEventListener("change", () => { const t = DB.get("travelers", f.travelerId.value); if (!t) return; if (!f.cname.value) f.cname.value = `${t.firstName} ${t.lastName}`; if (!f.cphone.value) f.cphone.value = t.phone || ""; if (!f.cemail.value) f.cemail.value = t.email || ""; if (!f.travelers.value.trim()) f.travelers.value = `${t.firstName} ${t.lastName}`.toUpperCase(); if (t.costCenterId && !f.costCenterId.value) f.costCenterId.value = t.costCenterId; });
       ["cabin", "sell", "depart"].forEach((k) => f[k].addEventListener("change", pol));
     }
+    // Passports: one row per traveler name, with a check of the expiry against the trip dates
+    const ppEdit = edit || issue;
+    const tripEndOf = () => { const ds = [f.depart.value, f.ret.value, ...$$("#segRows [name=date]").map((i) => i.value)].filter(Boolean).sort(); return ds.pop() || ""; };
+    const addMonths = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 10); };
+    const ppStatus = (exp) => {
+      if (!exp) return ["", ""];
+      const end = tripEndOf() || today();
+      if (exp < today()) return ["bad", T("منتهي", "Expired")];
+      if (exp < end) return ["bad", T("ينتهي قبل نهاية الرحلة", "Expires before the trip ends")];
+      if (exp < addMonths(end, 6)) return ["warn", T("أقل من 6 أشهر بعد السفر", "Under 6 months after travel")];
+      return ["ok", T("صالح", "Valid")];
+    };
+    const ppState = () => $$("#ppRows [data-pp]").map((r) => ({ name: r.dataset.name, number: r.querySelector("[name=ppno]").value.replace(/[^A-Za-z0-9]/g, "").toUpperCase(), expiry: r.querySelector("[name=ppexp]").value, country: r.querySelector("[name=ppcc]").value.trim() }));
+    const ppBadge = (r) => { const [k, t] = ppStatus(r.querySelector("[name=ppexp]").value); const el = r.querySelector("[data-ppst]"); el.className = "pp-st " + k; el.textContent = t; };
+    function ppRender() {
+      const prev = $$("#ppRows [data-pp]").length ? ppState() : b.passports || [];
+      const names = f.travelers.value.split("\n").map((x) => x.trim()).filter(Boolean);
+      const list = names.length ? names : [f.cname.value.trim() || T("المسافر 1", "Traveler 1")];
+      const dis = ppEdit ? "" : "disabled";
+      $("#ppRows").innerHTML = list.map((n, i) => { const x = prev.find((q) => q.name && q.name.toUpperCase() === n.toUpperCase()) || prev[i] || {};
+        return `<div class="pp-row" data-pp data-name="${esc(n)}"><b dir="ltr">${esc(n)}</b><input name="ppno" dir="ltr" value="${esc(x.number || "")}" maxlength="20" autocomplete="off" ${dis} aria-label="${T("رقم الجواز", "Passport number")}"><input name="ppexp" type="date" value="${esc(x.expiry || "")}" ${dis} aria-label="${T("تاريخ الانتهاء", "Expiry")}"><input name="ppcc" value="${esc(x.country || "")}" maxlength="60" ${dis} aria-label="${T("الدولة المُصدِرة", "Issuing country")}"><span data-ppst class="pp-st"></span></div>`; }).join("");
+      $$("#ppRows [data-pp]").forEach((r) => { ppBadge(r); r.querySelector("[name=ppexp]").addEventListener("input", () => ppBadge(r)); });
+    }
+    ppRender();
+    f.travelers.addEventListener("change", ppRender);
+    [f.depart, f.ret].forEach((x) => x && x.addEventListener("change", () => $$("#ppRows [data-pp]").forEach(ppBadge)));
+    // International? (airports in different countries)
+    let tripIntl = false;
+    const codesOf = () => [...$$("#segRows [data-seg]").flatMap((r) => [r.querySelector("[name=from]").value, r.querySelector("[name=to]").value]), ...(f.route.value.match(/[A-Za-z]{3}/g) || [])].map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z]{3}$/.test(x));
+    const checkIntl = () => airports().then((A) => { const cc = new Set(codesOf().map((c) => A[c] && A[c].cc).filter(Boolean)); tripIntl = cc.size > 1; $("#ppIntl").textContent = tripIntl ? T("رحلة دولية: الجواز وتاريخ انتهائه مطلوبان لكل مسافر", "International trip: passport and expiry required for every traveler") : T("مطلوبة للرحلات الدولية", "Required for international trips"); $("#ppIntl").classList.toggle("pp-need", tripIntl); }).catch(() => {});
+    checkIntl();
+    f.route.addEventListener("change", checkIntl);
+    $("#segRows").addEventListener("change", checkIntl);
     const bindSeg = () => $$("[data-rmseg]").forEach((x) => (x.onclick = () => { if ($$("#segRows [data-seg]").length > 1) x.parentElement.parentNode.removeChild(x.parentElement); }));
     if ($("#segAdd")) $("#segAdd").addEventListener("click", () => { const last = $$("#segRows [data-seg]").pop(); const prev = last ? { from: last.querySelector("[name=to]").value, date: last.querySelector("[name=date]").value } : {}; $("#segRows").insertAdjacentHTML("beforeend", segRow(prev, true)); bindSeg(); });
     bindSeg();
@@ -571,6 +608,14 @@
         data.segments = $$("#segRows [data-seg]").map((r) => Object.fromEntries($$("input", r).map((i) => [i.name, ["from", "to", "flight"].includes(i.name) ? i.value.trim().toUpperCase() : i.value]))).filter((x) => x.from && x.to);
       }
       if (owner) { data.cost = +d.cost || 0; data.assignedTo = d.assignedTo || ""; }
+      if (ppEdit) {
+        data.passports = ppState().filter((x) => x.number || x.expiry || x.country);
+        const end = tripEndOf();
+        const missing = tripIntl && ppState().some((x) => !x.number || !x.expiry);
+        const tooOld = data.passports.some((x) => x.expiry && end && x.expiry < end);
+        if (["ticketed", "confirmed"].includes(data.status) && (missing || tooOld)) { toast(missing ? T("رحلة دولية: أدخل رقم الجواز وتاريخ انتهائه لكل مسافر قبل التأكيد أو الإصدار.", "International trip: enter every traveler's passport number and expiry before confirming or ticketing.") : T("يوجد جواز ينتهي قبل نهاية الرحلة: يجب تجديده قبل التأكيد أو الإصدار.", "A passport expires before the trip ends: it must be renewed before confirming or ticketing.")); return; }
+        if (missing || tooOld) toast(T("تنبيه: بيانات جوازات ناقصة أو منتهية. أكملها قبل الإصدار.", "Note: passport details are missing or expired. Complete them before ticketing."));
+      }
       if (!allowed(data.status)) { toast(T("لا تملك صلاحية هذه الحالة", "You can't set this status")); return; }
       if (data.source === "b2b" && !data.partnerId) { toast(T("اختر وكيل B2B لهذا الحجز", "Choose the B2B agent for this booking")); return; }
       if (data.status === "ticketed" && !data.pnr) { toast(T("أدخل رقم PNR قبل تحويل الحالة إلى صادرة", "Enter the PNR before marking it ticketed")); return; }
@@ -833,18 +878,114 @@
   }
 
   /* ---------- Invoice ---------- */
+  // Customer invoice for one booking: the company letterhead, bill-to, lines, payments and balance
+  function invoiceDocHtml(b) {
+    const c = CO(), m = bookingMoney(b);
+    const p = b.partnerId ? DB.get("partners", b.partnerId) : null, co = b.companyId ? DB.get("companies", b.companyId) : null;
+    const bill = p ? [p.agency, p.contact, p.phone, p.contactEmail || p.email] : co ? [co.name, co.legalName, co.email, co.phone] : [b.customer.name, b.customer.phone, b.customer.email];
+    const pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "—"];
+    const total = (+b.sell || 0) + (+b.serviceFee || 0);
+    const pays = DB.all("payments").filter((x) => x.bookingId === b.id && (x.dir === "in" || x.dir === "refund"));
+    const paid = pays.reduce((sum, x) => sum + (x.dir === "in" ? x.amount : -x.amount), 0);
+    const due = Math.max(0, total - paid);
+    const issued = b.ticketedAt || b.created || today();
+    const segs = segmentsOf(b);
+    const trip = segs.length ? segs.map((x) => `${x.from} → ${x.to} ${fmtDate(x.date)}`).join(" · ") : `${b.route} · ${fmtDate(b.depart)}${b.ret ? " – " + fmtDate(b.ret) : ""}`;
+    const row = (d, sub, q, unit, amt) => `<tr><td><b>${d}</b>${sub ? `<br><small>${sub}</small>` : ""}</td><td class="num">${q}</td><td class="num" dir="ltr">${unit}</td><td class="num" dir="ltr"><b>${amt}</b></td></tr>`;
+    const per = pax.length ? (+b.sell || 0) / pax.length : +b.sell || 0;
+    return `<div class="statement invoice-doc" id="invoiceDoc">
+      ${letterhead("INVOICE", "فاتورة", `<span dir="ltr" class="mono">INV-${esc(b.id)}</span><span>${T("التاريخ", "Date")}: <span dir="ltr">${fmtDate(issued)}</span></span>`)}
+      <div class="inv-stamp ${due > 0.004 ? "is-due" : "is-paid"}">${due > 0.004 ? `${T("المستحق", "Balance due")} <b dir="ltr">${usd.format(due)}</b>` : `✓ ${T("مدفوعة بالكامل", "Paid in full")}`}</div>
+      <div class="inv-parties">
+        <div><small>${L("فاتورة إلى", "Bill to")}</small><b>${esc(bill[0] || "—")}</b>${bill.slice(1).filter(Boolean).map((x) => `<span dir="auto">${esc(x)}</span>`).join("")}</div>
+        <div><small>${L("الحجز", "Booking")}</small><b dir="ltr" class="mono">${esc(b.id)}</b>${b.pnr ? `<span dir="ltr">PNR <b class="mono">${esc(b.pnr)}</b></span>` : ""}<span>${esc(b.airline || "")} · ${esc(CABIN()[b.cabin] || "")}</span></div>
+      </div>
+      <table class="of-table inv-lines"><thead><tr><th>${T("البيان / Description", "Description")}</th><th>${T("الكمية", "Qty")}</th><th>${T("السعر", "Unit price")}</th><th>${T("المبلغ", "Amount")}</th></tr></thead>
+        <tbody>
+          ${row(`${T("تذاكر طيران", "Air tickets")} · ${esc(b.airline || "")}`, `<span dir="ltr">${esc(trip)}</span><br>${esc(pax.join(", "))}${(b.tickets || []).length ? `<br>${T("أرقام التذاكر", "E-tickets")}: <span dir="ltr" class="mono">${esc(b.tickets.join(", "))}</span>` : ""}`, pax.length, usd.format(per), usd.format(+b.sell || 0))}
+          ${+b.serviceFee ? row(T("رسوم الخدمة", "Service fee"), "", 1, usd.format(+b.serviceFee), usd.format(+b.serviceFee)) : ""}
+        </tbody>
+        <tfoot>
+          <tr><td colspan="3">${T("الإجمالي", "Total")} (USD)</td><td class="num" dir="ltr"><b>${usd.format(total)}</b></td></tr>
+          ${pays.map((x) => `<tr class="inv-pay"><td colspan="3">${x.dir === "in" ? T("دفعة مستلمة", "Payment received") : T("استرداد", "Refund")} · ${fmtDate(x.date)} · ${esc(METHOD()[x.method] || x.method || "")}${x.ref ? ` · <span dir="ltr">${esc(x.ref)}</span>` : ""}</td><td class="num" dir="ltr">${x.dir === "in" ? "−" : "+"}${usd.format(x.amount)}</td></tr>`).join("")}
+          <tr class="inv-due"><td colspan="3">${T("الرصيد المستحق", "Balance due")}</td><td class="num" dir="ltr"><b>${usd.format(due)}</b></td></tr>
+        </tfoot></table>
+      ${c.paymentInfo ? `<div class="inv-box"><small>${L("طريقة الدفع", "How to pay")}</small><p dir="auto">${esc(c.paymentInfo).replace(/\n/g, "<br>")}</p></div>` : ""}
+      <div class="inv-box"><small>${L("الشروط", "Terms")}</small><p dir="auto">${esc(c.invoiceTerms || "").replace(/\n/g, "<br>")}</p></div>
+      <p class="inv-thanks">${T(`شكراً لاختياركم ${esc(c.tradeNameAr || c.tradeName)}.`, `Thank you for choosing ${esc(c.tradeName)}.`)} <small dir="ltr">${esc(c.legalName)}${coIds() ? " · " + esc(coIds()) : ""}</small></p>
+    </div>`;
+  }
+  const invoiceText = (b) => {
+    const total = (+b.sell || 0) + (+b.serviceFee || 0), paid = DB.paidIn(b.id);
+    return `${CO().tradeName} — ${T("فاتورة", "Invoice")} INV-${b.id}\n${b.pnr ? "PNR " + b.pnr + " · " : ""}${b.airline || ""} · ${b.route}\n${T("الإجمالي", "Total")}: ${usd.format(total)} · ${T("المدفوع", "Paid")}: ${usd.format(paid)} · ${T("المستحق", "Due")}: ${usd.format(Math.max(0, total - paid))}\n${coPhones()[0] || ""} · ${CO().email}`;
+  };
   function printInvoice(id) {
-    const b = DB.get("bookings", id), m = bookingMoney(b);
-    const p = b.partnerId ? DB.get("partners", b.partnerId) : null;
-    const billTo = p ? `${esc(p.agency)}<br><small>${esc(p.contact || "")} · <span dir="ltr">${esc(p.phone || "")}</span></small>` : `${esc(b.customer.name)}<br><small dir="ltr">${esc([b.customer.phone, b.customer.email].filter(Boolean).join(" · "))}</small>`;
-    printHtml(`<div class="statement invoice">
-      <header class="st-head"><img src="assets/img/logo.png" alt="" width="48" height="48"><div><b>Green Travel</b><small>World Services dba Green Travel · +1 (708) 963-2552 · info@greentravel.us</small></div>
-        <div class="st-meta"><b>${T("فاتورة", "Invoice")}</b><span dir="ltr">INV-${esc(b.id)}</span><span>${fmtDate(today())}</span></div></header>
-      <div class="inv-parties"><div><small>${T("إلى", "Bill to")}</small><b>${billTo}</b></div><div><small>${T("الحجز", "Booking")}</small><b dir="ltr">${esc(b.id)}${b.pnr ? " · PNR " + esc(b.pnr) : ""}</b></div></div>
-      <table class="of-table"><thead><tr><th>${T("البيان", "Description")}</th><th>${T("المسافرون", "Travelers")}</th><th>${T("المبلغ", "Amount")}</th></tr></thead>
-        <tbody><tr><td>${T("تذاكر طيران", "Air tickets")} · ${esc(b.airline)} · <span dir="ltr">${esc(b.route)}</span><br><small>${fmtDate(b.depart)}${b.ret ? " – " + fmtDate(b.ret) : ""} · ${CABIN()[b.cabin] || ""}${(b.tickets || []).length ? " · " + T("تذاكر", "Tickets") + ": " + esc(b.tickets.join(", ")) : ""}</small></td><td>${esc((b.travelers || []).join(", ") || b.pax)}</td><td>${money(b.sell)}</td></tr></tbody>
-        <tfoot><tr><td colspan="2">${T("الإجمالي", "Total")}</td><td><b>${money(b.sell)}</b></td></tr><tr><td colspan="2">${T("المدفوع", "Paid")}</td><td>${money(m.inn)}</td></tr><tr><td colspan="2">${T("المتبقي", "Balance due")}</td><td><b>${money(Math.max(0, b.sell - m.inn))}</b></td></tr></tfoot></table>
-      <p class="muted">${T("شكراً لتعاملكم مع Green Travel. جميع الحجوزات تخضع لشروط شركة الطيران.", "Thank you for choosing Green Travel. All bookings are subject to the airline's fare rules.")}</p></div>`);
+    const b = DB.get("bookings", id);
+    if (!b) return;
+    closeDrawer();
+    openModal(T("الفاتورة", "Invoice") + " · INV-" + b.id, docActionsHtml(b, "invoice") + invoiceDocHtml(b), true);
+    bindDocActions(b, "invoice", { el: () => $("#invoiceDoc"), file: `Invoice-INV-${b.id}.pdf`, text: () => invoiceText(b), print: () => invoiceDocHtml(b), csv: () => downloadCsv(`invoice-INV-${b.id}`, ["invoice", "date", "bill_to", "booking", "pnr", "airline", "route", "travelers", "tickets", "fare", "service_fee", "total", "paid", "balance_due"],
+      [[`INV-${b.id}`, b.ticketedAt || b.created, b.customer.name, b.id, b.pnr, b.airline, b.route, (b.travelers || []).join(" / "), (b.tickets || []).join(" / "), +b.sell || 0, +b.serviceFee || 0, (+b.sell || 0) + (+b.serviceFee || 0), DB.paidIn(b.id), Math.max(0, (+b.sell || 0) + (+b.serviceFee || 0) - DB.paidIn(b.id))]]) });
+  }
+  // The same actions for a ticket and an invoice: print, PDF, email with the PDF attached, share the PDF to any app, WhatsApp / SMS text, copy, Excel (CSV)
+  function docActionsHtml(b, kind) {
+    return `<div class="tk-actions">
+        <button type="button" class="btn btn--primary btn--sm" data-doc-print>${icon("i-list")}${T("طباعة", "Print")}</button>
+        <button type="button" class="btn btn--ghost btn--sm" data-doc-pdf>${icon("i-ticket")}${T("حفظ PDF", "Save PDF")}</button>
+        ${kind === "invoice" ? `<button type="button" class="btn btn--ghost btn--sm" data-doc-csv>${T("Excel (CSV)", "Excel (CSV)")}</button>` : ""}
+        <span class="tk-mail"><input type="email" data-doc-to dir="ltr" placeholder="${T("بريد العميل", "Customer email")}" value="${esc(b.customer.email || "")}"><button type="button" class="btn btn--accent btn--sm" data-doc-email>${icon("i-mail")}${T("إرسال بالبريد (PDF)", "Email (PDF)")}</button></span>
+      </div>
+      <div class="tk-actions tk-share">
+        <button type="button" class="btn btn--accent btn--sm" data-doc-share>${icon("i-ticket")}${T("مشاركة PDF (واتساب، بريد، تطبيقات…)", "Share PDF (WhatsApp, Mail, apps…)")}</button>
+        ${b.customer.phone ? `<a class="btn btn--ghost btn--sm" target="_blank" rel="noopener" data-doc-wa href="#">${icon("i-whatsapp")}${T("واتساب: نص", "WhatsApp: text")}</a><a class="btn btn--ghost btn--sm" data-doc-sms href="#">${icon("i-chat")}SMS</a>` : ""}
+        <button type="button" class="btn btn--ghost btn--sm" data-doc-copy>${T("نسخ التفاصيل", "Copy details")}</button>
+      </div>
+      ${kind === "ticket" && b.reminders && b.reminders.ticket ? `<p class="hint">${icon("i-check")}${T("أُرسلت التذكرة بالبريد في", "Ticket emailed on")} ${fmtTime(b.reminders.ticket)}</p>` : ""}`;
+  }
+  const pdfOpts = (name) => ({ margin: 8, filename: name, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } });
+  async function pdfBlob(el, name) { await loadPdfLib(); return window.html2pdf().set(pdfOpts(name)).from(el).outputPdf("blob"); }
+  const blobB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(blob); });
+  function bindDocActions(b, kind, o) {
+    const root = $("#ofModalBody") || document;
+    const q = (sel) => root.querySelector(sel) || document.querySelector(sel);
+    const label = kind === "invoice" ? T("الفاتورة", "invoice") : T("التذكرة", "ticket");
+    const wa = q("[data-doc-wa]"), sms = q("[data-doc-sms]");
+    if (wa) wa.href = `https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(o.text())}`;
+    if (sms) sms.href = `sms:${b.customer.phone || ""}?&body=${encodeURIComponent(o.text())}`;
+    q("[data-doc-print]").addEventListener("click", () => { printHtml(o.print()); log(`${T("طبع", "Printed")} ${label}`, b.id); });
+    q("[data-doc-copy]").addEventListener("click", () => (navigator.clipboard ? navigator.clipboard.writeText(o.text()) : Promise.reject()).then(() => toast(T("تم النسخ", "Copied"))).catch(() => toast(T("تعذّر النسخ", "Couldn't copy"))));
+    if (q("[data-doc-csv]") && o.csv) q("[data-doc-csv]").addEventListener("click", () => { o.csv(); log(`${T("صدّر", "Exported")} ${label} CSV`, b.id); });
+    q("[data-doc-pdf]").addEventListener("click", async (e) => { const btn = e.currentTarget; btn.disabled = true; if (await savePdf(o.el(), o.file)) log(`${T("حفظ PDF", "Saved PDF")}: ${label}`, b.id); btn.disabled = false; });
+    // The PDF goes to any app through the phone's or computer's share sheet; otherwise it is downloaded
+    q("[data-doc-share]").addEventListener("click", async (e) => {
+      const btn = e.currentTarget; btn.disabled = true;
+      try {
+        const blob = await pdfBlob(o.el(), o.file);
+        const file = new File([blob], o.file, { type: "application/pdf" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: o.file, text: o.text() }); log(`${T("شارك PDF", "Shared PDF")}: ${label}`, b.id); }
+        else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = o.file; document.body.appendChild(a); a.click(); a.remove(); toast(T("حُفظ ملف PDF: أرفقه في التطبيق الذي تريد.", "PDF saved: attach it in any app you like.")); }
+      } catch (er) { if (er && er.name !== "AbortError") toast(T("تعذّر تجهيز الملف، استخدم «حفظ PDF».", "Couldn't prepare the file; use Save PDF.")); }
+      btn.disabled = false;
+    });
+    // Email: the PDF is attached (the ticket email also shows the itinerary in the message)
+    q("[data-doc-email]").addEventListener("click", async (e) => {
+      const to = q("[data-doc-to]").value.trim(), btn = e.currentTarget;
+      if (!/^\S+@\S+\.\S+$/.test(to)) { toast(T("أدخل بريد العميل", "Enter the customer's email")); return; }
+      btn.disabled = true;
+      try {
+        const blob = await pdfBlob(o.el(), o.file);
+        if (blob.size > 4.5e6) throw new Error(T("الملف كبير جداً للإرسال", "The file is too large to email"));
+        await DB.sendEmail(kind, b.id, to, { pdf: await blobB64(blob), filename: o.file });
+        toast((kind === "invoice" ? T("أُرسلت الفاتورة إلى ", "Invoice sent to ") : T("أُرسلت التذكرة إلى ", "Ticket sent to ")) + to);
+      } catch (er) {
+        if (/not_configured/.test(er.message)) {
+          toast(T("خدمة البريد غير مفعّلة بعد: سيُحفظ PDF وتُفتح رسالة لترفقه بها.", "Email service not set up yet: the PDF will be saved and an email opened to attach it."));
+          await savePdf(o.el(), o.file);
+          location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(`${CO().tradeName} — ${o.file.replace(/\.pdf$/, "")}`)}&body=${encodeURIComponent(o.text())}`;
+        } else errToast(er);
+      }
+      btn.disabled = false;
+    });
   }
   function printHtml(html) {
     $("#printArea").innerHTML = html;
@@ -1042,6 +1183,45 @@
   }
 
   /* ---------- Settings (owner) ---------- */
+  /* ---------- Company details: the letterhead of every invoice and ticket (owner) ---------- */
+  function viewCompany(el) {
+    const c = CO();
+    el.innerHTML = `
+      <p class="hint">${icon("i-briefcase")}${T("هذه البيانات تظهر في رأس كل فاتورة وتذكرة وخط سير رحلة تُطبع أو تُرسل للعملاء. أكملها بدقة كما في أوراق الشركة الرسمية.", "These details appear at the top of every invoice, ticket and itinerary you print or send. Fill them in exactly as on the company's official papers.")}</p>
+      <form id="coForm" class="of-card dr-form" novalidate>
+        <fieldset><legend>${T("الاسم", "Name")}</legend><div class="f3">
+          ${inp("tradeName", T("الاسم التجاري (إنجليزي)", "Trade name (English)"), c.tradeName)}${inp("tradeNameAr", T("الاسم التجاري (عربي)", "Trade name (Arabic)"), c.tradeNameAr)}${inp("legalName", T("الاسم القانوني المسجل", "Registered legal name"), c.legalName)}</div></fieldset>
+        <fieldset><legend>${T("العنوان", "Address")}</legend><div class="f3">
+          ${inp("address", T("الشارع والرقم", "Street address"), c.address, "text", "ltr")}${inp("city", T("المدينة", "City"), c.city, "text", "ltr")}${inp("state", T("الولاية", "State"), c.state, "text", "ltr")}
+          ${inp("zip", T("الرمز البريدي", "ZIP code"), c.zip, "text", "ltr")}${inp("country", T("الدولة", "Country"), c.country, "text", "ltr")}</div></fieldset>
+        <fieldset><legend>${T("التواصل", "Contact")}</legend><div class="f3">
+          ${inp("email", T("البريد", "Email"), c.email, "email", "ltr")}${inp("website", T("الموقع", "Website"), c.website, "text", "ltr")}</div>
+          ${area("phones", T("أرقام الهاتف (سطر لكل رقم)", "Phone numbers (one per line)"), (c.phones || []).join("\n"), 'dir="ltr" style="min-height:110px"')}</fieldset>
+        <fieldset><legend>${T("الأرقام الرسمية", "Official numbers")}</legend><div class="f3">
+          ${inp("taxId", T("رقم الضريبة / EIN", "Tax ID / EIN"), c.taxId, "text", "ltr")}${inp("iata", T("رقم IATA / ARC", "IATA / ARC number"), c.iata, "text", "ltr")}${inp("sellerOfTravel", T("رقم تسجيل بائع السفر (Seller of Travel)", "Seller of Travel registration"), c.sellerOfTravel, "text", "ltr")}</div></fieldset>
+        <fieldset><legend>${T("الفواتير", "Invoices")}</legend>
+          ${area("paymentInfo", T("طريقة الدفع التي تظهر في الفاتورة (مثل: Zelle، تحويل بنكي…)", "How to pay, shown on the invoice (e.g. Zelle, bank transfer…)"), c.paymentInfo, 'style="min-height:84px"')}
+          ${area("invoiceTerms", T("الشروط في أسفل الفاتورة", "Terms at the bottom of the invoice"), c.invoiceTerms, 'style="min-height:84px"')}</fieldset>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button><button type="button" class="btn btn--ghost" id="coPreview">${T("معاينة الفاتورة", "Preview invoice")}</button></div>
+      </form>`;
+    const f = $("#coForm");
+    const read = () => { const d = Object.fromEntries(new FormData(f)); d.phones = String(d.phones || "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 8); return Object.assign({}, CO(), d); };
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const c2 = read();
+      if (!c2.tradeName.trim() || !c2.legalName.trim()) return toast(T("اكتب الاسم التجاري والاسم القانوني", "Enter the trade name and the legal name"));
+      if (c2.email && !/^\S+@\S+\.\S+$/.test(c2.email)) return toast(T("البريد غير صحيح", "The email looks wrong"));
+      const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+      try { await DB.saveCompany(c2); log(T("عدّل بيانات الشركة", "Edited company details")); toast(T("تم الحفظ: ستظهر في كل الفواتير والتذاكر", "Saved: shown on every invoice and ticket")); }
+      catch (er) { errToast(er); }
+      btn.disabled = false;
+    });
+    $("#coPreview").addEventListener("click", () => {
+      const sample = DB.all("bookings")[0] || { id: "GT-SAMPLE", created: today(), status: "confirmed", customer: { name: "Customer Name", phone: "+1 (000) 000-0000", email: "customer@example.com" }, route: "ORD → AMM", airline: "Royal Jordanian", cabin: "economy", depart: today(), ret: "", pax: 1, travelers: ["CUSTOMER NAME"], pnr: "ABC123", tickets: [], sell: 1200, serviceFee: 0, segments: [], reminders: {} };
+      openModal(T("معاينة الفاتورة", "Invoice preview"), invoiceDocHtml(sample), true);
+    });
+  }
+
   function viewSettings(el) {
     el.innerHTML = `
       <section class="of-card"><header class="of-card__h"><h3>${T("خصوصية الأرباح", "Profit privacy")}</h3></header>
@@ -1063,12 +1243,23 @@
   };
   const digits = (p) => String(p || "").replace(/[^\d]/g, "").replace(/^(\d{10})$/, "1$1");
   const L = (ar, en) => `<span class="bi"><b>${ar}</b><small>${en}</small></span>`;
+  // Letterhead of every invoice and ticket: the company details the owner saves in «Company details»
+  const CO = () => DB.company;
+  const coPhones = () => CO().phones || [];
+  const coAddress = () => { const c = CO(); return [c.address, [c.city, [c.state, c.zip].filter(Boolean).join(" ")].filter(Boolean).join(", "), c.country].filter(Boolean).join(" · "); };
+  const coIds = () => { const c = CO(); return [c.taxId ? `EIN / Tax ID ${c.taxId}` : "", c.iata ? `IATA ${c.iata}` : "", c.sellerOfTravel ? `Seller of Travel ${c.sellerOfTravel}` : ""].filter(Boolean).join(" · "); };
+  function letterhead(titleEn, titleAr, meta) {
+    const c = CO();
+    return `<header class="st-head doc-head"><img src="assets/img/logo.png" alt="" width="58" height="58">
+      <div class="doc-co"><b>${esc(c.tradeName)} · ${esc(c.tradeNameAr)}</b><small>${esc(c.legalName)}</small>${coAddress() ? `<small>${esc(coAddress())}</small>` : ""}
+        <small dir="ltr">${esc(coPhones().join(" · "))}</small><small dir="ltr">${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small dir="ltr">${esc(coIds())}</small>` : ""}</div>
+      <div class="st-meta"><b>${titleEn}</b><span>${titleAr}</span>${meta || ""}</div></header>`;
+  }
   function ticketDocHtml(b) {
     const segs = segmentsOf(b), pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "—"];
     const m = bookingMoney(b);
     return `<div class="statement ticket-doc" id="ticketDoc">
-      <header class="st-head"><img src="assets/img/logo.png" alt="" width="52" height="52"><div><b>Green Travel · جرين ترافيل</b><small>World Services dba Green Travel · info@greentravel.us · greentravel.us</small><small dir="ltr">${COMPANY_PHONES.join(" · ")}</small></div>
-        <div class="st-meta"><b>${b.status === "ticketed" ? "E-TICKET RECEIPT" : "ITINERARY"}</b><span>${b.status === "ticketed" ? "إيصال التذكرة الإلكترونية" : "خط سير الرحلة"}</span><span dir="ltr">${fmtDate(today())}</span></div></header>
+      ${letterhead(b.status === "ticketed" ? "E-TICKET RECEIPT" : "ITINERARY", b.status === "ticketed" ? "إيصال التذكرة الإلكترونية" : "خط سير الرحلة", `<span dir="ltr">${fmtDate(today())}</span>`)}
       <div class="tk-ids">
         <div>${L("رقم الحجز", "Booking ref (PNR)")}<strong dir="ltr" class="mono">${esc(b.pnr || "—")}</strong></div>
         <div>${L("شركة الطيران", "Airline")}<strong>${esc(b.airline || "—")}</strong></div>
@@ -1106,7 +1297,6 @@
       return true;
     } catch (e) { toast(T("تعذّر إنشاء PDF، استخدم «طباعة» ثم «حفظ كـ PDF».", "Couldn't create the PDF; use Print, then Save as PDF.")); return false; }
   }
-  const COMPANY_PHONES = ["+1 (708) 963-2552", "+1 (708) 940-2929", "+1 (331) 213-3768", "+1 (708) 953-2244"];
   const ticketTextFull = (b) => {
     const segs = segmentsOf(b), pax = (b.travelers || []).length ? b.travelers : [b.customer.name || ""];
     const lines = [
@@ -1124,8 +1314,8 @@
       b.status === "ticketed" ? T("بعد الإصدار: التعديل والإلغاء حسب شروط شركة الطيران ورسومها.", "After ticketing: changes and cancellations follow the airline's rules and fees.") : T("قبل الإصدار يمكن الإلغاء أو التعديل دون رسوم.", "Before ticketing you can cancel or change free of charge."),
       T("احضر للمطار قبل 3 ساعات للرحلات الدولية.", "Arrive 3 hours early for international flights."),
       "",
-      `Green Travel · ${COMPANY_PHONES.join(" / ")}`,
-      `info@greentravel.us · greentravel.us/#manage`,
+      `${CO().tradeName} · ${coPhones().join(" / ")}`,
+      `${CO().email} · ${CO().website}/#manage`,
     ];
     return lines.filter((x, i, a) => x !== "" || a[i - 1] !== "").join("\n");
   };
@@ -1139,58 +1329,10 @@
     const b = DB.get("bookings", id);
     if (!b) return;
     closeDrawer();
-    openModal(T("التذكرة وخط سير الرحلة", "Ticket and itinerary") + " · " + b.id, `
-      <div class="tk-actions">
-        <button type="button" class="btn btn--primary btn--sm" id="tkPrint">${icon("i-list")}${T("طباعة", "Print")}</button>
-        <button type="button" class="btn btn--ghost btn--sm" id="tkPdf">${icon("i-ticket")}${T("حفظ PDF على الكمبيوتر", "Save PDF to computer")}</button>
-        <span class="tk-mail"><input type="email" id="tkTo" dir="ltr" placeholder="${T("بريد العميل", "Customer email")}" value="${esc(b.customer.email || "")}"><button type="button" class="btn btn--accent btn--sm" id="tkEmail">${icon("i-mail")}${T("إرسال بالبريد", "Email")}</button></span>
-      </div>
-      <div class="tk-actions tk-share">
-        <button type="button" class="btn btn--accent btn--sm" id="tkShare">${icon("i-ticket")}${T("إرسال PDF (واتساب / رسائل)", "Send PDF (WhatsApp / Messages)")}</button>
-        <a class="btn btn--ghost btn--sm" target="_blank" rel="noopener" href="https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(ticketTextFull(b))}">${icon("i-whatsapp")}${T("واتساب: التفاصيل كاملة", "WhatsApp: full details")}</a>
-        <a class="btn btn--ghost btn--sm" href="sms:${esc(b.customer.phone || "")}?&body=${encodeURIComponent(ticketTextFull(b))}">${icon("i-chat")}${T("رسالة نصية SMS", "Text message (SMS)")}</a>
-        <button type="button" class="btn btn--ghost btn--sm" id="tkCopy">${T("نسخ التفاصيل", "Copy details")}</button>
-      </div>
-      ${b.reminders && b.reminders.ticket ? `<p class="hint">${icon("i-check")}${T("أُرسلت التذكرة بالبريد في", "Ticket emailed on")} ${fmtTime(b.reminders.ticket)}</p>` : ""}
-      ${ticketDocHtml(b)}`, true);
-    $("#tkPrint").addEventListener("click", () => { printHtml(ticketDocHtml(b)); log(T("طبع تذكرة", "Printed ticket"), b.id); });
-    $("#tkCopy").addEventListener("click", () => (navigator.clipboard ? navigator.clipboard.writeText(ticketTextFull(b)) : Promise.reject()).then(() => toast(T("تم النسخ", "Copied"))).catch(() => toast(T("تعذّر النسخ", "Couldn't copy"))));
-    // The PDF goes straight to WhatsApp / Messages / Mail through the phone's or computer's share sheet; otherwise it is saved and WhatsApp opens
-    $("#tkShare").addEventListener("click", async (e) => {
-      const btn = e.currentTarget; btn.disabled = true;
-      const name = `GreenTravel-${b.pnr || b.id}.pdf`;
-      try {
-        await loadPdfLib();
-        const blob = await window.html2pdf().set({ margin: 8, filename: name, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4" } }).from($("#ticketDoc")).outputPdf("blob");
-        const file = new File([blob], name, { type: "application/pdf" });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: name, text: ticketTextFull(b) });
-          log(T("أرسل التذكرة PDF", "Shared ticket PDF"), b.id);
-        } else {
-          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
-          toast(T("حُفظ ملف PDF: أرفقه في محادثة واتساب التي ستُفتح الآن.", "PDF saved: attach it in the WhatsApp chat that opens now."));
-          if (b.customer.phone) window.open(`https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(ticketTextFull(b))}`, "_blank", "noopener");
-        }
-      } catch (er) { if (er && er.name !== "AbortError") toast(T("تعذّر تجهيز الملف، استخدم «حفظ PDF».", "Couldn't prepare the file; use Save PDF.")); }
-      btn.disabled = false;
-    });
-    $("#tkPdf").addEventListener("click", async (e) => { const btn = e.currentTarget; btn.disabled = true; if (await savePdf($("#ticketDoc"), `GreenTravel-${b.pnr || b.id}.pdf`)) log(T("حفظ تذكرة PDF", "Saved ticket PDF"), b.id); btn.disabled = false; });
-    $("#tkEmail").addEventListener("click", async (e) => {
-      const to = $("#tkTo").value.trim(), btn = e.currentTarget;
-      if (!/^\S+@\S+\.\S+$/.test(to)) { toast(T("أدخل بريد العميل", "Enter the customer's email")); return; }
-      btn.disabled = true;
-      try { await DB.sendEmail("ticket", b.id, to); toast(T("أُرسلت التذكرة إلى ", "Ticket sent to ") + to); }
-      catch (er) {
-        if (/not_configured/.test(er.message)) {
-          // Email service not set up yet: save the PDF and open the email app with the details
-          toast(T("خدمة البريد غير مفعّلة بعد: سيُحفظ PDF وتُفتح رسالة لترفقه بها.", "Email service not set up yet: the PDF will be saved and an email opened to attach it."));
-          await savePdf($("#ticketDoc"), `GreenTravel-${b.pnr || b.id}.pdf`);
-          location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent("Green Travel — " + (b.pnr ? "PNR " + b.pnr : b.id))}&body=${encodeURIComponent(ticketText(b))}`;
-        } else errToast(er);
-      }
-      btn.disabled = false;
-    });
+    openModal(T("التذكرة وخط سير الرحلة", "Ticket and itinerary") + " · " + b.id, docActionsHtml(b, "ticket") + ticketDocHtml(b), true);
+    bindDocActions(b, "ticket", { el: () => $("#ticketDoc"), file: `GreenTravel-${b.pnr || b.id}.pdf`, text: () => ticketTextFull(b), print: () => ticketDocHtml(b) });
   }
+
 
   /* =========================================================
      Travel alerts: departures in the next 7 days + reminders
@@ -1882,7 +2024,7 @@
 
   /* ---------- Duty of care: where are the travelers right now ---------- */
   let APT = null;
-  async function airports() { if (APT) return APT; const rows = await (await fetch("assets/data/airports.json")).json(); APT = Object.fromEntries(rows.map((r) => [r[0], { lat: r[4], lon: r[5], city: r[2] }])); return APT; }
+  async function airports() { if (APT) return APT; const rows = await (await fetch("assets/data/airports.json")).json(); APT = Object.fromEntries(rows.map((r) => [r[0], { lat: r[4], lon: r[5], city: r[2], cc: r[3] }])); return APT; }
   async function viewDuty(el) {
     el.innerHTML = `<p class="muted">${T("جارٍ التحميل…", "Loading…")}</p>`;
     let A = {};
