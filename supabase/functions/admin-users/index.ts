@@ -1,7 +1,7 @@
 // Green Travel: account management (runs on the server with the service key).
 // Only the owner can create/edit staff; the owner or staff with "agents_manage" can create/edit B2B agent logins
 // (pricing and credit limit stay owner-only). Creating the owner needs the one-time setup code saved as the
-// OWNER_SETUP_CODE secret in Supabase, and only works while no owner exists.
+// OWNER_SETUP_CODE secret in Supabase (or the one-time code in private.settings), and only works while no owner exists.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const cors = {
@@ -28,9 +28,12 @@ Deno.serve(async (req) => {
   if (action === "bootstrap") {
     const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("kind", "owner");
     if (count) return fail("Owner already exists", 409);
+    // The code is the OWNER_SETUP_CODE secret, or else the one-time code kept in the database (private.settings)
     const code = Deno.env.get("OWNER_SETUP_CODE") || "";
-    if (code.length < 6) return fail("Setup code is not configured yet. Add the OWNER_SETUP_CODE secret in Supabase.", 403);
-    if (String(body.setupCode || "") !== code) return fail("Wrong setup code", 403);
+    const given = String(body.setupCode || "").trim();
+    const okSecret = code.length >= 6 && given === code;
+    const { data: okDb } = okSecret ? { data: false } : await admin.rpc("owner_setup_check", { p_code: given });
+    if (!okSecret && okDb !== true) return fail("Wrong setup code", 403);
     const username = str(body.username, 40).toLowerCase();
     if (!/^[a-z0-9._-]{3,}$/.test(username) || String(body.password || "").length < 8) return fail("Username (3+ English letters) and a password of 8+ characters are required");
     const email = `${username}@${STAFF_DOMAIN}`;
