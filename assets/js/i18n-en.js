@@ -473,4 +473,5 @@ window.I18N_EN = {
   "المستندات": "Documents",
   "الجدولة": "Schedule",
   "الفريق والإعدادات": "Team & settings",
+  "نسيت كلمة المرور؟": "Forgot password?",
 };

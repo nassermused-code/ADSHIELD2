@@ -137,6 +137,83 @@ window.GTDB = (() => {
     return false;
   }
 
+  /* ---------- Forgot password (every account) ----------
+     Step 1: username or email → a 6-digit code goes to the email on the account.
+     Step 2: code + new password. Staff without an email: the owner gets a task to reset it. */
+  function forgotDialog(prefill) {
+    const wrap = document.createElement("div");
+    wrap.className = "gt-mfa gt-forgot"; wrap.setAttribute("role", "dialog"); wrap.setAttribute("aria-modal", "true");
+    wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(3,20,12,.72);display:grid;place-items:center;padding:16px;overflow:auto";
+    const card = document.createElement("form");
+    card.noValidate = true;
+    card.style.cssText = "background:#fff;color:#10231a;border-radius:18px;max-width:420px;width:100%;padding:24px;display:grid;gap:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);font:inherit";
+    const field = "font:inherit;padding:.65em .8em;border:1px solid #c9d6ce;border-radius:12px;width:100%;box-sizing:border-box";
+    const lbl = (t, inner) => `<label style="display:grid;gap:6px"><span style="font-weight:600">${t}</span>${inner}</label>`;
+    card.innerHTML = `<h2 style="margin:0;font-size:1.25rem">🔑 ${TT("نسيت كلمة المرور", "Forgot password")}</h2>
+      <div data-s1 style="display:grid;gap:12px">
+        <p style="margin:0">${TT("اكتب اسم المستخدم أو البريد. نرسل رمزاً من 6 أرقام إلى البريد المسجل في حسابك.", "Enter your username or email. We'll send a 6-digit code to the email on your account.")}</p>
+        ${lbl(TT("اسم المستخدم أو البريد", "Username or email"), `<input data-login dir="ltr" autocomplete="username" autocapitalize="none" style="${field}">`)}
+      </div>
+      <div data-s2 hidden style="display:grid;gap:12px">
+        <p data-sent style="margin:0"></p>
+        ${lbl(TT("الرمز من البريد", "Code from the email"), `<input data-code inputmode="numeric" autocomplete="one-time-code" maxlength="6" dir="ltr" style="${field};font-size:1.3rem;letter-spacing:.3em;text-align:center">`)}
+        ${lbl(TT("كلمة المرور الجديدة (8 أحرف على الأقل)", "New password (8+ characters)"), `<input data-p1 type="password" dir="ltr" autocomplete="new-password" style="${field}">`)}
+        ${lbl(TT("أعد كتابة كلمة المرور", "Repeat the password"), `<input data-p2 type="password" dir="ltr" autocomplete="new-password" style="${field}">`)}
+      </div>
+      <p data-err role="status" aria-live="polite" style="margin:0;color:#b42318;min-height:1.2em"></p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><button type="submit" class="btn btn--accent">${TT("أرسل الرمز", "Send the code")}</button><button type="button" data-cancel class="btn btn--ghost">${TT("إغلاق", "Close")}</button></div>`;
+    wrap.appendChild(card);
+    document.body.appendChild(wrap);
+    const $q = (sel) => card.querySelector(sel);
+    const err = (m, ok) => { const e = $q("[data-err]"); e.style.color = ok ? "#1b6b3a" : "#b42318"; e.textContent = m || ""; };
+    const close = () => wrap.remove();
+    $q("[data-cancel]").addEventListener("click", close);
+    wrap.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+    $q("[data-login]").value = prefill || "";
+    setTimeout(() => $q(prefill ? "[type=submit]" : "[data-login]").focus(), 30);
+    let step = 1;
+    const call = async (body) => {
+      const { data, error } = await sb.functions.invoke("password-reset", { body });
+      if (error) { let msg = error.message; try { const j = await error.context.json(); msg = j.error || msg; } catch (e) {} throw new Error(msg); }
+      if (data && data.error) throw new Error(data.error);
+      return data;
+    };
+    card.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = $q("[type=submit]"); err("");
+      const login = $q("[data-login]").value.trim();
+      if (step === 1) {
+        if (login.length < 3) return err(TT("اكتب اسم المستخدم أو البريد.", "Enter your username or email."));
+        btn.disabled = true;
+        try { await call({ action: "request", login }); } catch (er) { btn.disabled = false; return err(TT("تعذّر الإرسال الآن. حاول بعد قليل.", "Could not send now. Try again shortly.")); }
+        btn.disabled = false; step = 2;
+        $q("[data-s1]").hidden = true; $q("[data-s2]").hidden = false;
+        $q("[data-sent]").textContent = TT("إذا كان الحساب موجوداً وله بريد مسجل، فقد أرسلنا إليه رمزاً صالحاً 15 دقيقة. لا يصلك شيء؟ الموظف: اطلب من المالك تغيير كلمة مرورك (وصله طلبك كمهمة). الوكيل أو الشركة: تواصل معنا.", "If the account exists and has an email on file, we sent it a code valid for 15 minutes. Nothing arrived? Staff: ask the owner to set a new password (your request reached them as a task). Agents and companies: contact us.");
+        btn.textContent = TT("تغيير كلمة المرور", "Change password");
+        $q("[data-code]").focus();
+        return;
+      }
+      const code = $q("[data-code]").value.replace(/\D/g, ""), p1 = $q("[data-p1]").value, p2 = $q("[data-p2]").value;
+      if (code.length !== 6) return err(TT("اكتب الرمز المكوّن من 6 أرقام.", "Enter the 6-digit code."));
+      if (p1.length < 8) return err(TT("كلمة المرور 8 أحرف على الأقل.", "The password needs 8+ characters."));
+      if (p1 !== p2) return err(TT("كلمتا المرور غير متطابقتين.", "The passwords do not match."));
+      btn.disabled = true;
+      try { await call({ action: "reset", login, code, password: p1 }); }
+      catch (er) { btn.disabled = false; return err(/Wrong or expired/.test(er.message) ? TT("الرمز غير صحيح أو انتهت مدته.", "Wrong or expired code.") : er.message); }
+      card.querySelectorAll("input").forEach((i) => (i.value = ""));
+      $q("[data-s2]").hidden = true; btn.hidden = true; $q("[data-cancel]").textContent = TT("تسجيل الدخول", "Sign in");
+      err(TT("تم تغيير كلمة المرور. سجّل الدخول بكلمة المرور الجديدة.", "Your password was changed. Sign in with the new password."), true);
+    });
+  }
+  // Any "Forgot password?" link on a sign-in form opens the dialog, with what was typed as the username
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-forgot]");
+    if (!b) return;
+    e.preventDefault();
+    const form = b.closest("form"), first = form && form.querySelector("input:not([type=password]):not([type=hidden])");
+    forgotDialog(first ? first.value.trim() : "");
+  });
+
   /* ---------- Load everything this user may see ---------- */
   async function loadProfile() {
     const { data: { session } } = await sb.auth.getSession();
