@@ -156,6 +156,7 @@
       let r = null;
       try { r = await DB.login($("#ofEmail").value, $("#ofPass").value); } catch (er) { st.textContent = T("تعذّر الاتصال بالخادم. حاول مرة أخرى.", "Could not reach the server. Try again."); btn.disabled = false; return; }
       btn.disabled = false;
+      if (r && r.error === "mfa") { st.textContent = T("لم تكتمل خطوة التحقق الثانية. حاول مرة أخرى.", "Two-step verification was not completed. Try again."); return; }
       if (r && r.error === "inactive") { st.textContent = T("هذا الحساب موقوف. تواصل مع المدير.", "This account is suspended. Contact the owner."); return; }
       if (!r) { st.textContent = T("اسم المستخدم أو كلمة المرور غير صحيحة.", "Incorrect username or password."); return; }
       if (r.kind !== "staff") { await DB.logout(); st.textContent = T("هذا حساب وكيل B2B: ادخل من بوابة الشركاء.", "This is a B2B agent account: sign in through the partner portal."); return; }
@@ -940,6 +941,7 @@
           <div class="perm-grid">${PERMS().map(([k, l, h]) => `<label class="perm"><input type="checkbox" name="perm" value="${k}" ${(s.perms || []).includes(k) ? "checked" : ""}><span><b>${l}</b><small>${h}</small></span></label>`).join("")}</div>
           <p class="hint hint--lock">${icon("i-lock")}${T("للمالك فقط ولا يمكن منحها: التكاليف، الأرباح، المدفوع للموردين، المصروفات، التقارير المالية، الموظفون، سجل النشاط، تسعير الوكلاء.", "Owner only, cannot be granted: costs, profit, supplier payments, expenses, financial reports, team, activity log, agent pricing.")}</p></fieldset>`}
         <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button>
+          ${id && !isOwn ? `<button type="button" class="btn btn--ghost" id="sfMfa" title="${T("إذا فقد الموظف جواله: يربط تطبيقاً جديداً عند دخوله القادم", "If the employee lost their phone: they link a new app at their next sign-in")}">🔐 ${T("إعادة ضبط التحقق بخطوتين", "Reset two-step verification")}</button>` : ""}
           ${id && !isOwn ? `<button type="button" class="btn btn--ghost danger" id="sfDel">${T("حذف الموظف", "Delete employee")}</button>` : ""}</div>
       </form>`, true);
     const f = $("#sfForm");
@@ -955,6 +957,14 @@
       const btn = f.querySelector("[type=submit]"); btn.disabled = true;
       try { await DB.admin("save_staff", payload); } catch (er) { btn.disabled = false; return errToast(er); }
       closeModal(); toast(T("تم حفظ الموظف", "Employee saved")); showApp();
+    });
+    const mfa = $("#sfMfa");
+    if (mfa) mfa.addEventListener("click", async () => {
+      if (mfa.dataset.confirm !== "1") { mfa.dataset.confirm = "1"; mfa.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
+      mfa.disabled = true;
+      try { await DB.admin("reset_mfa", { id }); } catch (er) { mfa.disabled = false; return errToast(er); }
+      toast(T("تمت إعادة الضبط: سيربط الموظف تطبيقاً جديداً عند دخوله القادم", "Reset done: the employee links a new app at their next sign-in"));
+      mfa.textContent = "✓";
     });
     const del = $("#sfDel");
     if (del) del.addEventListener("click", async () => {

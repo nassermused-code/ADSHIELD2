@@ -616,6 +616,7 @@
     e.preventDefault();
     const r = await DB.login($("#aioUser").value, $("#aioPass").value);
     if (!r) return showLogin(T("اسم المستخدم أو كلمة المرور غير صحيحة", "Wrong username or password"));
+    if (r.error === "mfa") return showLogin(T("لم تكتمل خطوة التحقق الثانية. حاول مرة أخرى.", "Two-step verification was not completed. Try again."));
     if (r.error) return showLogin(T("الحساب موقوف", "This account is suspended"));
     if (r.role !== "owner") { await DB.logout(); return showLogin(T("المكتب الإلكتروني متاح لحساب المالك فقط", "The AI office is for the owner's account only")); }
     start().catch((er) => toast(er.message));

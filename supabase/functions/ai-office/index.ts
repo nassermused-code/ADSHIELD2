@@ -903,6 +903,9 @@ async function tickRound(db: any, anthropic: Anthropic, owner: Record<string, an
   return results.filter((x: any) => !x.skipped);
 }
 
+// Two-step verification: the session's level (aal) comes from the signed token that getUser just checked
+const tokenAal = (t: string) => { try { const p = t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return String(JSON.parse(atob(p + "=".repeat((4 - p.length % 4) % 4))).aal || ""); } catch { return ""; } };
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return fail("POST only", 405);
@@ -920,6 +923,7 @@ Deno.serve(async (req) => {
   const { data: me } = await db.from("profiles").select("*").eq("id", who.user.id).single();
   const isOwner = me?.kind === "owner";
   if (!me || me.status !== "active" || !(isOwner || (me.kind === "staff" && (me.perms || []).includes("ai_office")))) return fail("Not allowed", 403);
+  { const { data: mfa } = await db.rpc("mfa_ok_for", { p_uid: who.user.id, p_aal: tokenAal(token) }); if (mfa !== true) return fail("Two-step verification needed", 403); }
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return fail("Bad JSON"); }
   // A staff member works only with the jobs they asked for (and the departments' parts of those jobs)

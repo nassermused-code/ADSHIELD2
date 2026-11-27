@@ -401,10 +401,13 @@
   }
 
   // Airline logos live in assets/img/airlines/<IATA code>.webp; a lettered tile is the fallback
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (img && img.tagName === "IMG" && img.dataset.logo && img.parentNode) { const box = img.parentNode; box.classList.add("fl__logo--txt"); box.textContent = img.dataset.logo; }
+  }, true);
   function logoHtml(cr) {
     if (cr.c) {
-      return `<span class="fl__logo" style="--brand:${cr.col}"><img src="assets/img/airlines/${cr.c}.webp" alt="${esc(cr.n)}" width="40" height="40" loading="lazy"
-        onerror="this.parentNode.classList.add('fl__logo--txt');this.parentNode.textContent='${cr.c}'"></span>`;
+      return `<span class="fl__logo" style="--brand:${cr.col}"><img src="assets/img/airlines/${cr.c}.webp" alt="${esc(cr.n)}" width="40" height="40" loading="lazy" data-logo="${cr.c}"></span>`;
     }
     return `<span class="fl__logo fl__logo--txt" style="--brand:${cr.col}">✈</span>`;
   }

@@ -49,6 +49,94 @@ window.GTDB = (() => {
   const mapJournal = (r) => ({ id: r.id, date: r.date, memo: r.memo, lines: (r.lines || []).map((l) => ({ account: String(l.account), debit: +l.debit || 0, credit: +l.credit || 0, note: l.note || "" })) });
   const mapTask = (r) => ({ id: r.id, title: r.title, details: r.details, assignee: r.assignee, due: r.due || "", priority: r.priority, status: r.status, bookingId: r.booking_id, created: r.created, createdBy: r.created_by, doneAt: r.done_at || "" });
 
+  /* ---------- Two-step verification (authenticator app) ----------
+     Owner and staff accounts must pass a second step: a 6-digit code from an app such as
+     Google Authenticator or Microsoft Authenticator. The database enforces it too:
+     once an account has the app linked, nothing is readable without the code. */
+  const TT = (ar, en) => (window.T ? window.T(ar, en) : en);
+  async function mfaNeed() {
+    if (!profile || !["owner", "staff"].includes(profile.kind)) return null;
+    const { data, error } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (error || !data || data.currentLevel === "aal2") return null;
+    return data.nextLevel === "aal2" ? "verify" : "setup";
+  }
+  function mfaDialog(mode) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement("div");
+      wrap.className = "gt-mfa"; wrap.setAttribute("role", "dialog"); wrap.setAttribute("aria-modal", "true");
+      wrap.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(3,20,12,.72);display:grid;place-items:center;padding:16px;overflow:auto";
+      const card = document.createElement("form");
+      card.noValidate = true;
+      card.style.cssText = "background:#fff;color:#10231a;border-radius:18px;max-width:420px;width:100%;padding:24px;display:grid;gap:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);font:inherit";
+      const inp = "font:inherit;font-size:1.4rem;letter-spacing:.35em;text-align:center;padding:.55em;border:1px solid #c9d6ce;border-radius:12px;width:100%;box-sizing:border-box";
+      card.innerHTML = `<h2 style="margin:0;font-size:1.25rem">🔐 ${TT("التحقق بخطوتين", "Two-step verification")}</h2>
+        <div data-body style="display:grid;gap:10px"><p style="margin:0">${TT("جارٍ التحضير…", "Getting ready…")}</p></div>
+        <label style="display:grid;gap:6px"><span data-label style="font-weight:600"></span><input data-code inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" dir="ltr" style="${inp}" required></label>
+        <p data-err role="status" aria-live="polite" style="margin:0;color:#b42318;min-height:1.2em"></p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap"><button type="submit" class="btn btn--accent">${TT("تأكيد", "Confirm")}</button><button type="button" data-cancel class="btn btn--ghost">${TT("إلغاء وتسجيل الخروج", "Cancel and sign out")}</button></div>`;
+      wrap.appendChild(card);
+      document.body.appendChild(wrap);
+      const $q = (sel) => card.querySelector(sel);
+      const err = (m) => { $q("[data-err]").textContent = m || ""; };
+      const done = (ok) => { wrap.remove(); resolve(ok); };
+      let factorId = null;
+      $q("[data-cancel]").addEventListener("click", () => done(false));
+      (async () => {
+        try {
+          const { data: list } = await sb.auth.mfa.listFactors();
+          if (mode === "verify") {
+            const f = ((list && list.totp) || []).find((x) => x.status === "verified");
+            if (!f) throw new Error("no factor");
+            factorId = f.id;
+            $q("[data-body]").innerHTML = `<p style="margin:0">${TT("افتح تطبيق المصادقة على جوالك واكتب الرمز المكوّن من 6 أرقام لحساب Green Travel.", "Open the authenticator app on your phone and enter the 6-digit code for Green Travel.")}</p>`;
+          } else {
+            // Remove any half-finished setup, then start a new one
+            for (const f of ((list && list.all) || []).filter((x) => x.status !== "verified")) await sb.auth.mfa.unenroll({ factorId: f.id });
+            const { data, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "Green Travel " + new Date().toISOString().slice(0, 16) });
+            if (error) throw error;
+            factorId = data.id;
+            const qr = document.createElement("img");
+            const raw = String(data.totp.qr_code || ""), comma = raw.indexOf(",");
+            qr.src = raw.startsWith("data:image/svg+xml") && comma > 0 && !/;base64,/.test(raw) ? "data:image/svg+xml;charset=utf-8," + encodeURIComponent(decodeURIComponent(raw.slice(comma + 1))) : raw; qr.alt = TT("رمز QR للربط", "QR code to link the app"); qr.width = 180; qr.height = 180;
+            qr.style.cssText = "justify-self:center;background:#fff;border:1px solid #e3ebe6;border-radius:12px;padding:6px";
+            const body = $q("[data-body]");
+            body.innerHTML = `<p style="margin:0">${TT("لحماية بيانات العملاء، حسابك يحتاج خطوة ثانية عند الدخول. مرة واحدة فقط:", "To protect customer data, your account needs a second step at sign-in. One-time setup:")}</p>
+              <ol style="margin:0;padding-inline-start:1.4em;display:grid;gap:4px;list-style:decimal">
+                <li>${TT("ثبّت تطبيق Google Authenticator أو Microsoft Authenticator على جوالك.", "Install Google Authenticator or Microsoft Authenticator on your phone.")}</li>
+                <li>${TT("في التطبيق اختر «إضافة» ثم «مسح رمز QR» وامسح هذا الرمز.", "In the app choose Add, then Scan a QR code, and scan this code.")}</li>
+                <li>${TT("اكتب الرمز المكوّن من 6 أرقام الذي يظهر في التطبيق.", "Enter the 6-digit code the app shows.")}</li></ol>`;
+            body.appendChild(qr);
+            const sec = document.createElement("p");
+            sec.style.cssText = "margin:0;font-size:.85rem;color:#4a5c52;word-break:break-all";
+            sec.textContent = TT("لا تستطيع المسح؟ أدخل هذا المفتاح يدوياً: ", "Can't scan? Enter this key by hand: ") + data.totp.secret;
+            body.appendChild(sec);
+          }
+          $q("[data-label]").textContent = TT("الرمز من التطبيق", "Code from the app");
+          $q("[data-code]").focus();
+        } catch (e) { err(TT("تعذّر بدء التحقق. حدّث الصفحة وحاول مرة أخرى.", "Could not start verification. Reload the page and try again.")); }
+      })();
+      card.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const code = $q("[data-code]").value.replace(/\D/g, "");
+        if (code.length !== 6 || !factorId) return err(TT("اكتب الرمز المكوّن من 6 أرقام.", "Enter the 6-digit code."));
+        const btn = $q("[type=submit]"); btn.disabled = true; err("");
+        const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code });
+        btn.disabled = false;
+        if (error) { $q("[data-code]").value = ""; $q("[data-code]").focus(); return err(TT("الرمز غير صحيح أو انتهت مدته. جرّب الرمز الجديد.", "Wrong or expired code. Try the new code.")); }
+        done(true);
+      });
+    });
+  }
+  // Ask for the second step when needed; false = the person cancelled (they are signed out)
+  async function mfaGate() {
+    const need = await mfaNeed();
+    if (!need) return true;
+    if (await mfaDialog(need)) return true;
+    await sb.auth.signOut();
+    profile = null;
+    return false;
+  }
+
   /* ---------- Load everything this user may see ---------- */
   async function loadProfile() {
     const { data: { session } } = await sb.auth.getSession();
@@ -104,7 +192,7 @@ window.GTDB = (() => {
     channel = sb.channel("gt-live").on("postgres_changes", { event: "*", schema: "public" }, () => { clearTimeout(timer); timer = setTimeout(() => load().catch(() => {}), 500); }).subscribe();
   }
   const ready = (async () => {
-    try { await loadProfile(); await load(); subscribe(); } catch (e) { console.error(e); }
+    try { await loadProfile(); if (!document.querySelector("#ofLogin, #aioLogin") || await mfaGate()) { await load(); subscribe(); } else notify(); } catch (e) { console.error(e); }
   })();
 
   const api = {
@@ -127,6 +215,7 @@ window.GTDB = (() => {
       if (!profile) { await sb.auth.signOut(); return null; }
       if (profile.status !== "active") { await sb.auth.signOut(); profile = null; return { error: "inactive" }; }
       if (profile.kind === "company") return { kind: "company", id: profile.id, name: profile.name, email: profile.email };
+      if (!(await mfaGate())) return { error: "mfa" };
       sb.rpc("touch_login").then(() => {}, () => {});
       await load();
       subscribe();

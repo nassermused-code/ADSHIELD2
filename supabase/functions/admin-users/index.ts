@@ -16,6 +16,9 @@ const fail = (msg: string, status = 400) => json({ error: msg }, status);
 const str = (v: unknown, max = 160) => String(v ?? "").trim().slice(0, max);
 const BAN = "876000h";
 
+// Two-step verification: the session's level (aal) comes from the signed token that getUser just checked
+const tokenAal = (t: string) => { try { const p = t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return String(JSON.parse(atob(p + "=".repeat((4 - p.length % 4) % 4))).aal || ""); } catch { return ""; } };
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return fail("POST only", 405);
@@ -51,6 +54,7 @@ Deno.serve(async (req) => {
   if (!who?.user) return fail("Not signed in", 401);
   const { data: me } = await admin.from("profiles").select("*").eq("id", who.user.id).single();
   if (!me || me.status !== "active" || !(me.kind === "owner" || me.kind === "staff")) return fail("Not allowed", 403);
+  { const { data: mfa } = await admin.rpc("mfa_ok_for", { p_uid: who.user.id, p_aal: tokenAal(token) }); if (mfa !== true) return fail("Two-step verification needed", 403); }
   const isOwner = me.kind === "owner";
   const canManageAgents = isOwner || (me.perms || []).includes("agents_manage");
   const canCorporate = isOwner || (me.perms || []).includes("corporate");
@@ -103,6 +107,18 @@ Deno.serve(async (req) => {
     const { error } = await admin.auth.admin.deleteUser(target.id);
     if (error) return fail(error.message);
     await log("Deleted employee", target.name);
+    return json({ ok: true });
+  }
+
+  // Lost phone: the owner removes an employee's authenticator so they can link a new one at the next sign-in
+  if (action === "reset_mfa") {
+    if (!isOwner) return fail("Only the owner can do this", 403);
+    const { data: target } = await admin.from("profiles").select("id, kind, name").eq("id", str(body.id, 60)).single();
+    if (!target || target.kind !== "staff") return fail("Not found", 404);
+    const { data: f, error } = await admin.auth.admin.mfa.listFactors({ userId: target.id });
+    if (error) return fail(error.message);
+    for (const x of f?.factors || []) await admin.auth.admin.mfa.deleteFactor({ userId: target.id, id: x.id });
+    await log("Reset two-step verification", target.name);
     return json({ ok: true });
   }
 
