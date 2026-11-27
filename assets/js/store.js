@@ -215,7 +215,8 @@ window.GTDB = (() => {
       if (!profile) { await sb.auth.signOut(); return null; }
       if (profile.status !== "active") { await sb.auth.signOut(); profile = null; return { error: "inactive" }; }
       if (profile.kind === "company") return { kind: "company", id: profile.id, name: profile.name, email: profile.email };
-      if (!(await mfaGate())) return { error: "mfa" };
+      // The company portal only tells owner/staff to use the back office, so no second step there
+      if (profile.kind !== "company" && !document.getElementById("cpLogin") && !(await mfaGate())) return { error: "mfa" };
       sb.rpc("touch_login").then(() => {}, () => {});
       await load();
       subscribe();
