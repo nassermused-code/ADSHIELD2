@@ -229,6 +229,7 @@
       btn.disabled = false;
       if (r && r.error === "inactive") { st.textContent = T("هذا الحساب موقوف. تواصل مع جرين ترافيل.", "This account is suspended. Contact Green Travel."); return; }
       if (!r) { st.textContent = T("البريد أو كلمة المرور غير صحيحة.", "Incorrect email or password."); return; }
+      if (r.kind === "staff") { await DB.logout(); st.innerHTML = `${T("هذا حساب المالك أو موظف: ادخل من", "This is an owner or staff account. Sign in at the")} <a href="office.html">${T("المكتب الخلفي", "back office")}</a>.`; return; }
       if (r.kind !== "company") { await DB.logout(); st.textContent = T("هذه البوابة لحسابات الشركات فقط.", "This portal is for company accounts only."); return; }
       try { await load(); } catch (er) { st.textContent = er.message; return; }
       view = "home"; location.hash = "home"; show();
