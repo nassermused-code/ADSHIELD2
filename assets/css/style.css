@@ -1525,3 +1525,14 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 .doc-head .st-meta { order: 3; margin: 0; }
 .doc-logo img { width: 110px; height: 110px; object-fit: contain; border-radius: 50%; }
 @media (max-width: 560px) { .doc-logo img { width: 72px; height: 72px; } .doc-head { gap: 8px; } }
+
+/* Invoices and tickets: professional page margins with a framed border on every side */
+.invoice-doc, .ticket-doc { position: relative; padding: 34px 38px 30px; border: 1px solid #b9cdbf; border-top: 6px solid var(--g-700, #0b3d1f); border-radius: 6px; background: #fff; box-sizing: border-box; }
+.invoice-doc::before, .ticket-doc::before { content: ""; position: absolute; inset: 7px; border: 1px solid #e1ebe4; border-radius: 3px; pointer-events: none; z-index: 0; }
+.invoice-doc > *, .ticket-doc > * { position: relative; z-index: 1; }
+.invoice-doc > .inv-watermark { position: absolute; z-index: 2; }
+@media (max-width: 560px) { .invoice-doc, .ticket-doc { padding: 22px 16px 20px; } }
+@media print {
+  @page { size: A4; margin: 12mm; }
+  .print-area .invoice-doc, .print-area .ticket-doc { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

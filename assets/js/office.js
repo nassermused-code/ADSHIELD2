@@ -1069,7 +1069,7 @@
       </div>
       ${kind === "ticket" && b.reminders && b.reminders.ticket ? `<p class="hint">${icon("i-check")}${T("أُرسلت التذكرة بالبريد في", "Ticket emailed on")} ${fmtTime(b.reminders.ticket)}</p>` : ""}`;
   }
-  const pdfOpts = (name) => ({ margin: 8, filename: name, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } });
+  const pdfOpts = (name) => ({ margin: 10, filename: name, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } });
   async function pdfBlob(el, name) { await loadPdfLib(); return window.html2pdf().set(pdfOpts(name)).from(el).outputPdf("blob"); }
   const blobB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(blob); });
   function bindDocActions(b, kind, o) {
@@ -1459,7 +1459,7 @@
   async function savePdf(el, filename) {
     try {
       await loadPdfLib();
-      await window.html2pdf().set({ margin: 8, filename, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }).from(el).save();
+      await window.html2pdf().set({ margin: 10, filename, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }).from(el).save();
       return true;
     } catch (e) { toast(T("تعذّر إنشاء PDF، استخدم «طباعة» ثم «حفظ كـ PDF».", "Couldn't create the PDF; use Print, then Save as PDF.")); return false; }
   }
