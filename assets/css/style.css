@@ -1517,3 +1517,8 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 .trv-row__end:empty { display: none; }
 #trvAdd { margin-top: 10px; }
 @media (max-width: 760px) { .trv-row { grid-template-columns: 1fr 1fr; } }
+
+/* Invoices and tickets: the company logo centred at the top, larger */
+.doc-head { flex-wrap: wrap; }
+.doc-logo { flex: 0 0 100%; display: flex; justify-content: center; margin-bottom: 6px; }
+.doc-logo img { width: 110px; height: 110px; object-fit: contain; border-radius: 50%; }

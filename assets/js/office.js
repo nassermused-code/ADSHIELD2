@@ -953,7 +953,7 @@
     const addr = coAddress();
     return `<div class="statement invoice-doc" id="invoiceDoc" lang="en" dir="ltr">
       <div class="inv-watermark inv-watermark--${stamp[0]}" aria-hidden="true"><span>${stamp[1]}</span>${stamp[0] === "paid" && m.pays.length ? `<small>${enDate(m.pays.map((x) => x.date).sort().pop())}</small>` : ""}</div>
-      <header class="st-head doc-head"><img src="assets/img/logo.png" alt="" width="58" height="58">
+      <header class="st-head doc-head"><div class="doc-logo"><img src="assets/img/logo-512.png" alt="Logo" width="110" height="110"></div>
         <div class="doc-co"><b>${esc(c.tradeName)}</b>${c.legalName && c.legalName !== c.tradeName ? `<small>${esc(c.legalName)}</small>` : ""}${addr ? `<small>${esc(addr)}</small>` : ""}<small>${esc(coPhones().join(" · "))}</small><small>${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small>${esc(coIds())}</small>` : ""}</div>
         <div class="st-meta"><b>INVOICE</b><span class="mono">${esc(inv.number)}</span><span>Date: ${enDate(inv.date)}</span><span>Due: ${inv.due && inv.due !== inv.date ? enDate(inv.due) : "On receipt"}</span></div></header>
       <div class="inv-parties">
@@ -1416,7 +1416,7 @@
   const coIds = () => { const c = CO(); return [c.taxId ? `EIN / Tax ID ${c.taxId}` : "", c.iata ? `IATA ${c.iata}` : "", c.sellerOfTravel ? `Seller of Travel ${c.sellerOfTravel}` : ""].filter(Boolean).join(" · "); };
   function letterhead(titleEn, titleAr, meta) {
     const c = CO();
-    return `<header class="st-head doc-head"><img src="assets/img/logo.png" alt="" width="58" height="58">
+    return `<header class="st-head doc-head"><div class="doc-logo"><img src="assets/img/logo-512.png" alt="Logo" width="110" height="110"></div>
       <div class="doc-co"><b>${esc(c.tradeName)} · ${esc(c.tradeNameAr)}</b><small>${esc(c.legalName)}</small>${coAddress() ? `<small>${esc(coAddress())}</small>` : ""}
         <small dir="ltr">${esc(coPhones().join(" · "))}</small><small dir="ltr">${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small dir="ltr">${esc(coIds())}</small>` : ""}</div>
       <div class="st-meta"><b>${titleEn}</b><span>${titleAr}</span>${meta || ""}</div></header>`;
