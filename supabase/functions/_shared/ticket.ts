@@ -1,4 +1,5 @@
 // Green Travel: e-ticket / travel reminder email (Arabic + English).
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const CABIN: Record<string, [string, string]> = { economy: ["سياحية", "Economy"], premium: ["سياحية ممتازة", "Premium economy"], business: ["رجال أعمال", "Business"], first: ["أولى", "First"] };
 const fmt = (iso: string) => (iso ? new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
@@ -82,15 +83,40 @@ export function ticketEmail(b: Record<string, any>, kind: Kind) {
   return { subject, html, text };
 }
 
-// Sends through Resend (https://resend.com). Needs the RESEND_API_KEY secret; EMAIL_FROM is optional.
-export async function sendEmail(to: string, msg: { subject: string; html: string; text: string }) {
+// Is email set up? Either the company's own mail server (cPanel: SMTP_HOST, SMTP_USER, SMTP_PASS) or Resend (RESEND_API_KEY).
+export const emailConfigured = () => !!((Deno.env.get("SMTP_HOST") && Deno.env.get("SMTP_USER") && Deno.env.get("SMTP_PASS")) || Deno.env.get("RESEND_API_KEY"));
+
+// Sends through the company's cPanel mail server when SMTP_* is set (SSL, port 465 by default), otherwise through Resend.
+// fromName / replyTo: the employee who sends it, so the customer's reply reaches them.
+// attachments: files sent with the email (for example the invoice or ticket PDF)
+export type Attachment = { filename: string; content: Uint8Array; contentType: string };
+const b64 = (u: Uint8Array) => { let s = ""; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
+export async function sendEmail(to: string, msg: { subject: string; html: string; text: string }, opt: { fromName?: string; replyTo?: string; attachments?: Attachment[] } = {}) {
+  const name = opt.fromName ? `${opt.fromName.replace(/[<>"\r\n]/g, "").slice(0, 60)} · Green Travel` : "Green Travel";
+  const replyTo = opt.replyTo && /^\S+@\S+\.\S+$/.test(opt.replyTo) ? opt.replyTo : "info@greentravel.us";
+  const host = Deno.env.get("SMTP_HOST"), user = Deno.env.get("SMTP_USER"), pass = Deno.env.get("SMTP_PASS");
+  if (host && user && pass) {
+    const client = new SMTPClient({ connection: { hostname: host, port: Number(Deno.env.get("SMTP_PORT") || 465), tls: true, auth: { username: user, password: pass } } });
+    try {
+      await client.send({ from: `${name} <${user}>`, to, replyTo, subject: msg.subject, content: msg.text, html: msg.html,
+        attachments: (opt.attachments || []).map((a) => ({ filename: a.filename, content: a.content, encoding: "binary" as const, contentType: a.contentType })) });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: "send_failed: " + String((e as Error)?.message || e).slice(0, 300) };
+    } finally {
+      try { await client.close(); } catch { /* already closed */ }
+    }
+  }
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return { ok: false, error: "email_not_configured" };
-  const from = Deno.env.get("EMAIL_FROM") || "Green Travel <onboarding@resend.dev>";
+  const fromEnv = Deno.env.get("EMAIL_FROM") || "Green Travel <onboarding@resend.dev>";
+  const addr = (fromEnv.match(/<([^>]+)>/) || [, fromEnv])[1];
+  const from = opt.fromName ? `${name} <${addr}>` : fromEnv;
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from, to: [to], reply_to: "info@greentravel.us", subject: msg.subject, html: msg.html, text: msg.text }),
+    body: JSON.stringify({ from, to: [to], reply_to: replyTo, subject: msg.subject, html: msg.html, text: msg.text,
+      ...(opt.attachments?.length ? { attachments: opt.attachments.map((a) => ({ filename: a.filename, content: b64(a.content) })) } : {}) }),
   });
   if (!res.ok) return { ok: false, error: "send_failed: " + (await res.text()).slice(0, 300) };
   return { ok: true };

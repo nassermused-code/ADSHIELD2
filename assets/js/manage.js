@@ -98,8 +98,8 @@
       <style>body{font-family:Arial,sans-serif;color:#10231a;max-width:720px;margin:24px auto;padding:0 16px}header{display:flex;gap:12px;align-items:center;border-bottom:2px solid #0b3d1f;padding-bottom:10px;margin-bottom:14px}
       header img{width:56px;height:56px}small{color:#5b6b60}.mg-head{display:flex;justify-content:space-between}.mg-head b{font-size:22px;display:block}ul{padding-inline-start:18px}li{margin-bottom:6px}.pill{border:1px solid #0b3d1f;border-radius:99px;padding:2px 10px;font-size:12px}</style></head>
       <body><header><img src="${location.origin}/assets/img/logo.png" alt=""><div><b>Green Travel · جرين ترافيل</b><br><small>info@greentravel.us · +1 (708) 963-2552 · +1 (708) 940-2929 · +1 (331) 213-3768 · +1 (708) 953-2244</small></div></header>
-      ${itinerary(b)}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
-    w.document.close();
+      ${itinerary(b)}</body></html>`);
+    w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500);
   }
   function open() { ensure(); modal.hidden = false; document.body.style.overflow = "hidden"; setTimeout(() => $("#mgRef").focus(), 50); }
   function close() { if (!modal) return; modal.hidden = true; document.body.style.overflow = ""; if (location.hash === "#manage") history.replaceState(null, "", location.pathname + location.search); }

@@ -1,7 +1,7 @@
 // Green Travel: account management (runs on the server with the service key).
 // Only the owner can create/edit staff; the owner or staff with "agents_manage" can create/edit B2B agent logins
 // (pricing and credit limit stay owner-only). Creating the owner needs the one-time setup code saved as the
-// OWNER_SETUP_CODE secret in Supabase, and only works while no owner exists.
+// OWNER_SETUP_CODE secret in Supabase (or the one-time code in private.settings), and only works while no owner exists.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const cors = {
@@ -9,12 +9,15 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const PERMS = ["bookings_all", "bookings_create", "bookings_issue", "bookings_cancel", "payments", "customers", "agents", "agents_manage", "export", "corporate", "ai_office"];
+const PERMS = ["bookings_all", "bookings_create", "bookings_issue", "bookings_cancel", "payments", "customers", "agents", "agents_manage", "export", "corporate", "ai_office", "billing"];
 const STAFF_DOMAIN = "staff.greentravel.us";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const fail = (msg: string, status = 400) => json({ error: msg }, status);
 const str = (v: unknown, max = 160) => String(v ?? "").trim().slice(0, max);
 const BAN = "876000h";
+
+// Two-step verification: the session's level (aal) comes from the signed token that getUser just checked
+const tokenAal = (t: string) => { try { const p = t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); return String(JSON.parse(atob(p + "=".repeat((4 - p.length % 4) % 4))).aal || ""); } catch { return ""; } };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -28,9 +31,12 @@ Deno.serve(async (req) => {
   if (action === "bootstrap") {
     const { count } = await admin.from("profiles").select("id", { count: "exact", head: true }).eq("kind", "owner");
     if (count) return fail("Owner already exists", 409);
+    // The code is the OWNER_SETUP_CODE secret, or else the one-time code kept in the database (private.settings)
     const code = Deno.env.get("OWNER_SETUP_CODE") || "";
-    if (code.length < 6) return fail("Setup code is not configured yet. Add the OWNER_SETUP_CODE secret in Supabase.", 403);
-    if (String(body.setupCode || "") !== code) return fail("Wrong setup code", 403);
+    const given = String(body.setupCode || "").trim();
+    const okSecret = code.length >= 6 && given === code;
+    const { data: okDb } = okSecret ? { data: false } : await admin.rpc("owner_setup_check", { p_code: given });
+    if (!okSecret && okDb !== true) return fail("Wrong setup code", 403);
     const username = str(body.username, 40).toLowerCase();
     if (!/^[a-z0-9._-]{3,}$/.test(username) || String(body.password || "").length < 8) return fail("Username (3+ English letters) and a password of 8+ characters are required");
     const email = `${username}@${STAFF_DOMAIN}`;
@@ -48,6 +54,7 @@ Deno.serve(async (req) => {
   if (!who?.user) return fail("Not signed in", 401);
   const { data: me } = await admin.from("profiles").select("*").eq("id", who.user.id).single();
   if (!me || me.status !== "active" || !(me.kind === "owner" || me.kind === "staff")) return fail("Not allowed", 403);
+  { const { data: mfa } = await admin.rpc("mfa_ok_for", { p_uid: who.user.id, p_aal: tokenAal(token) }); if (mfa !== true) return fail("Two-step verification needed", 403); }
   const isOwner = me.kind === "owner";
   const canManageAgents = isOwner || (me.perms || []).includes("agents_manage");
   const canCorporate = isOwner || (me.perms || []).includes("corporate");
@@ -103,6 +110,18 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
+  // Lost phone: the owner removes an employee's authenticator so they can link a new one at the next sign-in
+  if (action === "reset_mfa") {
+    if (!isOwner) return fail("Only the owner can do this", 403);
+    const { data: target } = await admin.from("profiles").select("id, kind, name").eq("id", str(body.id, 60)).single();
+    if (!target || target.kind !== "staff") return fail("Not found", 404);
+    const { data: f, error } = await admin.auth.admin.mfa.listFactors({ userId: target.id });
+    if (error) return fail(error.message);
+    for (const x of f?.factors || []) await admin.auth.admin.mfa.deleteFactor({ userId: target.id, id: x.id });
+    await log("Reset two-step verification", target.name);
+    return json({ ok: true });
+  }
+
   // ---------- B2B agents ----------
   if (action === "save_partner") {
     if (!canManageAgents) return fail("Not allowed", 403);
@@ -112,7 +131,10 @@ Deno.serve(async (req) => {
     if (body.password && String(body.password).length < 8) return fail("Password must be 8+ characters");
     if (!id && !body.password) return fail("Password is required");
     const status = ["active", "pending", "suspended"].includes(body.status) ? body.status : "active";
-    const row: Record<string, unknown> = { email, agency: str(body.agency, 120), contact: str(body.contact, 120), phone: str(body.phone, 40), status };
+    const row: Record<string, unknown> = { email, agency: str(body.agency, 120), contact: str(body.contact, 120), phone: str(body.phone, 40), status,
+      // Full company details (shown on invoices and statements)
+      legal_name: str(body.legalName, 160), address: str(body.address, 200), city: str(body.city, 80), state: str(body.state, 60), zip: str(body.zip, 20), country: str(body.country, 60),
+      tax_id: str(body.taxId, 40), iata: str(body.iata, 40), license_no: str(body.licenseNo, 60), office_phone: str(body.officePhone, 40), contact_email: str(body.contactEmail, 160).toLowerCase() || undefined, website: str(body.website, 200) || undefined, notes: str(body.notes, 2000) };
     if (isOwner && body.creditLimit != null) row.credit_limit = Math.max(0, Number(body.creditLimit) || 0);
     let pid = id;
     if (id) {

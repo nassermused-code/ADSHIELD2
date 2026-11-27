@@ -178,13 +178,23 @@
       else if (e.key === "Escape" && !box.hidden) { e.stopPropagation(); close(); }
       else if (e.key === "Tab" && !box.hidden && active >= 0 && input.value.trim() && !input.dataset.code) choose(items[active]);
     });
+    // Choose on a tap, not on the first touch, so a finger can scroll the list on phones.
+    let press = null;
     box.addEventListener("pointerdown", (e) => {
-      const li = e.target.closest("li[data-i]");
-      if (!li) return;
-      e.preventDefault();
-      choose(items[+li.dataset.i]);
+      if (e.pointerType === "mouse") e.preventDefault(); // keep the input focused for mouse users
+      press = { x: e.clientX, y: e.clientY, li: e.target.closest("li[data-i]") };
     });
-    input.addEventListener("blur", () => setTimeout(close, 120));
+    box.addEventListener("pointermove", (e) => {
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) press.li = null; // it is a scroll
+    });
+    box.addEventListener("pointerup", (e) => {
+      const p = press; press = null;
+      if (p && p.li && p.li === e.target.closest("li[data-i]")) choose(items[+p.li.dataset.i]);
+    });
+    box.addEventListener("pointercancel", () => { press = null; }); // the browser took the touch for scrolling
+    input.addEventListener("blur", () => setTimeout(() => { if (!press && !box.matches(":hover")) close(); }, 150));
+    // On phones the input loses focus while the list scrolls: close only on a touch outside the field
+    document.addEventListener("pointerdown", (e) => { if (!box.hidden && !field.contains(e.target)) close(); });
   }
 
   function resolveAirport(input) {
@@ -391,10 +401,13 @@
   }
 
   // Airline logos live in assets/img/airlines/<IATA code>.webp; a lettered tile is the fallback
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (img && img.tagName === "IMG" && img.dataset.logo && img.parentNode) { const box = img.parentNode; box.classList.add("fl__logo--txt"); box.textContent = img.dataset.logo; }
+  }, true);
   function logoHtml(cr) {
     if (cr.c) {
-      return `<span class="fl__logo" style="--brand:${cr.col}"><img src="assets/img/airlines/${cr.c}.webp" alt="${esc(cr.n)}" width="40" height="40" loading="lazy"
-        onerror="this.parentNode.classList.add('fl__logo--txt');this.parentNode.textContent='${cr.c}'"></span>`;
+      return `<span class="fl__logo" style="--brand:${cr.col}"><img src="assets/img/airlines/${cr.c}.webp" alt="${esc(cr.n)}" width="40" height="40" loading="lazy" data-logo="${cr.c}"></span>`;
     }
     return `<span class="fl__logo fl__logo--txt" style="--brand:${cr.col}">✈</span>`;
   }
@@ -671,7 +684,7 @@
   }
 
   // Option 1 — book online: the customer enters the passengers and contact details, gets a reference
-  let bookingModal, currentBooking = null;
+  let bookingModal, currentBooking = null, currentIntl = false;
   function ensureBookingModal() {
     if (bookingModal) return bookingModal;
     bookingModal = document.createElement("div");
@@ -718,7 +731,10 @@
     return bookingModal;
   }
 
-  function paxFields() {
+  // International trips: every traveler gives their passport number, expiry and issuing country, and confirms them
+  const tripIsIntl = (r) => r.legs.some((l) => l.from.cc && l.to.cc && l.from.cc !== l.to.cc) || !!(state.o && state.d && state.o.cc && state.d.cc && state.o.cc !== state.d.cc);
+  const tripEnd = (r) => r.legs.reduce((m, l) => { const d = l.plus ? addDays(l.dateIso, l.plus) : l.dateIso; return d > m ? d : m; }, "");
+  function paxFields(intl, endIso) {
     const groups = [["adults", T("بالغ", "Adult")], ["children", T("طفل", "Child")], ["infants", T("رضيع", "Infant")]];
     let i = 0, html = "";
     groups.forEach(([k, lab]) => {
@@ -731,9 +747,16 @@
             <div class="field"><label for="bkDob${i}">${T("تاريخ الميلاد", "Date of birth")}</label><input id="bkDob${i}" name="dob${i}" type="date" max="${todayIso()}" required></div>
           </div>
           <div class="field field--gender"><label for="bkGender${i}">${T("الجنس", "Gender")}</label><select id="bkGender${i}" name="gender${i}" required><option value="m">${T("ذكر", "Male")}</option><option value="f">${T("أنثى", "Female")}</option></select></div>
+          ${intl ? `<div class="form-row form-row--3 bk-passport">
+            <div class="field"><label for="bkPpNo${i}">${T("رقم جواز السفر", "Passport number")}</label><input id="bkPpNo${i}" name="ppno${i}" dir="ltr" autocomplete="off" autocapitalize="characters" maxlength="20" required></div>
+            <div class="field"><label for="bkPpExp${i}">${T("تاريخ انتهاء الجواز", "Passport expiry date")}</label><input id="bkPpExp${i}" name="ppexp${i}" type="date" min="${endIso}" required></div>
+            <div class="field"><label for="bkPpCc${i}">${T("الدولة المُصدِرة للجواز", "Issuing country")}</label><input id="bkPpCc${i}" name="ppcc${i}" autocomplete="${i === 1 ? "country-name" : "off"}" maxlength="60" required></div>
+          </div>` : ""}
           <input type="hidden" name="type${i}" value="${lab}"><input type="hidden" name="ptype${i}" value="${k === "adults" ? "adult" : k === "children" ? "child" : "infant"}"></fieldset>`;
       }
     });
+    if (intl) html += `<p class="bk-pp-note">${T("رحلة دولية: بيانات الجواز مطلوبة لكل مسافر. كثير من الدول تشترط أن يكون الجواز صالحاً 6 أشهر على الأقل بعد موعد السفر.", "International trip: passport details are required for every traveler. Many countries require the passport to be valid for at least 6 months after travel.")}</p>
+      <label class="consent"><input type="checkbox" id="bkPpOk" required> ${T("أؤكد أن أرقام الجوازات وتواريخ انتهائها مطابقة تماماً لجوازات المسافرين.", "I confirm the passport numbers and expiry dates match each traveler's passport exactly.")}</label>`;
     return html;
   }
 
@@ -744,7 +767,8 @@
     $('[data-step="form"]', m).hidden = false;
     $('[data-step="done"]', m).hidden = true;
     $("#bkFlight").innerHTML = `${logoHtml(r.cr)}<div><b>${esc(r.cr.n)}</b><small>${r.legs.map((l) => `<span dir="ltr">${l.from.code} ${hm(l.dep)} → ${l.to.code} ${hm(l.arr)}${l.plus ? "+" + l.plus : ""}</span>`).join(" · ")}</small><small>${dateAr(r.legs[0].dateIso, { day: "numeric", month: "long" })}${r.legs[1] ? " – " + dateAr(r.legs[1].dateIso, { day: "numeric", month: "long" }) : ""} · ${CABIN_AR[state.cabin]}</small></div><strong dir="ltr">${usd.format(r.total)}</strong>`;
-    $("#bkPax").innerHTML = paxFields();
+    currentIntl = tripIsIntl(r);
+    $("#bkPax").innerHTML = paxFields(currentIntl, tripEnd(r));
     $("#bkForm").reset();
     bookingModal.lastFocus = document.activeElement;
     m.hidden = false;
@@ -765,6 +789,17 @@
     if (typeof validate === "function" && !validate(form)) { toast(T("يرجى إكمال الحقول المطلوبة", "Please complete the required fields")); return; }
     const d = Object.fromEntries(new FormData(form));
     const r = currentBooking;
+    const passports = [];
+    if (currentIntl) {
+      const end = tripEnd(r);
+      for (const k of Object.keys(d).filter((x) => /^first\d+$/.test(x))) {
+        const i = k.slice(5), no = String(d["ppno" + i] || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase(), exp = d["ppexp" + i] || "";
+        const bad = (id, msg) => { const el = $("#" + id); if (el) { el.closest(".field").classList.add("is-invalid"); el.focus(); } toast(msg); };
+        if (!/^[A-Z0-9]{5,20}$/.test(no)) return bad("bkPpNo" + i, T(`رقم جواز المسافر ${i} غير صحيح.`, `Traveler ${i}: the passport number looks wrong.`));
+        if (!exp || exp < end) return bad("bkPpExp" + i, T(`جواز المسافر ${i} ينتهي قبل نهاية الرحلة، ويجب تجديده قبل الحجز.`, `Traveler ${i}: the passport expires before the trip ends. It must be renewed first.`));
+        passports.push({ name: `${d[k]} ${d["last" + i]}`.trim().toUpperCase(), number: no, expiry: exp, country: String(d["ppcc" + i] || "").trim() });
+      }
+    }
     const people = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => {
       const i = k.slice(5);
       return `${i}. ${d["first" + i]} ${d["last" + i]} (${d["type" + i]}${T("، ", ", ")}${d["dob" + i]})`;
@@ -773,7 +808,7 @@
     if (r.live && r.canBook && window.GTDB && window.GTDB.flightsApi) {
       const btnL = $('button[type="submit"]', form);
       btnL.disabled = true;
-      const passengers = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => { const i = k.slice(5); return { given: d["first" + i], family: d["last" + i], dob: d["dob" + i], gender: d["gender" + i], type: d["ptype" + i] }; });
+      const passengers = Object.keys(d).filter((k) => /^first\d+$/.test(k)).map((k) => { const i = k.slice(5); return { given: d["first" + i], family: d["last" + i], dob: d["dob" + i], gender: d["gender" + i], type: d["ptype" + i], passport: passports[+i - 1] || null }; });
       let res = null;
       try { res = await window.GTDB.flightsApi("book", { offerId: r.offerId, passengers, contact: { email: d.email, phone: d.phone }, notes: d.notes || "" }); } catch (err) { res = { error: err.message }; }
       btnL.disabled = false;
@@ -791,7 +826,7 @@
           customer: { name: names[0] || "", phone: d.phone, email: d.email },
           route: `${state.o.code} → ${state.d.code}`, airline: r.cr.n, cabin: state.cabin,
           depart: r.legs[0].dateIso, ret: r.legs[1] ? r.legs[1].dateIso : "", pax: names.length || 1, travelers: names,
-          sell: r.total, notes: [people.join("\n"), d.notes].filter(Boolean).join("\n\n"),
+          sell: r.total, notes: [people.join("\n"), d.notes].filter(Boolean).join("\n\n"), passports,
           segments: r.legs.map((l) => ({ from: l.from.code, to: l.to.code, date: l.dateIso, dep: hm(l.dep), arr: hm(l.arr), arrDate: l.plus ? addDays(l.dateIso, l.plus) : l.dateIso, via: l.via ? l.via.code : "" })),
         });
       } catch (err) { console.warn("booking not saved online", err); }

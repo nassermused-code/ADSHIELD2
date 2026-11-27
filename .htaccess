@@ -1,0 +1,35 @@
+# Green Travel: security settings for the website server (HostGator / Apache).
+# Upload this file to public_html together with the site. It must be named exactly ".htaccess".
+# The database and server functions live on Supabase and have their own protection.
+
+Options -Indexes
+ServerSignature Off
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Always use the secure https:// address (needs the free SSL certificate: cPanel → SSL/TLS Status → Run AutoSSL)
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+  # Never serve hidden files (.git, .env, …) or backups
+  RewriteRule (^|/)\.(?!well-known/) - [F,L]
+  RewriteRule \.(bak|old|orig|sql|zip|log|md)$ - [F,L,NC]
+</IfModule>
+
+<IfModule mod_headers.c>
+  # Browsers must use https for a year
+  Header always set Strict-Transport-Security "max-age=31536000"
+  # Only our own scripts (and the few trusted libraries) may run; the site cannot be shown inside another site
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-P4v3BQfs+eZBg+NDVIsgFSX50YC/0WI9GnPtHdU/md0=' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://js.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://qlhtjnhuhkaapzufxvzd.supabase.co wss://qlhtjnhuhkaapzufxvzd.supabase.co https://*.stripe.com; frame-src https://js.stripe.com https://checkout.stripe.com https://*.stripe.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+  Header always set X-Frame-Options "DENY"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), usb=(), payment=(self \"https://js.stripe.com\" \"https://checkout.stripe.com\")"
+  Header always set Cross-Origin-Opener-Policy "same-origin-allow-popups"
+  Header unset X-Powered-By
+  # Staff, partner and company pages: never cached, never in search engines
+  <FilesMatch "^(office|ai-office|b2b|corporate)\.html$">
+    Header always set Cache-Control "no-store"
+    Header always set X-Robots-Tag "noindex, nofollow"
+  </FilesMatch>
+</IfModule>

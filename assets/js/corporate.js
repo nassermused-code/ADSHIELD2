@@ -97,8 +97,8 @@
         <h2>PNR ${esc(b.pnr || "—")} <small>${esc(P.company.name)}</small></h2><p>${esc(b.airline || "")} · ${CABIN()[b.cabin] || ""}${b.baggage ? " · " + esc(b.baggage) : ""}</p>
         <table><tr><th>${T("الرحلة", "Flight")}</th><th>${T("من → إلى", "From → To")}</th><th>${T("التاريخ", "Date")}</th><th>${T("الوقت", "Time")}</th></tr>${segs.map((s) => `<tr><td>${esc(s.flight || "")}</td><td>${esc(s.from)} → ${esc(s.to)}</td><td>${fmtDate(s.date)}</td><td>${esc(s.dep || "")}${s.arr ? " → " + esc(s.arr) : ""}</td></tr>`).join("")}</table>
         <table><tr><th>${T("المسافر", "Traveler")}</th><th>${T("التذكرة", "Ticket")}</th></tr>${(b.travelers || []).map((n, i) => `<tr><td>${esc(n)}</td><td>${esc((b.tickets || [])[i] || "—")}</td></tr>`).join("")}</table>
-        <script>window.onload=()=>setTimeout(()=>print(),300)<\/script></body></html>`);
-      w.document.close();
+        </body></html>`);
+      w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500);
     }));
   }
 
@@ -215,8 +215,8 @@
         <h2>${T("فاتورة", "Invoice")} ${i.id} <small>${esc(P.company.name)}</small></h2><p>${fmtDate(i.period_from)} – ${fmtDate(i.period_to)} · ${T("تستحق", "Due")} ${fmtDate(i.due)}</p>
         <table><tr><th>${T("التاريخ", "Date")}</th><th>${T("المسافر", "Traveler")}</th><th>${T("الرحلة", "Trip")}</th><th>PNR</th><th>${T("القسم", "Cost center")}</th><th>${T("السعر", "Fare")}</th><th>${T("رسوم", "Fee")}</th></tr>
         ${(i.lines || []).map((l) => `<tr><td>${fmtDate(l.date)}</td><td>${esc(l.traveler)}</td><td>${esc(l.route)}</td><td>${esc(l.pnr)}</td><td>${esc(l.costCenter)}</td><td>${usd.format(l.fare)}</td><td>${usd.format(l.fee)}</td></tr>`).join("")}
-        <tfoot><tr><td colspan="5">${T("الإجمالي", "Total")}</td><td colspan="2">${usd.format(i.total)}</td></tr></tfoot></table><script>window.onload=()=>setTimeout(()=>print(),300)<\/script></body></html>`);
-      w.document.close();
+        <tfoot><tr><td colspan="5">${T("الإجمالي", "Total")}</td><td colspan="2">${usd.format(i.total)}</td></tr></tfoot></table></body></html>`);
+      w.document.close(); setTimeout(() => { w.focus(); w.print(); }, 500);
     }));
   }
 
@@ -229,6 +229,7 @@
       btn.disabled = false;
       if (r && r.error === "inactive") { st.textContent = T("هذا الحساب موقوف. تواصل مع جرين ترافيل.", "This account is suspended. Contact Green Travel."); return; }
       if (!r) { st.textContent = T("البريد أو كلمة المرور غير صحيحة.", "Incorrect email or password."); return; }
+      if (r.kind === "staff") { await DB.logout(); st.innerHTML = `${T("هذا حساب المالك أو موظف: ادخل من", "This is an owner or staff account. Sign in at the")} <a href="office.html">${T("المكتب الخلفي", "back office")}</a>.`; return; }
       if (r.kind !== "company") { await DB.logout(); st.textContent = T("هذه البوابة لحسابات الشركات فقط.", "This portal is for company accounts only."); return; }
       try { await load(); } catch (er) { st.textContent = er.message; return; }
       view = "home"; location.hash = "home"; show();

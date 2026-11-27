@@ -151,3 +151,7 @@ body.aio { background: var(--paper); color: var(--ink); min-height: 100vh; margi
 .aio-bar i { position: absolute; inset-block: 0; inset-inline-start: 0; background: var(--g-500); border-radius: 999px; }
 .aio-kpi.warn .aio-bar i { background: var(--amber); }
 .aio-bar b { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--ink-3); }
+
+/* Long English option text must not widen the page on phones */
+.aio-cmd { grid-template-columns: minmax(0, 1fr); }
+.aio-cmd__row select { flex: 1 1 220px; text-overflow: ellipsis; }

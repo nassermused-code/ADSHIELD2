@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>try{var l=new URLSearchParams(location.search).get("lang")||localStorage.getItem("gt-lang");if(l!=="ar"){var r=document.documentElement;r.lang="en";r.dir="ltr";r.classList.add("i18n-pending");}}catch(e){var r=document.documentElement;r.lang="en";r.dir="ltr";r.classList.add("i18n-pending");}</script>
+  <style>.i18n-pending body{opacity:0}</style>
   <title>المكتب الإلكتروني | جرين ترافيل</title>
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#062014">
-  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/img/favicon.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Readex+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -22,14 +24,15 @@
       <label class="aio-field"><span>اسم المستخدم</span><input id="aioUser" type="text" dir="ltr" autocomplete="username" autocapitalize="none" required></label>
       <label class="aio-field"><span>كلمة المرور</span><input id="aioPass" type="password" dir="ltr" autocomplete="current-password" required></label>
       <button type="submit" class="btn btn--accent btn--block">دخول</button>
+      <button type="button" class="link-btn" data-forgot>نسيت كلمة المرور؟</button>
       <p class="form-status err" id="aioLoginStatus" role="status" aria-live="polite"></p>
-      <p class="muted small"><a href="office.html">العودة إلى المكتب الخلفي</a></p>
+      <p class="muted small"><a href="office.html">العودة إلى المكتب الخلفي</a> · <button type="button" class="lang-toggle lang-toggle--sm" data-lang-toggle>English</button></p>
     </form>
   </section>
 
   <div class="aio-app" id="aioApp" hidden>
     <header class="aio-top">
-      <a class="aio-brand" href="#office"><img src="assets/img/favicon.svg" alt="" width="34" height="34"><span><b>المكتب الإلكتروني</b><small>Green Travel · AI office</small></span></a>
+      <a class="aio-brand" href="#office"><img src="assets/img/logo.png" alt="" width="34" height="34"><span><b>المكتب الإلكتروني</b><small>Green Travel · AI office</small></span></a>
       <nav class="aio-tabs" id="aioTabs" aria-label="الأقسام">
         <a href="#office">المكتب</a>
         <a href="#jobs">المهام <em id="tJobs"></em></a>
@@ -41,6 +44,7 @@
       </nav>
       <div class="aio-top__end">
         <span class="aio-status" id="aioStatus"></span>
+        <button type="button" class="lang-toggle lang-toggle--sm" data-lang-toggle>English</button>
         <a class="btn btn--ghost btn--sm" href="office.html">المكتب الخلفي</a>
       </div>
     </header>
@@ -58,6 +62,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js" defer></script>
+  <script src="assets/js/i18n-en.js" defer></script>
+  <script src="assets/js/i18n.js" defer></script>
   <script src="assets/js/store.js" defer></script>
   <script src="assets/js/ai-office.js" defer></script>
 </body>

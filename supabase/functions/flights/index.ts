@@ -143,11 +143,16 @@ Deno.serve(async (req) => {
     const s = o.summary, hm = (t: string) => (t || "").slice(11, 16), d = (t: string) => (t || "").slice(0, 10);
     const segments = s.slices.flatMap((sl: any) => sl.segments.map((g: any) => ({ flight: g.flight, from: g.from, to: g.to, date: d(g.depAt), dep: hm(g.depAt), arr: hm(g.arrAt), arrDate: d(g.arrAt) })));
     const names = pax.map((t) => `${t.given} ${t.family}`.toUpperCase());
+    // Passport details (international trips), in the same order as the travelers
+    const passports = (body.passengers || []).slice(0, 13).map((t: any, i: number) => {
+      const pp = t && t.passport ? t.passport : {};
+      return { name: names[i] || "", number: String(pp.number || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 20), expiry: DATE.test(String(pp.expiry || "")) ? String(pp.expiry) : "", country: String(pp.country || "").trim().slice(0, 60) };
+    });
     const source = me && me.kind !== "partner" ? "office" : "website";
     const { data: b, error } = await admin.from("bookings").insert({
       source, status: "confirmed", customer: { name: `${pax[0].given} ${pax[0].family}`, phone: contact.phone, email: contact.email },
       route: `${q.from} → ${q.to}`, airline: s.carrierName || s.carrier, cabin: q.cabin || "economy", depart: q.depart, ret: q.ret || null, pax: pax.length, travelers: names,
-      pnr: res.pnr || "", sell: +o.sell, segments, provider: o.provider, provider_ref: res.ref, hold_expires: res.expires || null,
+      pnr: res.pnr || "", sell: +o.sell, segments, passports: passports.some((x: any) => x.number) ? passports : [], provider: o.provider, provider_ref: res.ref, hold_expires: res.expires || null,
       notes: `${p.name} · ${String(body.notes || "").slice(0, 1500)}`.trim(), assigned_to: me && me.kind !== "partner" ? me.id : null,
     }).select("id").single();
     if (error) return json({ error: "saved_failed", detail: error.message, pnr: res.pnr, ref: res.ref }, 500);

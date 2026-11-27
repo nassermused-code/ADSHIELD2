@@ -69,6 +69,7 @@
     ["agents_manage", T("فتح حسابات الوكلاء", "Open agent accounts"), T("إنشاء وتعديل دخول الوكلاء (بدون التسعير)", "Create and edit agent logins (not pricing)")],
     ["export", T("تصدير CSV", "Export CSV"), T("تنزيل قائمة الحجوزات", "Download the bookings list")],
     ["corporate", T("سفر الشركات (TMC)", "Corporate travel (TMC)"), T("الشركات والمسافرون والسياسات والموافقات وفواتير الشركات", "Companies, travelers, policies, approvals and company invoices")],
+    ["billing", T("الفوترة والحسابات البنكية", "Billing & bank accounts"), T("إدخال الحسابات البنكية ووسائل الدفع، وبيانات الشركة، وتعديل الفواتير", "Enter bank accounts and payment methods, company details, and edit invoices")],
     ["ai_office", T("المساعد الذكي", "AI assistant"), T("يطلب من الموظفين الأذكياء: ردود، خطابات، مراجعات (بدون التكاليف والأرباح، وما يحتاج موافقة يذهب للمالك)", "Asks the AI employees for replies, letters and reviews (no costs or profit; anything needing approval goes to the owner)")],
   ];
   const pill = (st) => `<span class="pill pill--${st}">${STATUS()[st] || st}</span>`;
@@ -103,13 +104,17 @@
     reports: { icon: "i-list", t: () => T("التقارير المالية", "Financial reports"), r: viewReports, ok: isOwner, owner: true },
     team: { icon: "i-shield", t: () => T("الموظفون والصلاحيات", "Team & permissions"), r: viewTeam, ok: isOwner, owner: true },
     activity: { icon: "i-clock", t: () => T("سجل النشاط", "Activity log"), r: viewActivity, ok: isOwner, owner: true },
+    company: { icon: "i-briefcase", t: () => T("بيانات الشركة (الفواتير والتذاكر)", "Company details (invoices & tickets)"), r: viewCompany, ok: () => can("billing"), group: "billing" },
+    paymethods: { icon: "i-card", t: () => T("وسائل الدفع والحسابات البنكية", "Payment methods & bank accounts"), r: viewPayMethods, ok: () => can("billing"), group: "billing" },
     settings: { icon: "i-lock", t: () => T("الإعدادات", "Settings"), r: viewSettings, ok: isOwner, owner: true },
   };
   function renderNav() {
     const items = Object.entries(VIEWS).filter(([, v]) => v.ok());
-    const main = items.filter(([, v]) => !v.owner && !v.group), own = items.filter(([, v]) => v.owner), corpItems = items.filter(([, v]) => v.group === "corp");
+    const main = items.filter(([, v]) => !v.owner && !v.group), own = items.filter(([, v]) => v.owner), corpItems = items.filter(([, v]) => v.group === "corp"), billItems = items.filter(([, v]) => v.group === "billing");
     const link = ([k, v]) => { const n = v.badge ? v.badge() : 0; return `<a href="#${k}">${icon(v.icon)}<span>${v.t()}</span>${n ? `<em class="nav-badge">${n}</em>` : ""}</a>`; };
-    $("#ofNav").innerHTML = main.map(link).join("") + (corpItems.length ? `<p class="of-nav__label">${T("سفر الشركات", "Corporate travel")}</p>` + corpItems.map(link).join("") : "") + (own.length ? `<p class="of-nav__label">${T("للمالك فقط", "Owner only")}</p>` + own.map(link).join("") : "")
+    $("#ofNav").innerHTML = main.map(link).join("") + (corpItems.length ? `<p class="of-nav__label">${T("سفر الشركات", "Corporate travel")}</p>` + corpItems.map(link).join("") : "") + (billItems.length ? `<p class="of-nav__label">${T("الفوترة", "Billing")}</p>` + billItems.map(link).join("") : "") + (own.length ? `<p class="of-nav__label">${T("للمالك فقط", "Owner only")}</p>` + own.map(link).join("") : "")
+      // The company mailboxes live on the cPanel mail server; webmail opens in a new tab
+      + `<a href="https://greentravel.us/webmail" target="_blank" rel="noopener">${icon("i-mail")}<span>${T("بريدي (Webmail)", "My email (Webmail)")}</span></a>`
       + (isOwner() ? `<a href="ai-office.html" class="of-nav__ai">${icon("i-users")}<span>${T("المكتب الإلكتروني (موظفون أذكياء)", "AI office (AI employees)")}</span></a>` : "");
   }
 
@@ -156,6 +161,7 @@
       let r = null;
       try { r = await DB.login($("#ofEmail").value, $("#ofPass").value); } catch (er) { st.textContent = T("تعذّر الاتصال بالخادم. حاول مرة أخرى.", "Could not reach the server. Try again."); btn.disabled = false; return; }
       btn.disabled = false;
+      if (r && r.error === "mfa") { st.textContent = T("لم تكتمل خطوة التحقق الثانية. حاول مرة أخرى.", "Two-step verification was not completed. Try again."); return; }
       if (r && r.error === "inactive") { st.textContent = T("هذا الحساب موقوف. تواصل مع المدير.", "This account is suspended. Contact the owner."); return; }
       if (!r) { st.textContent = T("اسم المستخدم أو كلمة المرور غير صحيحة.", "Incorrect username or password."); return; }
       if (r.kind !== "staff") { await DB.logout(); st.textContent = T("هذا حساب وكيل B2B: ادخل من بوابة الشركاء.", "This is a B2B agent account: sign in through the partner portal."); return; }
@@ -505,7 +511,10 @@
         <fieldset><legend>${T("الرحلة", "Trip")}</legend><div class="f3">
           ${inp("route", T("المسار (مثل ORD → AMM)", "Route (e.g. ORD → AMM)"), b.route, "text", "ltr", ro(edit))}${inp("airline", T("شركة الطيران", "Airline"), b.airline, "text", "", ro(edit))}${sel("cabin", T("الدرجة", "Cabin"), CABIN(), b.cabin)}
           ${inp("depart", T("الذهاب", "Depart"), b.depart, "date", "", ro(edit))}${inp("ret", T("العودة", "Return"), b.ret, "date", "", ro(edit))}${inp("pax", T("عدد المسافرين", "Travelers"), b.pax, "number", "ltr", ro(edit))}</div>
-          ${area("travelers", T("أسماء المسافرين (سطر لكل مسافر)", "Traveler names (one per line)"), (b.travelers || []).join("\n"), ro(edit))}</fieldset>
+          <textarea name="travelers" hidden>${esc((b.travelers || []).join("\n"))}</textarea>
+          <div class="pp-ed"><p class="pp-ed__h">${icon("i-users")}<b>${T("المسافرون وجوازات السفر", "Travelers and passports")}</b> <small class="muted" id="ppIntl">${T("الجواز مطلوب للرحلات الدولية", "Passport required for international trips")}</small></p>
+            <div id="ppRows"></div>
+            ${edit ? `<button type="button" class="btn btn--ghost btn--sm" id="trvAdd">+ ${T("إضافة مسافر", "Add traveler")}</button>` : ""}</div></fieldset>
         <fieldset><legend>${T("الإصدار", "Ticketing")}${issue ? "" : ` <small class="muted">· ${T("لا تملك صلاحية الإصدار", "You can't issue tickets")}</small>`}</legend><div class="f3">
           ${inp("pnr", "PNR", b.pnr, "text", "ltr", ro(issue))}${inp("tickets", T("أرقام التذاكر (بنفس ترتيب المسافرين، افصل بفاصلة)", "Ticket numbers (same order as travelers, comma-separated)"), (b.tickets || []).join(", "), "text", "ltr", ro(issue))}${inp("baggage", T("الأمتعة", "Baggage"), b.baggage, "text", "", `${ro(segEdit)} placeholder="${T("مثال: حقيبتان 23 كغ", "e.g. 2 × 23 kg")}"`)}</div>
           <div class="seg-ed"><div class="seg-ed__h"><span>${T("الرحلة", "Flight")}</span><span>${T("من", "From")}</span><span>${T("إلى", "To")}</span><span>${T("التاريخ", "Date")}</span><span>${T("الإقلاع", "Departs")}</span><span>${T("الوصول", "Arrives")}</span><span></span></div>
@@ -518,7 +527,7 @@
         ${area("notes", T("ملاحظات داخلية", "Internal notes"), b.notes)}
         <div class="dr-actions">
           <button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button>
-          ${id ? `<button type="button" class="btn btn--ghost" id="bkTicket">${icon("i-ticket")}${T("التذكرة: طباعة / PDF / بريد", "Ticket: print / PDF / email")}</button><button type="button" class="btn btn--ghost" id="bkInvoice">${T("فاتورة", "Invoice")}</button>` : ""}
+          ${id ? `<button type="button" class="btn btn--ghost" id="bkTicket">${icon("i-ticket")}${T("التذكرة: طباعة / PDF / بريد", "Ticket: print / PDF / email")}</button><button type="button" class="btn btn--ghost" id="bkInvoice">${T("فاتورة", "Invoice")}</button><button type="button" class="btn btn--ghost" id="bkMail">${icon("i-mail")}${T("رسالة للعميل", "Email the customer")}</button>` : ""}
           ${id && owner ? `<button type="button" class="btn btn--ghost" id="bkTask">+ ${T("مهمة على هذا الحجز", "Task for this booking")}</button><button type="button" class="btn btn--ghost danger" id="bkDelete">${T("حذف", "Delete")}</button>` : ""}
         </div>
       </form>
@@ -545,9 +554,69 @@
       };
       fill(true); pol();
       f.companyId.addEventListener("change", () => { fill(false); const c = DB.get("companies", f.companyId.value); if (c && !id) f.serviceFee.value = c.serviceFee; pol(); });
-      f.travelerId.addEventListener("change", () => { const t = DB.get("travelers", f.travelerId.value); if (!t) return; if (!f.cname.value) f.cname.value = `${t.firstName} ${t.lastName}`; if (!f.cphone.value) f.cphone.value = t.phone || ""; if (!f.cemail.value) f.cemail.value = t.email || ""; if (!f.travelers.value.trim()) f.travelers.value = `${t.firstName} ${t.lastName}`.toUpperCase(); if (t.costCenterId && !f.costCenterId.value) f.costCenterId.value = t.costCenterId; });
+      f.travelerId.addEventListener("change", () => { const t = DB.get("travelers", f.travelerId.value); if (!t) return; if (!f.cname.value) f.cname.value = `${t.firstName} ${t.lastName}`; if (!f.cphone.value) f.cphone.value = t.phone || ""; if (!f.cemail.value) f.cemail.value = t.email || ""; if (!f.travelers.value.trim()) { f.travelers.value = `${t.firstName} ${t.lastName}`.toUpperCase(); f.travelers.dispatchEvent(new Event("change")); } if (t.costCenterId && !f.costCenterId.value) f.costCenterId.value = t.costCenterId; });
       ["cabin", "sell", "depart"].forEach((k) => f[k].addEventListener("change", pol));
     }
+    // Travelers: entered by hand (phone, WhatsApp, walk-in…), one card per traveler with passport details and a validity check
+    const ppEdit = edit || issue;
+    const tripEndOf = () => { const ds = [f.depart.value, f.ret.value, ...$$("#segRows [name=date]").map((i) => i.value)].filter(Boolean).sort(); return ds.pop() || ""; };
+    const addMonths = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 10); };
+    const ppStatus = (exp) => {
+      if (!exp) return ["", ""];
+      const end = tripEndOf() || today();
+      if (exp < today()) return ["bad", T("منتهي", "Expired")];
+      if (exp < end) return ["bad", T("ينتهي قبل نهاية الرحلة", "Expires before the trip ends")];
+      if (exp < addMonths(end, 6)) return ["warn", T("أقل من 6 أشهر بعد السفر", "Under 6 months after travel")];
+      return ["ok", T("صالح", "Valid")];
+    };
+    const TRV_TYPE = { adult: T("بالغ", "Adult"), child: T("طفل", "Child"), infant: T("رضيع", "Infant") };
+    const splitName = (n) => { const w = String(n || "").trim().split(/\s+/).filter(Boolean); return w.length > 1 ? [w.slice(0, -1).join(" "), w[w.length - 1]] : [w[0] || "", ""]; };
+    const trvRow = (x) => {
+      const [fn, ln] = x.first || x.last ? [x.first || "", x.last || ""] : splitName(x.name);
+      const ne = edit ? "" : "disabled", pe = ppEdit ? "" : "disabled";
+      const lab = (ar, en, inner) => `<label><span>${T(ar, en)}</span>${inner}</label>`;
+      return `<div class="trv-row" data-pp>
+        ${lab("الاسم الأول (كما في الجواز)", "First name (as on passport)", `<input name="tfirst" dir="ltr" value="${esc(fn)}" autocomplete="off" ${ne}>`)}
+        ${lab("اسم العائلة", "Last name", `<input name="tlast" dir="ltr" value="${esc(ln)}" autocomplete="off" ${ne}>`)}
+        ${lab("النوع", "Type", `<select name="ttype" ${ne}>${Object.entries(TRV_TYPE).map(([k, v]) => `<option value="${k}" ${(x.type || "adult") === k ? "selected" : ""}>${v}</option>`).join("")}</select>`)}
+        ${lab("تاريخ الميلاد", "Date of birth", `<input name="tdob" type="date" max="${today()}" value="${esc(x.dob || "")}" ${ne}>`)}
+        ${lab("الجنس", "Gender", `<select name="tgender" ${ne}><option value="">—</option><option value="m" ${x.gender === "m" ? "selected" : ""}>${T("ذكر", "Male")}</option><option value="f" ${x.gender === "f" ? "selected" : ""}>${T("أنثى", "Female")}</option></select>`)}
+        ${lab("رقم الجواز", "Passport no.", `<input name="ppno" dir="ltr" maxlength="20" value="${esc(x.number || "")}" autocomplete="off" ${pe}>`)}
+        ${lab("انتهاء الجواز", "Passport expiry", `<input name="ppexp" type="date" value="${esc(x.expiry || "")}" ${pe}>`)}
+        ${lab("الدولة المُصدِرة", "Issuing country", `<input name="ppcc" maxlength="60" value="${esc(x.country || "")}" ${pe}>`)}
+        <div class="trv-row__end"><span data-ppst class="pp-st"></span>${edit ? `<button type="button" class="btn btn--ghost btn--sm danger" data-rm-trv aria-label="${T("حذف المسافر", "Remove traveler")}">×</button>` : ""}</div>
+      </div>`;
+    };
+    const rowData = (r) => { const g = (n) => r.querySelector(`[name=${n}]`).value.trim(); const first = g("tfirst").toUpperCase(), last = g("tlast").toUpperCase();
+      return { name: `${first} ${last}`.trim(), first, last, type: g("ttype"), dob: g("tdob"), gender: g("tgender"), number: g("ppno").replace(/[^A-Za-z0-9]/g, "").toUpperCase(), expiry: g("ppexp"), country: g("ppcc") }; };
+    const ppState = () => $$("#ppRows [data-pp]").map(rowData).filter((x) => x.name);
+    const syncNames = () => { const st = ppState(); f.travelers.value = st.map((x) => x.name).join("\n"); if (edit && st.length) f.pax.value = st.length; };
+    const ppBadge = (r) => { const [k, t] = ppStatus(r.querySelector("[name=ppexp]").value); const el = r.querySelector("[data-ppst]"); el.className = "pp-st " + k; el.textContent = t; };
+    const bindRows = () => $$("#ppRows [data-pp]").forEach((r) => {
+      ppBadge(r);
+      r.oninput = () => { ppBadge(r); syncNames(); };
+      r.onchange = r.oninput;
+      const rm = r.querySelector("[data-rm-trv]");
+      if (rm) rm.onclick = () => { if ($$("#ppRows [data-pp]").length > 1) { r.remove(); syncNames(); } else r.querySelectorAll("input").forEach((i) => (i.value = "")); };
+    });
+    function ppRender() {
+      const names = f.travelers.value.split("\n").map((x) => x.trim()).filter(Boolean), pp = b.passports || [];
+      let list = names.map((n, i) => pp.find((q) => q.name && q.name.toUpperCase() === n.toUpperCase()) || Object.assign({}, pp[i] && !pp[i].name ? pp[i] : {}, { name: n }));
+      if (!list.length) list = [{ name: f.cname.value.trim() }];
+      $("#ppRows").innerHTML = list.map(trvRow).join("");
+      bindRows();
+    }
+    ppRender();
+    if ($("#trvAdd")) $("#trvAdd").addEventListener("click", () => { $("#ppRows").insertAdjacentHTML("beforeend", trvRow({})); bindRows(); $$("#ppRows [data-pp]").pop().querySelector("input").focus(); });
+    f.travelers.addEventListener("change", ppRender);
+    [f.depart, f.ret].forEach((x) => x && x.addEventListener("change", () => $$("#ppRows [data-pp]").forEach(ppBadge)));
+    // International? (airports in different countries)
+    let tripIntl = false;
+    const codesOf = () => [...$$("#segRows [data-seg]").flatMap((r) => [r.querySelector("[name=from]").value, r.querySelector("[name=to]").value]), ...(f.route.value.match(/[A-Za-z]{3}/g) || [])].map((x) => x.trim().toUpperCase()).filter((x) => /^[A-Z]{3}$/.test(x));
+    const checkIntl = () => airports().then((A) => { const cc = new Set(codesOf().map((c) => A[c] && A[c].cc).filter(Boolean)); tripIntl = cc.size > 1; $("#ppIntl").textContent = tripIntl ? T("رحلة دولية: الجواز وتاريخ انتهائه مطلوبان لكل مسافر", "International trip: passport and expiry required for every traveler") : T("مطلوبة للرحلات الدولية", "Required for international trips"); $("#ppIntl").classList.toggle("pp-need", tripIntl); }).catch(() => {});
+    checkIntl();
+    f.route.addEventListener("change", checkIntl);
+    $("#segRows").addEventListener("change", checkIntl);
     const bindSeg = () => $$("[data-rmseg]").forEach((x) => (x.onclick = () => { if ($$("#segRows [data-seg]").length > 1) x.parentElement.parentNode.removeChild(x.parentElement); }));
     if ($("#segAdd")) $("#segAdd").addEventListener("click", () => { const last = $$("#segRows [data-seg]").pop(); const prev = last ? { from: last.querySelector("[name=to]").value, date: last.querySelector("[name=date]").value } : {}; $("#segRows").insertAdjacentHTML("beforeend", segRow(prev, true)); bindSeg(); });
     bindSeg();
@@ -568,6 +637,16 @@
         data.segments = $$("#segRows [data-seg]").map((r) => Object.fromEntries($$("input", r).map((i) => [i.name, ["from", "to", "flight"].includes(i.name) ? i.value.trim().toUpperCase() : i.value]))).filter((x) => x.from && x.to);
       }
       if (owner) { data.cost = +d.cost || 0; data.assignedTo = d.assignedTo || ""; }
+      if (edit) { data.travelers = ppState().map((x) => x.name); if (data.travelers.length) data.pax = data.travelers.length; }
+      if (ppEdit) {
+        const st = ppState();
+        data.passports = st;
+        const end = tripEndOf();
+        const missing = tripIntl && st.some((x) => !x.number || !x.expiry);
+        const tooOld = st.some((x) => x.expiry && end && x.expiry < end);
+        if (["ticketed", "confirmed"].includes(data.status) && (missing || tooOld)) { toast(missing ? T("رحلة دولية: أدخل رقم الجواز وتاريخ انتهائه لكل مسافر قبل التأكيد أو الإصدار.", "International trip: enter every traveler's passport number and expiry before confirming or ticketing.") : T("يوجد جواز ينتهي قبل نهاية الرحلة: يجب تجديده قبل التأكيد أو الإصدار.", "A passport expires before the trip ends: it must be renewed before confirming or ticketing.")); return; }
+        if (missing || tooOld) toast(T("تنبيه: بيانات جوازات ناقصة أو منتهية. أكملها قبل الإصدار.", "Note: passport details are missing or expired. Complete them before ticketing."));
+      }
       if (!allowed(data.status)) { toast(T("لا تملك صلاحية هذه الحالة", "You can't set this status")); return; }
       if (data.source === "b2b" && !data.partnerId) { toast(T("اختر وكيل B2B لهذا الحجز", "Choose the B2B agent for this booking")); return; }
       if (data.status === "ticketed" && !data.pnr) { toast(T("أدخل رقم PNR قبل تحويل الحالة إلى صادرة", "Enter the PNR before marking it ticketed")); return; }
@@ -591,6 +670,7 @@
     if (id) {
       $("#bkInvoice").addEventListener("click", () => printInvoice(id));
       $("#bkTicket").addEventListener("click", () => openTicket(id));
+      $("#bkMail").addEventListener("click", () => mailForm(b));
       const provAct = (btnId, action, okMsg) => { const btn = $(btnId); if (!btn) return; btn.addEventListener("click", async () => {
         if (btn.dataset.confirm !== "1") { btn.dataset.confirm = "1"; btn.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
         btn.disabled = true;
@@ -751,12 +831,19 @@
   function agentForm(id) {
     if (!can("agents_manage")) return;
     const owner = isOwner();
-    const p = id ? Object.assign({ password: "" }, DB.get("partners", id)) : { email: "", password: genPass(), agency: "", contact: "", phone: "", contactEmail: "", website: "", sellMarkup: 6, status: "active", creditLimit: 3000, pricing: { mode: "hybrid" } };
+    const p = id ? Object.assign({ password: "" }, DB.get("partners", id)) : { email: "", password: genPass(), agency: "", contact: "", phone: "", contactEmail: "", website: "", sellMarkup: 6, status: "active", creditLimit: 3000, pricing: { mode: "hybrid" }, legalName: "", address: "", city: "", state: "", zip: "", country: "United States", taxId: "", iata: "", licenseNo: "", officePhone: "", notes: "" };
     const c = Object.assign({}, DEF_PRICING, p.pricing || {});
     openModal(id ? T("تعديل وكيل", "Edit agent") : T("وكيل B2B جديد", "New B2B agent"), `
       <form id="agForm" class="dr-form" novalidate>
         <fieldset><legend>${T("بيانات الوكالة", "Agency details")}</legend><div class="f3">
-          ${inp("agency", T("اسم الوكالة", "Agency name"), p.agency)}${inp("contact", T("اسم المسؤول", "Contact person"), p.contact)}${inp("phone", T("الهاتف", "Phone"), p.phone, "tel", "ltr")}</div></fieldset>
+          ${inp("agency", T("اسم الوكالة (التجاري)", "Agency (trade) name"), p.agency)}${inp("legalName", T("الاسم القانوني المسجل", "Registered legal name"), p.legalName, "text", "ltr")}${inp("contact", T("اسم المسؤول", "Contact person"), p.contact)}
+          ${inp("phone", T("جوال المسؤول", "Contact mobile"), p.phone, "tel", "ltr")}${inp("officePhone", T("هاتف المكتب", "Office phone"), p.officePhone, "tel", "ltr")}${inp("contactEmail", T("بريد المراسلات والفواتير", "Billing / contact email"), p.contactEmail, "email", "ltr")}
+          ${inp("website", T("الموقع", "Website"), p.website, "text", "ltr")}</div></fieldset>
+        <fieldset><legend>${T("العنوان والأرقام الرسمية", "Address and official numbers")}</legend><div class="f3">
+          ${inp("address", T("الشارع والرقم", "Street address"), p.address, "text", "ltr")}${inp("city", T("المدينة", "City"), p.city, "text", "ltr")}${inp("state", T("الولاية / المنطقة", "State / region"), p.state, "text", "ltr")}
+          ${inp("zip", T("الرمز البريدي", "ZIP / postal code"), p.zip, "text", "ltr")}${inp("country", T("الدولة", "Country"), p.country, "text", "ltr")}${inp("taxId", T("الرقم الضريبي / EIN", "Tax ID / EIN"), p.taxId, "text", "ltr")}
+          ${inp("iata", T("رقم IATA / ARC", "IATA / ARC number"), p.iata, "text", "ltr")}${inp("licenseNo", T("رقم الرخصة التجارية", "Business license no."), p.licenseNo, "text", "ltr")}</div>
+          ${area("notes", T("ملاحظات داخلية", "Internal notes"), p.notes)}</fieldset>
         <fieldset><legend>${T("الدخول إلى بوابة الشركاء", "Partner portal login")}</legend><div class="f3">
           ${inp("email", T("البريد (اسم الدخول)", "Email (login)"), p.email, "email", "ltr")}
           <label class="fl"><span>${T("كلمة المرور", "Password")}</span><span class="pw-row"><input name="password" type="text" dir="ltr" value="${esc(p.password)}" placeholder="${id ? T("اتركها فارغة للإبقاء عليها", "Leave empty to keep") : ""}" autocomplete="off"><button type="button" class="btn btn--ghost btn--sm" data-gen>${T("توليد", "Generate")}</button></span></label>
@@ -774,7 +861,8 @@
       const d = Object.fromEntries(new FormData(e.target));
       const email = d.email.trim().toLowerCase();
       if (!d.agency.trim() || !email || (!id && d.password.length < 8) || (d.password && d.password.length < 8)) { toast(T("اسم الوكالة والبريد وكلمة مرور من 8 أحرف على الأقل مطلوبة", "Agency name, email and a password of 8+ characters are required")); return; }
-      const payload = { id, agency: d.agency.trim(), contact: d.contact.trim(), phone: d.phone.trim(), email, password: d.password || undefined, status: d.status };
+      const payload = { id, agency: d.agency.trim(), contact: d.contact.trim(), phone: d.phone.trim(), email, password: d.password || undefined, status: d.status,
+        legalName: d.legalName.trim(), address: d.address.trim(), city: d.city.trim(), state: d.state.trim(), zip: d.zip.trim(), country: d.country.trim(), taxId: d.taxId.trim(), iata: d.iata.trim(), licenseNo: d.licenseNo.trim(), officePhone: d.officePhone.trim(), contactEmail: d.contactEmail.trim(), website: d.website.trim(), notes: d.notes.trim() };
       if (owner) Object.assign(payload, { creditLimit: +d.creditLimit || 0, pricing: { mode: d.mode, flatAll: +d.flatAll || 0, pctAll: (+d.pctAll || 0) / 100, flat: +d.flat || 0, threshold: +d.threshold || 0, pct: (+d.pct || 0) / 100, publicMarkup: (+d.publicMarkup || 0) / 100 } });
       const btn = e.target.querySelector("[type=submit]"); btn.disabled = true;
       try { await DB.admin("save_partner", payload); } catch (er) { btn.disabled = false; return errToast(er); }
@@ -829,18 +917,202 @@
   }
 
   /* ---------- Invoice ---------- */
+  // Customer invoice for one booking, always in English: company letterhead, bill-to, lines, payments, balance and a PAID / UNPAID stamp.
+  // Anything on it can be changed with «Edit invoice» (saved in bookings.invoice); otherwise it is built from the booking.
+  const enDate = (iso) => (iso ? new Date(String(iso).slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—");
+  const usdEn = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+  const CABIN_EN = { economy: "Economy", premium: "Premium Economy", business: "Business", first: "First" };
+  const METHOD_EN = { card: "Card", cash: "Cash", bank: "Bank transfer", zelle: "Zelle", check: "Check" };
+  const PM_KIND = () => ({ bank: T("حساب بنكي", "Bank account"), wire: T("تحويل دولي (Wire)", "Wire transfer"), zelle: "Zelle", card: T("بطاقة", "Card"), cash: T("نقداً", "Cash"), check: T("شيك", "Check"), other: T("أخرى", "Other") });
+  function invoiceDefaults(b) {
+    const p = b.partnerId ? DB.get("partners", b.partnerId) : null, co = b.companyId ? DB.get("companies", b.companyId) : null;
+    const addr = (x) => [x.address, [x.city, [x.state, x.zip].filter(Boolean).join(" ")].filter(Boolean).join(", "), x.country].filter(Boolean).join("\n");
+    const billTo = p ? [p.legalName || p.agency, p.legalName && p.legalName !== p.agency ? `dba ${p.agency}` : "", addr(p), p.contact ? `Attn: ${p.contact}` : "", p.officePhone || p.phone, p.contactEmail || p.email, p.taxId ? `Tax ID: ${p.taxId}` : "", p.iata ? `IATA: ${p.iata}` : ""]
+      : co ? [co.legalName || co.name, co.address || "", co.email || "", co.phone || "", co.taxId ? `Tax ID: ${co.taxId}` : ""]
+      : [b.customer.name, b.customer.phone, b.customer.email];
+    const pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "Traveler"];
+    const segs = segmentsOf(b);
+    const trip = segs.length ? segs.map((x) => `${x.flight ? x.flight + " " : ""}${x.from} → ${x.to} · ${enDate(x.date)}`).join("\n") : `${b.route} · ${enDate(b.depart)}${b.ret ? " – " + enDate(b.ret) : ""}`;
+    const items = [{ desc: `Air tickets — ${b.airline || "Airline"} (${CABIN_EN[b.cabin] || b.cabin || ""})`, detail: `${trip}\nPassengers: ${pax.join(", ")}${b.pnr ? `\nPNR: ${b.pnr}` : ""}${(b.tickets || []).length ? `\nE-tickets: ${b.tickets.join(", ")}` : ""}`, qty: pax.length, unit: +((+b.sell || 0) / pax.length).toFixed(2) }];
+    if (+b.serviceFee) items.push({ desc: "Service fee", detail: "", qty: 1, unit: +b.serviceFee });
+    const date = b.ticketedAt || b.created || today();
+    return { number: `INV-${b.id}`, date, due: date, billTo: billTo.filter(Boolean).join("\n"), items, notes: "", terms: CO().invoiceTerms || "", methods: null };
+  }
+  const invoiceOf = (b) => { const d = invoiceDefaults(b), e = b.invoice || {}; const o = Object.assign({}, d, Object.fromEntries(Object.entries(e).filter(([, v]) => v !== "" && v != null))); if (!Array.isArray(o.items) || !o.items.length) o.items = d.items; return o; };
+  const invMoney = (b, inv) => {
+    const total = inv.items.reduce((sum, x) => sum + (+x.qty || 0) * (+x.unit || 0), 0);
+    const pays = DB.all("payments").filter((x) => x.bookingId === b.id && (x.dir === "in" || x.dir === "refund"));
+    const paid = pays.reduce((sum, x) => sum + (x.dir === "in" ? x.amount : -x.amount), 0);
+    return { total, pays, paid, due: Math.max(0, +(total - paid).toFixed(2)) };
+  };
+  const invMethods = (inv) => DB.all("paymentMethods").filter((m) => m.enabled && (Array.isArray(inv.methods) ? inv.methods.includes(m.id) : m.showOnInvoice));
+  const nl = (t) => esc(t || "").replace(/\n/g, "<br>");
+  function invoiceDocHtml(b) {
+    const c = CO(), inv = invoiceOf(b), m = invMoney(b, inv);
+    const stamp = m.total > 0 && m.due <= 0.004 ? ["paid", "PAID"] : m.paid > 0.004 ? ["partial", "PARTIALLY PAID"] : ["unpaid", "UNPAID"];
+    const addr = coAddress();
+    return `<div class="statement invoice-doc" id="invoiceDoc" lang="en" dir="ltr">
+      <div class="inv-watermark inv-watermark--${stamp[0]}" aria-hidden="true"><span>${stamp[1]}</span>${stamp[0] === "paid" && m.pays.length ? `<small>${enDate(m.pays.map((x) => x.date).sort().pop())}</small>` : ""}</div>
+      <header class="st-head doc-head"><div class="doc-logo"><img src="assets/img/logo-512.png" alt="Logo" width="110" height="110"></div>
+        <div class="doc-co"><b>${esc(c.tradeName)}</b>${c.legalName && c.legalName !== c.tradeName ? `<small>${esc(c.legalName)}</small>` : ""}${addr ? `<small>${esc(addr)}</small>` : ""}<small>${esc(coPhones().join(" · "))}</small><small>${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small>${esc(coIds())}</small>` : ""}</div>
+        <div class="st-meta"><b>INVOICE</b><span class="mono">${esc(inv.number)}</span><span>Date: ${enDate(inv.date)}</span><span>Due: ${inv.due && inv.due !== inv.date ? enDate(inv.due) : "On receipt"}</span></div></header>
+      <div class="inv-parties">
+        <div><small>BILL TO</small>${String(inv.billTo || "").split("\n").map((x) => x.trim()).filter(Boolean).map((x, i) => (i ? `<span>${esc(x)}</span>` : `<b>${esc(x)}</b>`)).join("")}</div>
+        <div><small>BOOKING</small><b class="mono">${esc(b.id)}</b>${b.pnr ? `<span>PNR <b class="mono">${esc(b.pnr)}</b></span>` : ""}<span>${esc(b.airline || "")}${b.cabin ? " · " + esc(CABIN_EN[b.cabin] || b.cabin) : ""}</span></div>
+      </div>
+      <table class="of-table inv-lines"><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr></thead>
+        <tbody>${inv.items.map((x) => `<tr><td><b>${esc(x.desc || "")}</b>${x.detail ? `<br><small>${nl(x.detail)}</small>` : ""}</td><td class="num">${+x.qty || 0}</td><td class="num">${usdEn.format(+x.unit || 0)}</td><td class="num"><b>${usdEn.format((+x.qty || 0) * (+x.unit || 0))}</b></td></tr>`).join("")}</tbody>
+        <tfoot>
+          <tr><td colspan="3">Total (USD)</td><td class="num"><b>${usdEn.format(m.total)}</b></td></tr>
+          ${m.pays.map((x) => `<tr class="inv-pay"><td colspan="3">${x.dir === "in" ? "Payment received" : "Refund"} · ${enDate(x.date)} · ${esc(METHOD_EN[x.method] || x.method || "")}${x.ref ? ` · ${esc(x.ref)}` : ""}</td><td class="num">${x.dir === "in" ? "−" : "+"}${usdEn.format(x.amount)}</td></tr>`).join("")}
+          <tr class="inv-due"><td colspan="3">Balance due</td><td class="num"><b>${usdEn.format(m.due)}</b></td></tr>
+        </tfoot></table>
+      ${inv.notes ? `<div class="inv-box"><small>NOTES</small><p>${nl(inv.notes)}</p></div>` : ""}
+      ${invMethods(inv).length || c.paymentInfo ? `<div class="inv-box"><small>HOW TO PAY</small>${invMethods(inv).map((x) => `<p><b>${esc(x.label)}</b><br>${nl(x.details)}</p>`).join("")}${c.paymentInfo ? `<p>${nl(c.paymentInfo)}</p>` : ""}</div>` : ""}
+      ${inv.terms ? `<div class="inv-box"><small>TERMS</small><p>${nl(inv.terms)}</p></div>` : ""}
+      <p class="inv-thanks">Thank you for choosing ${esc(c.tradeName)}.<small>${esc(c.legalName)}${coIds() ? " · " + esc(coIds()) : ""}</small></p>
+    </div>`;
+  }
+  const invoiceText = (b) => {
+    const inv = invoiceOf(b), m = invMoney(b, inv);
+    return `${CO().tradeName} — Invoice ${inv.number}\n${b.pnr ? "PNR " + b.pnr + " · " : ""}${b.airline || ""} · ${b.route}\nTotal: ${usdEn.format(m.total)} · Paid: ${usdEn.format(m.paid)} · Balance due: ${usdEn.format(m.due)}\n${coPhones()[0] || ""} · ${CO().email}`;
+  };
   function printInvoice(id) {
-    const b = DB.get("bookings", id), m = bookingMoney(b);
-    const p = b.partnerId ? DB.get("partners", b.partnerId) : null;
-    const billTo = p ? `${esc(p.agency)}<br><small>${esc(p.contact || "")} · <span dir="ltr">${esc(p.phone || "")}</span></small>` : `${esc(b.customer.name)}<br><small dir="ltr">${esc([b.customer.phone, b.customer.email].filter(Boolean).join(" · "))}</small>`;
-    printHtml(`<div class="statement invoice">
-      <header class="st-head"><img src="assets/img/logo.png" alt="" width="48" height="48"><div><b>Green Travel</b><small>World Services dba Green Travel · +1 (708) 963-2552 · info@greentravel.us</small></div>
-        <div class="st-meta"><b>${T("فاتورة", "Invoice")}</b><span dir="ltr">INV-${esc(b.id)}</span><span>${fmtDate(today())}</span></div></header>
-      <div class="inv-parties"><div><small>${T("إلى", "Bill to")}</small><b>${billTo}</b></div><div><small>${T("الحجز", "Booking")}</small><b dir="ltr">${esc(b.id)}${b.pnr ? " · PNR " + esc(b.pnr) : ""}</b></div></div>
-      <table class="of-table"><thead><tr><th>${T("البيان", "Description")}</th><th>${T("المسافرون", "Travelers")}</th><th>${T("المبلغ", "Amount")}</th></tr></thead>
-        <tbody><tr><td>${T("تذاكر طيران", "Air tickets")} · ${esc(b.airline)} · <span dir="ltr">${esc(b.route)}</span><br><small>${fmtDate(b.depart)}${b.ret ? " – " + fmtDate(b.ret) : ""} · ${CABIN()[b.cabin] || ""}${(b.tickets || []).length ? " · " + T("تذاكر", "Tickets") + ": " + esc(b.tickets.join(", ")) : ""}</small></td><td>${esc((b.travelers || []).join(", ") || b.pax)}</td><td>${money(b.sell)}</td></tr></tbody>
-        <tfoot><tr><td colspan="2">${T("الإجمالي", "Total")}</td><td><b>${money(b.sell)}</b></td></tr><tr><td colspan="2">${T("المدفوع", "Paid")}</td><td>${money(m.inn)}</td></tr><tr><td colspan="2">${T("المتبقي", "Balance due")}</td><td><b>${money(Math.max(0, b.sell - m.inn))}</b></td></tr></tfoot></table>
-      <p class="muted">${T("شكراً لتعاملكم مع Green Travel. جميع الحجوزات تخضع لشروط شركة الطيران.", "Thank you for choosing Green Travel. All bookings are subject to the airline's fare rules.")}</p></div>`);
+    const b = DB.get("bookings", id);
+    if (!b) return;
+    closeDrawer();
+    const inv = invoiceOf(b), m = invMoney(b, inv);
+    const tools = `<div class="tk-actions inv-tools">
+        ${can("billing") ? `<button type="button" class="btn btn--ghost btn--sm" id="invEdit">✎ ${T("تعديل الفاتورة", "Edit invoice")}</button>` : ""}
+        ${can("payments") && m.due > 0.004 ? `<button type="button" class="btn btn--accent btn--sm" id="invPay">${icon("i-card")}${T("تسجيل دفعة", "Record payment")}</button>` : ""}
+        ${Math.abs(m.total - ((+b.sell || 0) + (+b.serviceFee || 0))) > 0.004 ? `<span class="tag tag--out">${T("إجمالي الفاتورة يختلف عن سعر الحجز", "Invoice total differs from the booking price")}</span>` : ""}
+      </div>`;
+    openModal(T("الفاتورة", "Invoice") + " · " + inv.number, tools + docActionsHtml(b, "invoice") + invoiceDocHtml(b), true);
+    bindDocActions(b, "invoice", { el: () => $("#invoiceDoc"), file: `Invoice-${inv.number}.pdf`, text: () => invoiceText(b), print: () => invoiceDocHtml(b), csv: () => downloadCsv(`invoice-${inv.number}`, ["invoice", "date", "due", "bill_to", "booking", "pnr", "description", "details", "qty", "unit_price", "amount"],
+      inv.items.map((x) => [inv.number, inv.date, inv.due, inv.billTo.split("\n")[0], b.id, b.pnr, x.desc, String(x.detail || "").replace(/\n/g, " / "), +x.qty || 0, +x.unit || 0, (+x.qty || 0) * (+x.unit || 0)])) });
+    if ($("#invEdit")) $("#invEdit").addEventListener("click", () => invoiceEditor(b));
+    if ($("#invPay")) $("#invPay").addEventListener("click", () => invoicePayment(b));
+  }
+  // Edit anything on the invoice (owner or "billing" permission; the database checks it too)
+  function invoiceEditor(b) {
+    const inv = invoiceOf(b), saved = b.invoice || {};
+    const pms = DB.all("paymentMethods").filter((x) => x.enabled);
+    const itemRow = (x) => `<div class="inv-ed-item" data-item><input name="desc" value="${esc(x.desc || "")}" placeholder="Description" aria-label="Description"><textarea name="detail" rows="2" placeholder="Details" aria-label="Details">${esc(x.detail || "")}</textarea><input name="qty" type="number" min="0" step="any" value="${+x.qty || 0}" aria-label="Qty"><input name="unit" type="number" min="0" step="0.01" value="${+x.unit || 0}" aria-label="Unit price"><button type="button" class="btn btn--ghost btn--sm" data-rm-item aria-label="${T("حذف", "Remove")}">×</button></div>`;
+    openModal(T("تعديل الفاتورة", "Edit invoice") + " · " + inv.number, `
+      <form id="invForm" class="dr-form" novalidate lang="en">
+        <p class="hint">${icon("i-list")}${T("الفاتورة تُطبع بالإنجليزية دائماً، فاكتب البيانات بالإنجليزية. بيانات شركتك تُعدَّل من «بيانات الشركة».", "Invoices are always printed in English, so write in English. Your company's details are edited in «Company details».")}</p>
+        <div class="f3">${inp("number", "Invoice number", inv.number, "text", "ltr")}${inp("date", "Invoice date", inv.date, "date")}${inp("due", "Due date", inv.due, "date")}</div>
+        ${area("billTo", "Bill to (one line each: name, address, phone, email…)", inv.billTo, 'dir="ltr" style="min-height:120px"')}
+        <fieldset><legend>Lines</legend><div class="inv-ed-head"><span>Description</span><span>Details</span><span>Qty</span><span>Unit price (USD)</span><span></span></div>
+          <div id="invItems">${inv.items.map(itemRow).join("")}</div><button type="button" class="btn btn--ghost btn--sm" id="invAddItem">+ ${T("سطر", "Line")}</button></fieldset>
+        ${area("notes", "Notes (optional)", inv.notes, 'dir="ltr"')}
+        ${area("terms", "Terms", inv.terms, 'dir="ltr" style="min-height:70px"')}
+        <fieldset><legend>${T("وسائل الدفع التي تظهر في الفاتورة", "Payment methods shown on the invoice")}</legend>
+          ${pms.length ? pms.map((x) => `<label class="perm"><input type="checkbox" name="pm" value="${x.id}" ${(Array.isArray(inv.methods) ? inv.methods.includes(x.id) : x.showOnInvoice) ? "checked" : ""}><span><b>${esc(x.label)}</b><small>${esc(PM_KIND()[x.kind] || x.kind)}</small></span></label>`).join("") : `<p class="muted">${T("لا توجد وسائل دفع بعد. أضفها من «وسائل الدفع والحسابات البنكية».", "No payment methods yet. Add them in «Payment methods & bank accounts».")}</p>`}</fieldset>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ الفاتورة", "Save invoice")}</button><button type="button" class="btn btn--ghost" id="invBack">${T("رجوع", "Back")}</button>${Object.keys(saved).length ? `<button type="button" class="btn btn--ghost danger" id="invReset">${T("إرجاعها تلقائية من بيانات الحجز", "Reset to automatic (from the booking)")}</button>` : ""}</div>
+      </form>`, true);
+    const f = $("#invForm");
+    const bindRm = () => $$("[data-rm-item]", f).forEach((x) => (x.onclick = () => { if ($$("[data-item]", f).length > 1) x.parentNode.remove(); }));
+    bindRm();
+    $("#invAddItem").addEventListener("click", () => { $("#invItems").insertAdjacentHTML("beforeend", itemRow({ qty: 1, unit: 0 })); bindRm(); });
+    $("#invBack").addEventListener("click", () => printInvoice(b.id));
+    const save = async (invoice) => {
+      try { await DB.update("bookings", b.id, { invoice }); } catch (er) { return errToast(er); }
+      log(T("عدّل الفاتورة", "Edited invoice"), b.id); toast(T("حُفظت الفاتورة", "Invoice saved"));
+      printInvoice(b.id);
+    };
+    if ($("#invReset")) $("#invReset").addEventListener("click", (e) => { const x = e.currentTarget; if (x.dataset.confirm !== "1") { x.dataset.confirm = "1"; x.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; } save({}); });
+    f.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const items = $$("[data-item]", f).map((r) => ({ desc: r.querySelector("[name=desc]").value.trim(), detail: r.querySelector("[name=detail]").value.trim(), qty: +r.querySelector("[name=qty]").value || 0, unit: +(+r.querySelector("[name=unit]").value || 0).toFixed(2) })).filter((x) => x.desc || x.unit);
+      if (!items.length) return toast(T("أضف سطراً واحداً على الأقل", "Add at least one line"));
+      const v = (n) => f.elements[n].value.trim();
+      save({ number: v("number").slice(0, 40), date: v("date"), due: v("due"), billTo: v("billTo").slice(0, 1500), items: items.slice(0, 40), notes: v("notes").slice(0, 3000), terms: v("terms").slice(0, 3000), methods: $$("[name=pm]:checked", f).map((x) => x.value) });
+    });
+  }
+  // Record a payment straight from the invoice
+  function invoicePayment(b) {
+    const inv = invoiceOf(b), m = invMoney(b, inv);
+    const pms = DB.all("paymentMethods").filter((x) => x.enabled);
+    openModal(T("تسجيل دفعة على الفاتورة", "Record a payment on the invoice") + " · " + inv.number, `
+      <form id="ipBkForm" class="dr-form" novalidate>
+        <p class="hint">${T("المستحق الآن", "Balance due now")}: <b dir="ltr">${usdEn.format(m.due)}</b></p>
+        <div class="f3">${inp("amount", T("المبلغ (USD)", "Amount (USD)"), m.due, "number", "ltr")}${sel("method", T("الطريقة", "Method"), METHOD(), "zelle")}${inp("date", T("التاريخ", "Date"), today(), "date")}</div>
+        <div class="f3">${pms.length ? sel("account", T("الحساب المستلِم", "Received into"), Object.fromEntries([["", "—"], ...pms.map((x) => [x.label, x.label])]), "") : ""}${inp("ref", T("مرجع العملية", "Transaction reference"), "", "text", "ltr")}</div>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("تسجيل الدفعة", "Record payment")}</button><button type="button" class="btn btn--ghost" id="ipBack">${T("رجوع", "Back")}</button></div>
+      </form>`);
+    $("#ipBack").addEventListener("click", () => printInvoice(b.id));
+    $("#ipBkForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(e.target)), amount = +d.amount;
+      if (!(amount > 0)) return toast(T("أدخل مبلغاً صحيحاً", "Enter a valid amount"));
+      const btn = e.target.querySelector("[type=submit]"); btn.disabled = true;
+      try { await DB.insert("payments", { date: d.date || today(), dir: "in", amount, method: d.method, bookingId: b.id, partnerId: b.partnerId || null, ref: (d.ref || "").trim(), note: d.account ? `${T("إلى حساب", "Into")}: ${d.account}` : "" }); }
+      catch (er) { btn.disabled = false; return errToast(er); }
+      log(T("سجّل دفعة على الفاتورة", "Recorded invoice payment"), `${b.id} · ${usdEn.format(amount)}`);
+      toast(amount >= m.due - 0.004 ? T("تم الدفع بالكامل: الفاتورة مختومة PAID", "Paid in full: the invoice is stamped PAID") : T("تم تسجيل الدفعة", "Payment recorded"));
+      printInvoice(b.id); route();
+    });
+  }
+  // The same actions for a ticket and an invoice: print, PDF, email with the PDF attached, share the PDF to any app, WhatsApp / SMS text, copy, Excel (CSV)
+  function docActionsHtml(b, kind) {
+    return `<div class="tk-actions">
+        <button type="button" class="btn btn--primary btn--sm" data-doc-print>${icon("i-list")}${T("طباعة", "Print")}</button>
+        <button type="button" class="btn btn--ghost btn--sm" data-doc-pdf>${icon("i-ticket")}${T("حفظ PDF", "Save PDF")}</button>
+        ${kind === "invoice" ? `<button type="button" class="btn btn--ghost btn--sm" data-doc-csv>${T("Excel (CSV)", "Excel (CSV)")}</button>` : ""}
+        <span class="tk-mail"><input type="email" data-doc-to dir="ltr" placeholder="${T("بريد العميل", "Customer email")}" value="${esc(b.customer.email || "")}"><button type="button" class="btn btn--accent btn--sm" data-doc-email>${icon("i-mail")}${T("إرسال بالبريد (PDF)", "Email (PDF)")}</button></span>
+      </div>
+      <div class="tk-actions tk-share">
+        <button type="button" class="btn btn--accent btn--sm" data-doc-share>${icon("i-ticket")}${T("مشاركة PDF (واتساب، بريد، تطبيقات…)", "Share PDF (WhatsApp, Mail, apps…)")}</button>
+        ${b.customer.phone ? `<a class="btn btn--ghost btn--sm" target="_blank" rel="noopener" data-doc-wa href="#">${icon("i-whatsapp")}${T("واتساب: نص", "WhatsApp: text")}</a><a class="btn btn--ghost btn--sm" data-doc-sms href="#">${icon("i-chat")}SMS</a>` : ""}
+        <button type="button" class="btn btn--ghost btn--sm" data-doc-copy>${T("نسخ التفاصيل", "Copy details")}</button>
+      </div>
+      ${kind === "ticket" && b.reminders && b.reminders.ticket ? `<p class="hint">${icon("i-check")}${T("أُرسلت التذكرة بالبريد في", "Ticket emailed on")} ${fmtTime(b.reminders.ticket)}</p>` : ""}`;
+  }
+  const pdfOpts = (name) => ({ margin: 10, filename: name, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }, pagebreak: { mode: ["css", "legacy"] } });
+  async function pdfBlob(el, name) { await loadPdfLib(); return window.html2pdf().set(pdfOpts(name)).from(el).outputPdf("blob"); }
+  const blobB64 = (blob) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = rej; r.readAsDataURL(blob); });
+  function bindDocActions(b, kind, o) {
+    const root = $("#ofModalBody") || document;
+    const q = (sel) => root.querySelector(sel) || document.querySelector(sel);
+    const label = kind === "invoice" ? T("الفاتورة", "invoice") : T("التذكرة", "ticket");
+    const wa = q("[data-doc-wa]"), sms = q("[data-doc-sms]");
+    if (wa) wa.href = `https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(o.text())}`;
+    if (sms) sms.href = `sms:${b.customer.phone || ""}?&body=${encodeURIComponent(o.text())}`;
+    q("[data-doc-print]").addEventListener("click", () => { printHtml(o.print()); log(`${T("طبع", "Printed")} ${label}`, b.id); });
+    q("[data-doc-copy]").addEventListener("click", () => (navigator.clipboard ? navigator.clipboard.writeText(o.text()) : Promise.reject()).then(() => toast(T("تم النسخ", "Copied"))).catch(() => toast(T("تعذّر النسخ", "Couldn't copy"))));
+    if (q("[data-doc-csv]") && o.csv) q("[data-doc-csv]").addEventListener("click", () => { o.csv(); log(`${T("صدّر", "Exported")} ${label} CSV`, b.id); });
+    q("[data-doc-pdf]").addEventListener("click", async (e) => { const btn = e.currentTarget; btn.disabled = true; if (await savePdf(o.el(), o.file)) log(`${T("حفظ PDF", "Saved PDF")}: ${label}`, b.id); btn.disabled = false; });
+    // The PDF goes to any app through the phone's or computer's share sheet; otherwise it is downloaded
+    q("[data-doc-share]").addEventListener("click", async (e) => {
+      const btn = e.currentTarget; btn.disabled = true;
+      try {
+        const blob = await pdfBlob(o.el(), o.file);
+        const file = new File([blob], o.file, { type: "application/pdf" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: o.file, text: o.text() }); log(`${T("شارك PDF", "Shared PDF")}: ${label}`, b.id); }
+        else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = o.file; document.body.appendChild(a); a.click(); a.remove(); toast(T("حُفظ ملف PDF: أرفقه في التطبيق الذي تريد.", "PDF saved: attach it in any app you like.")); }
+      } catch (er) { if (er && er.name !== "AbortError") toast(T("تعذّر تجهيز الملف، استخدم «حفظ PDF».", "Couldn't prepare the file; use Save PDF.")); }
+      btn.disabled = false;
+    });
+    // Email: the PDF is attached (the ticket email also shows the itinerary in the message)
+    q("[data-doc-email]").addEventListener("click", async (e) => {
+      const to = q("[data-doc-to]").value.trim(), btn = e.currentTarget;
+      if (!/^\S+@\S+\.\S+$/.test(to)) { toast(T("أدخل بريد العميل", "Enter the customer's email")); return; }
+      btn.disabled = true;
+      try {
+        const blob = await pdfBlob(o.el(), o.file);
+        if (blob.size > 4.5e6) throw new Error(T("الملف كبير جداً للإرسال", "The file is too large to email"));
+        await DB.sendEmail(kind, b.id, to, { pdf: await blobB64(blob), filename: o.file });
+        toast((kind === "invoice" ? T("أُرسلت الفاتورة إلى ", "Invoice sent to ") : T("أُرسلت التذكرة إلى ", "Ticket sent to ")) + to);
+      } catch (er) {
+        if (/not_configured/.test(er.message)) {
+          toast(T("خدمة البريد غير مفعّلة بعد: سيُحفظ PDF وتُفتح رسالة لترفقه بها.", "Email service not set up yet: the PDF will be saved and an email opened to attach it."));
+          await savePdf(o.el(), o.file);
+          location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(`${CO().tradeName} — ${o.file.replace(/\.pdf$/, "")}`)}&body=${encodeURIComponent(o.text())}`;
+        } else errToast(er);
+      }
+      btn.disabled = false;
+    });
   }
   function printHtml(html) {
     $("#printArea").innerHTML = html;
@@ -940,6 +1212,7 @@
           <div class="perm-grid">${PERMS().map(([k, l, h]) => `<label class="perm"><input type="checkbox" name="perm" value="${k}" ${(s.perms || []).includes(k) ? "checked" : ""}><span><b>${l}</b><small>${h}</small></span></label>`).join("")}</div>
           <p class="hint hint--lock">${icon("i-lock")}${T("للمالك فقط ولا يمكن منحها: التكاليف، الأرباح، المدفوع للموردين، المصروفات، التقارير المالية، الموظفون، سجل النشاط، تسعير الوكلاء.", "Owner only, cannot be granted: costs, profit, supplier payments, expenses, financial reports, team, activity log, agent pricing.")}</p></fieldset>`}
         <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button>
+          ${id && !isOwn ? `<button type="button" class="btn btn--ghost" id="sfMfa" title="${T("إذا فقد الموظف جواله: يربط تطبيقاً جديداً عند دخوله القادم", "If the employee lost their phone: they link a new app at their next sign-in")}">🔐 ${T("إعادة ضبط التحقق بخطوتين", "Reset two-step verification")}</button>` : ""}
           ${id && !isOwn ? `<button type="button" class="btn btn--ghost danger" id="sfDel">${T("حذف الموظف", "Delete employee")}</button>` : ""}</div>
       </form>`, true);
     const f = $("#sfForm");
@@ -955,6 +1228,14 @@
       const btn = f.querySelector("[type=submit]"); btn.disabled = true;
       try { await DB.admin("save_staff", payload); } catch (er) { btn.disabled = false; return errToast(er); }
       closeModal(); toast(T("تم حفظ الموظف", "Employee saved")); showApp();
+    });
+    const mfa = $("#sfMfa");
+    if (mfa) mfa.addEventListener("click", async () => {
+      if (mfa.dataset.confirm !== "1") { mfa.dataset.confirm = "1"; mfa.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
+      mfa.disabled = true;
+      try { await DB.admin("reset_mfa", { id }); } catch (er) { mfa.disabled = false; return errToast(er); }
+      toast(T("تمت إعادة الضبط: سيربط الموظف تطبيقاً جديداً عند دخوله القادم", "Reset done: the employee links a new app at their next sign-in"));
+      mfa.textContent = "✓";
     });
     const del = $("#sfDel");
     if (del) del.addEventListener("click", async () => {
@@ -1029,6 +1310,84 @@
   }
 
   /* ---------- Settings (owner) ---------- */
+  /* ---------- Payment methods & bank accounts (owner or "billing") ---------- */
+  function viewPayMethods(el) {
+    const list = DB.all("paymentMethods");
+    el.innerHTML = `
+      <p class="hint">${icon("i-lock")}${T("لا يضيف أو يعدّل وسائل الدفع والحسابات البنكية إلا المالك أو الموظف الذي أعطيته صلاحية «الفوترة والحسابات البنكية». القاعدة نفسها تمنع غيرهم.", "Only the owner, or staff you give the «Billing & bank accounts» permission, can add or change payment methods and bank accounts. The database itself blocks everyone else.")}</p>
+      <div class="of-toolbar"><button type="button" class="btn btn--accent btn--sm" id="pmNew">+ ${T("وسيلة دفع / حساب بنكي", "Payment method / bank account")}</button></div>
+      <section class="of-card"><div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الاسم", "Name")}</th><th>${T("النوع", "Type")}</th><th>${T("التفاصيل", "Details")}</th><th>${T("في الفاتورة", "On invoice")}</th><th>${T("الحالة", "Status")}</th><th></th></tr></thead>
+        <tbody>${list.length ? list.map((m) => `<tr><td><b>${esc(m.label)}</b></td><td>${esc(PM_KIND()[m.kind] || m.kind)}</td><td dir="ltr"><small>${nl(m.details)}</small></td><td>${m.showOnInvoice ? "✓" : "—"}</td><td>${m.enabled ? `<span class="pill pill--ticketed">${T("مفعّلة", "On")}</span>` : `<span class="pill pill--cancelled">${T("متوقفة", "Off")}</span>`}</td><td class="row-actions"><button type="button" class="btn btn--ghost btn--sm" data-pm="${m.id}">${T("تعديل", "Edit")}</button></td></tr>`).join("") : `<tr><td colspan="6" class="muted empty">${T("لا توجد وسائل دفع بعد. أضف حسابك البنكي أو Zelle ليظهر في الفواتير.", "No payment methods yet. Add your bank account or Zelle to show it on invoices.")}</td></tr>`}</tbody></table></div></section>`;
+    $("#pmNew").addEventListener("click", () => payMethodForm(null));
+    $$("[data-pm]", el).forEach((x) => x.addEventListener("click", () => payMethodForm(DB.all("paymentMethods").find((m) => m.id === x.dataset.pm))));
+  }
+  function payMethodForm(m) {
+    m = m || { kind: "bank", label: "", details: "", showOnInvoice: true, enabled: true, sort: 0 };
+    const ex = { bank: "Bank: Chase\nAccount name: World Services dba Green Travel\nRouting: 000000000\nAccount: 000000000", zelle: "Zelle: info@greentravel.us", wire: "Bank, SWIFT, IBAN / account, beneficiary address", card: "Visa / Mastercard / Amex — pay by phone or payment link", cash: "At our office", check: "Payable to: World Services dba Green Travel", other: "" };
+    openModal(m.id ? T("تعديل وسيلة دفع", "Edit payment method") : T("وسيلة دفع جديدة", "New payment method"), `
+      <form id="pmForm" class="dr-form" novalidate>
+        <div class="f3">${sel("kind", T("النوع", "Type"), PM_KIND(), m.kind)}${inp("label", T("الاسم الظاهر (بالإنجليزية)", "Name shown (English)"), m.label, "text", "ltr")}${inp("sort", T("الترتيب", "Order"), m.sort || 0, "number", "ltr")}</div>
+        ${area("details", T("التفاصيل التي تظهر للعميل (بالإنجليزية)", "Details shown to the customer (English)"), m.details, `dir="ltr" style="min-height:120px" placeholder="${esc(ex[m.kind] || "")}"`)}
+        <label class="perm"><input type="checkbox" name="showOnInvoice" ${m.showOnInvoice ? "checked" : ""}><span><b>${T("تظهر في الفواتير", "Show on invoices")}</b><small>${T("يمكن اختيارها لكل فاتورة أيضاً", "Can also be chosen per invoice")}</small></span></label>
+        <label class="perm"><input type="checkbox" name="enabled" ${m.enabled ? "checked" : ""}><span><b>${T("مفعّلة", "Enabled")}</b><small>${T("تظهر عند تسجيل الدفعات", "Offered when recording payments")}</small></span></label>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button>${m.id ? `<button type="button" class="btn btn--ghost danger" id="pmDel">${T("حذف", "Delete")}</button>` : ""}</div>
+      </form>`);
+    const f = $("#pmForm");
+    f.elements.kind.addEventListener("change", () => (f.elements.details.placeholder = ex[f.elements.kind.value] || ""));
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = { id: m.id, kind: f.elements.kind.value, label: f.elements.label.value.trim().slice(0, 80), details: f.elements.details.value.trim().slice(0, 1500), sort: +f.elements.sort.value || 0, showOnInvoice: f.elements.showOnInvoice.checked, enabled: f.elements.enabled.checked };
+      if (!d.label) return toast(T("اكتب اسم وسيلة الدفع", "Enter a name for the payment method"));
+      try { await DB.savePayMethod(d); } catch (er) { return errToast(er); }
+      log(m.id ? T("عدّل وسيلة دفع", "Edited payment method") : T("أضاف وسيلة دفع", "Added payment method"), d.label);
+      closeModal(); toast(T("تم الحفظ", "Saved")); route();
+    });
+    if ($("#pmDel")) $("#pmDel").addEventListener("click", async (e) => {
+      const x = e.currentTarget; if (x.dataset.confirm !== "1") { x.dataset.confirm = "1"; x.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
+      try { await DB.deletePayMethod(m.id); } catch (er) { return errToast(er); }
+      log(T("حذف وسيلة دفع", "Deleted payment method"), m.label); closeModal(); route();
+    });
+  }
+
+  /* ---------- Company details: the letterhead of every invoice and ticket (owner) ---------- */
+  function viewCompany(el) {
+    const c = CO();
+    el.innerHTML = `
+      <p class="hint">${icon("i-briefcase")}${T("هذه البيانات تظهر في رأس كل فاتورة وتذكرة وخط سير رحلة. الفواتير تُطبع بالإنجليزية، فاكتب العنوان والشروط بالإنجليزية. الحسابات البنكية تُضاف من «وسائل الدفع والحسابات البنكية».", "These details appear at the top of every invoice, ticket and itinerary. Invoices are printed in English, so write the address and terms in English. Bank accounts are added in «Payment methods & bank accounts».")}</p>
+      <form id="coForm" class="of-card dr-form" novalidate>
+        <fieldset><legend>${T("الاسم", "Name")}</legend><div class="f3">
+          ${inp("tradeName", T("الاسم التجاري (إنجليزي)", "Trade name (English)"), c.tradeName)}${inp("tradeNameAr", T("الاسم التجاري (عربي)", "Trade name (Arabic)"), c.tradeNameAr)}${inp("legalName", T("الاسم القانوني المسجل", "Registered legal name"), c.legalName)}</div></fieldset>
+        <fieldset><legend>${T("العنوان", "Address")}</legend><div class="f3">
+          ${inp("address", T("الشارع والرقم", "Street address"), c.address, "text", "ltr")}${inp("city", T("المدينة", "City"), c.city, "text", "ltr")}${inp("state", T("الولاية", "State"), c.state, "text", "ltr")}
+          ${inp("zip", T("الرمز البريدي", "ZIP code"), c.zip, "text", "ltr")}${inp("country", T("الدولة", "Country"), c.country, "text", "ltr")}</div></fieldset>
+        <fieldset><legend>${T("التواصل", "Contact")}</legend><div class="f3">
+          ${inp("email", T("البريد", "Email"), c.email, "email", "ltr")}${inp("website", T("الموقع", "Website"), c.website, "text", "ltr")}</div>
+          ${area("phones", T("أرقام الهاتف (سطر لكل رقم)", "Phone numbers (one per line)"), (c.phones || []).join("\n"), 'dir="ltr" style="min-height:110px"')}</fieldset>
+        <fieldset><legend>${T("الأرقام الرسمية", "Official numbers")}</legend><div class="f3">
+          ${inp("taxId", T("رقم الضريبة / EIN", "Tax ID / EIN"), c.taxId, "text", "ltr")}${inp("iata", T("رقم IATA / ARC", "IATA / ARC number"), c.iata, "text", "ltr")}${inp("sellerOfTravel", T("رقم تسجيل بائع السفر (Seller of Travel)", "Seller of Travel registration"), c.sellerOfTravel, "text", "ltr")}</div></fieldset>
+        <fieldset><legend>${T("الفواتير", "Invoices")}</legend>
+          ${area("paymentInfo", T("طريقة الدفع التي تظهر في الفاتورة (مثل: Zelle، تحويل بنكي…)", "How to pay, shown on the invoice (e.g. Zelle, bank transfer…)"), c.paymentInfo, 'style="min-height:84px"')}
+          ${area("invoiceTerms", T("الشروط في أسفل الفاتورة", "Terms at the bottom of the invoice"), c.invoiceTerms, 'style="min-height:84px"')}</fieldset>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button><button type="button" class="btn btn--ghost" id="coPreview">${T("معاينة الفاتورة", "Preview invoice")}</button></div>
+      </form>`;
+    const f = $("#coForm");
+    const read = () => { const d = Object.fromEntries(new FormData(f)); d.phones = String(d.phones || "").split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 8); return Object.assign({}, CO(), d); };
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const c2 = read();
+      if (!c2.tradeName.trim() || !c2.legalName.trim()) return toast(T("اكتب الاسم التجاري والاسم القانوني", "Enter the trade name and the legal name"));
+      if (c2.email && !/^\S+@\S+\.\S+$/.test(c2.email)) return toast(T("البريد غير صحيح", "The email looks wrong"));
+      const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+      try { await DB.saveCompany(c2); log(T("عدّل بيانات الشركة", "Edited company details")); toast(T("تم الحفظ: ستظهر في كل الفواتير والتذاكر", "Saved: shown on every invoice and ticket")); }
+      catch (er) { errToast(er); }
+      btn.disabled = false;
+    });
+    $("#coPreview").addEventListener("click", () => {
+      const sample = DB.all("bookings")[0] || { id: "GT-SAMPLE", created: today(), status: "confirmed", customer: { name: "Customer Name", phone: "+1 (000) 000-0000", email: "customer@example.com" }, route: "ORD → AMM", airline: "Royal Jordanian", cabin: "economy", depart: today(), ret: "", pax: 1, travelers: ["CUSTOMER NAME"], pnr: "ABC123", tickets: [], sell: 1200, serviceFee: 0, segments: [], reminders: {} };
+      openModal(T("معاينة الفاتورة", "Invoice preview"), invoiceDocHtml(sample), true);
+    });
+  }
+
   function viewSettings(el) {
     el.innerHTML = `
       <section class="of-card"><header class="of-card__h"><h3>${T("خصوصية الأرباح", "Profit privacy")}</h3></header>
@@ -1050,33 +1409,56 @@
   };
   const digits = (p) => String(p || "").replace(/[^\d]/g, "").replace(/^(\d{10})$/, "1$1");
   const L = (ar, en) => `<span class="bi"><b>${ar}</b><small>${en}</small></span>`;
+  // Letterhead of every invoice and ticket: the company details the owner saves in «Company details»
+  const CO = () => DB.company;
+  const coPhones = () => CO().phones || [];
+  const coAddress = () => { const c = CO(); return [c.address, [c.city, [c.state, c.zip].filter(Boolean).join(" ")].filter(Boolean).join(", "), c.country].filter(Boolean).join(" · "); };
+  const coIds = () => { const c = CO(); return [c.taxId ? `EIN / Tax ID ${c.taxId}` : "", c.iata ? `IATA ${c.iata}` : "", c.sellerOfTravel ? `Seller of Travel ${c.sellerOfTravel}` : ""].filter(Boolean).join(" · "); };
+  function letterhead(titleEn, titleAr, meta) {
+    const c = CO();
+    return `<header class="st-head doc-head"><div class="doc-logo"><img src="assets/img/logo-512.png" alt="Logo" width="110" height="110"></div>
+      <div class="doc-co"><b>${esc(c.tradeName)} · ${esc(c.tradeNameAr)}</b><small>${esc(c.legalName)}</small>${coAddress() ? `<small>${esc(coAddress())}</small>` : ""}
+        <small dir="ltr">${esc(coPhones().join(" · "))}</small><small dir="ltr">${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small dir="ltr">${esc(coIds())}</small>` : ""}</div>
+      <div class="st-meta"><b>${titleEn}</b><span>${titleAr}</span>${meta || ""}</div></header>`;
+  }
+  // Ticket / itinerary for the customer, always in English, in the same framed layout as the invoice
   function ticketDocHtml(b) {
-    const segs = segmentsOf(b), pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "—"];
-    const m = bookingMoney(b);
-    return `<div class="statement ticket-doc" id="ticketDoc">
-      <header class="st-head"><img src="assets/img/logo.png" alt="" width="52" height="52"><div><b>Green Travel · جرين ترافيل</b><small>World Services dba Green Travel · info@greentravel.us · greentravel.us</small><small dir="ltr">${COMPANY_PHONES.join(" · ")}</small></div>
-        <div class="st-meta"><b>${b.status === "ticketed" ? "E-TICKET RECEIPT" : "ITINERARY"}</b><span>${b.status === "ticketed" ? "إيصال التذكرة الإلكترونية" : "خط سير الرحلة"}</span><span dir="ltr">${fmtDate(today())}</span></div></header>
+    const c = CO(), m = bookingMoney(b), segs = segmentsOf(b);
+    const pp = b.passports || [];
+    const pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "—"];
+    const TYPE_EN = { adult: "Adult", child: "Child", infant: "Infant" };
+    const typeOf = (n, i) => { const x = pp.find((q) => q.name && q.name.toUpperCase() === String(n).toUpperCase()) || pp[i] || {}; return TYPE_EN[x.type] || "Adult"; };
+    const ticketed = b.status === "ticketed";
+    const total = (+b.sell || 0) + (+b.serviceFee || 0);
+    const addr = coAddress();
+    const box = (label, value, mono) => `<div><small>${label}</small><strong class="${mono ? "mono" : ""}">${value}</strong></div>`;
+    return `<div class="statement ticket-doc" id="ticketDoc" lang="en" dir="ltr">
+      <header class="st-head doc-head"><div class="doc-logo"><img src="assets/img/logo-512.png" alt="Logo" width="110" height="110"></div>
+        <div class="doc-co"><b>${esc(c.tradeName)}</b>${c.legalName && c.legalName !== c.tradeName ? `<small>${esc(c.legalName)}</small>` : ""}${addr ? `<small>${esc(addr)}</small>` : ""}<small>${esc(coPhones().join(" · "))}</small><small>${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small>${esc(coIds())}</small>` : ""}</div>
+        <div class="st-meta"><b>${ticketed ? "E-TICKET RECEIPT" : "ITINERARY"}</b><span class="mono">${esc(b.id)}</span><span>Issued: ${enDate(b.ticketedAt || today())}</span><span class="tk-status tk-status--${ticketed ? "ok" : "wait"}">${ticketed ? "TICKETED" : b.status === "confirmed" ? "CONFIRMED · NOT YET TICKETED" : "NOT YET TICKETED"}</span></div></header>
       <div class="tk-ids">
-        <div>${L("رقم الحجز", "Booking ref (PNR)")}<strong dir="ltr" class="mono">${esc(b.pnr || "—")}</strong></div>
-        <div>${L("شركة الطيران", "Airline")}<strong>${esc(b.airline || "—")}</strong></div>
-        <div>${L("الدرجة", "Cabin")}<strong>${esc(CABIN()[b.cabin] || b.cabin || "—")}</strong></div>
-        <div>${L("المرجع", "Reference")}<strong dir="ltr" class="mono">${esc(b.id)}</strong></div>
+        ${box("Booking reference (PNR)", esc(b.pnr || "—"), true)}
+        ${box("Airline", esc(b.airline || "—"))}
+        ${box("Cabin", esc(CABIN_EN[b.cabin] || b.cabin || "—"))}
+        ${box("Our reference", esc(b.id), true)}
       </div>
-      <h4 class="tk-h">${L("المسافرون", "Passengers")}</h4>
-      <table class="of-table"><thead><tr><th>#</th><th>${T("الاسم", "Name")} / Name</th><th>${T("رقم التذكرة", "Ticket number")} / E-ticket</th></tr></thead>
-        <tbody>${pax.map((n, i) => `<tr><td>${i + 1}</td><td><b>${esc(n)}</b></td><td dir="ltr" class="mono">${esc((b.tickets || [])[i] || (b.tickets || [])[0] || "—")}</td></tr>`).join("")}</tbody></table>
-      <h4 class="tk-h">${L("الرحلات", "Flights")}</h4>
-      <table class="of-table"><thead><tr><th>${T("الرحلة", "Flight")} / Flight</th><th>${T("من", "From")} → ${T("إلى", "To")}</th><th>${T("التاريخ", "Date")} / Date</th><th>${T("الإقلاع", "Departs")}</th><th>${T("الوصول", "Arrives")}</th></tr></thead>
-        <tbody>${segs.map((s) => `<tr><td dir="ltr" class="mono">${esc(s.flight || "—")}</td><td dir="ltr"><b>${esc(s.from)}</b> → <b>${esc(s.to)}</b>${s.via ? ` <small>via ${esc(s.via)}</small>` : ""}</td><td>${fmtDate(s.date)}</td><td dir="ltr" class="mono">${esc(s.dep || "—")}</td><td dir="ltr" class="mono">${esc(s.arr || "—")}${s.arrDate && s.arrDate !== s.date ? ` <small>${fmtDate(s.arrDate)}</small>` : ""}</td></tr>`).join("")}</tbody></table>
+      <h4 class="tk-h">Passengers</h4>
+      <table class="of-table"><thead><tr><th>#</th><th>Name (as on passport)</th><th>Type</th><th>E-ticket number</th></tr></thead>
+        <tbody>${pax.map((n, i) => `<tr><td>${i + 1}</td><td><b>${esc(n)}</b></td><td>${typeOf(n, i)}</td><td class="mono">${esc((b.tickets || [])[i] || "—")}</td></tr>`).join("")}</tbody></table>
+      <h4 class="tk-h">Flights</h4>
+      <table class="of-table"><thead><tr><th>Flight</th><th>From → To</th><th>Date</th><th>Departs</th><th>Arrives</th></tr></thead>
+        <tbody>${segs.map((x) => `<tr><td class="mono">${esc(x.flight || "—")}</td><td><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b>${x.via ? ` <small>via ${esc(x.via)}</small>` : ""}</td><td>${enDate(x.date)}</td><td class="mono">${esc(x.dep || "—")}</td><td class="mono">${esc(x.arr || "—")}${x.arrDate && x.arrDate !== x.date ? ` <small>${enDate(x.arrDate)}</small>` : ""}</td></tr>`).join("")}</tbody></table>
       <div class="tk-foot">
-        <div>${L("الأمتعة", "Baggage")}<span>${esc(b.baggage || T("حسب شروط شركة الطيران", "As per airline fare rules"))}</span></div>
-        <div>${L("المبلغ", "Amount")}<span><b dir="ltr">${usd.format(b.sell)}</b> · ${T("المدفوع", "Paid")} <span dir="ltr">${usd.format(m.inn)}</span>${m.due ? ` · ${T("المتبقي", "Due")} <span dir="ltr">${usd.format(m.due)}</span>` : ""}</span></div>
+        <div><small>Baggage</small><span>${esc(b.baggage || "As per the airline's fare rules")}</span></div>
+        <div><small>Fare</small><span><b>${usdEn.format(total)}</b> · Paid ${usdEn.format(m.inn)}${m.due ? ` · Balance ${usdEn.format(m.due)}` : ""}</span></div>
       </div>
       <ul class="tk-notes">
-        <li>${T("احضر إلى المطار قبل 3 ساعات للرحلات الدولية وساعتين للداخلية.", "Arrive 3 hours early for international flights and 2 hours for domestic.")} <small>Arrive 3h before international / 2h before domestic flights.</small></li>
-        <li>${T("تأكد من صلاحية جواز السفر (6 أشهر على الأقل) والتأشيرة إن لزمت.", "Make sure your passport is valid for 6+ months and you hold any required visa.")} <small>Passport valid 6+ months; visa if required.</small></li>
-        <li>${T("الأوقات بالتوقيت المحلي، والحجز يخضع لشروط شركة الطيران.", "Times are local; the booking is subject to the airline's fare rules.")} <small>Local times. Subject to the airline's fare rules.</small></li>
+        <li>Arrive at the airport 3 hours before international flights and 2 hours before domestic flights.</li>
+        <li>Make sure your passport is valid for at least 6 months after travel, and that you hold any visa you need.</li>
+        <li>Check in online with the airline 24 hours before departure.</li>
+        <li>All times are local. This booking is subject to the airline's fare rules and conditions.</li>
       </ul>
+      <p class="inv-thanks">Have a great trip with ${esc(c.tradeName)}.<small>${esc(coPhones()[0] || "")} · ${esc(c.email)} · ${esc(c.website)}</small></p>
     </div>`;
   }
   // Loads html2pdf only when someone saves a PDF
@@ -1089,11 +1471,10 @@
   async function savePdf(el, filename) {
     try {
       await loadPdfLib();
-      await window.html2pdf().set({ margin: 8, filename, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }).from(el).save();
+      await window.html2pdf().set({ margin: 10, filename, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4", orientation: "portrait" } }).from(el).save();
       return true;
     } catch (e) { toast(T("تعذّر إنشاء PDF، استخدم «طباعة» ثم «حفظ كـ PDF».", "Couldn't create the PDF; use Print, then Save as PDF.")); return false; }
   }
-  const COMPANY_PHONES = ["+1 (708) 963-2552", "+1 (708) 940-2929", "+1 (331) 213-3768", "+1 (708) 953-2244"];
   const ticketTextFull = (b) => {
     const segs = segmentsOf(b), pax = (b.travelers || []).length ? b.travelers : [b.customer.name || ""];
     const lines = [
@@ -1111,8 +1492,8 @@
       b.status === "ticketed" ? T("بعد الإصدار: التعديل والإلغاء حسب شروط شركة الطيران ورسومها.", "After ticketing: changes and cancellations follow the airline's rules and fees.") : T("قبل الإصدار يمكن الإلغاء أو التعديل دون رسوم.", "Before ticketing you can cancel or change free of charge."),
       T("احضر للمطار قبل 3 ساعات للرحلات الدولية.", "Arrive 3 hours early for international flights."),
       "",
-      `Green Travel · ${COMPANY_PHONES.join(" / ")}`,
-      `info@greentravel.us · greentravel.us/#manage`,
+      `${CO().tradeName} · ${coPhones().join(" / ")}`,
+      `${CO().email} · ${CO().website}/#manage`,
     ];
     return lines.filter((x, i, a) => x !== "" || a[i - 1] !== "").join("\n");
   };
@@ -1126,58 +1507,10 @@
     const b = DB.get("bookings", id);
     if (!b) return;
     closeDrawer();
-    openModal(T("التذكرة وخط سير الرحلة", "Ticket and itinerary") + " · " + b.id, `
-      <div class="tk-actions">
-        <button type="button" class="btn btn--primary btn--sm" id="tkPrint">${icon("i-list")}${T("طباعة", "Print")}</button>
-        <button type="button" class="btn btn--ghost btn--sm" id="tkPdf">${icon("i-ticket")}${T("حفظ PDF على الكمبيوتر", "Save PDF to computer")}</button>
-        <span class="tk-mail"><input type="email" id="tkTo" dir="ltr" placeholder="${T("بريد العميل", "Customer email")}" value="${esc(b.customer.email || "")}"><button type="button" class="btn btn--accent btn--sm" id="tkEmail">${icon("i-mail")}${T("إرسال بالبريد", "Email")}</button></span>
-      </div>
-      <div class="tk-actions tk-share">
-        <button type="button" class="btn btn--accent btn--sm" id="tkShare">${icon("i-ticket")}${T("إرسال PDF (واتساب / رسائل)", "Send PDF (WhatsApp / Messages)")}</button>
-        <a class="btn btn--ghost btn--sm" target="_blank" rel="noopener" href="https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(ticketTextFull(b))}">${icon("i-whatsapp")}${T("واتساب: التفاصيل كاملة", "WhatsApp: full details")}</a>
-        <a class="btn btn--ghost btn--sm" href="sms:${esc(b.customer.phone || "")}?&body=${encodeURIComponent(ticketTextFull(b))}">${icon("i-chat")}${T("رسالة نصية SMS", "Text message (SMS)")}</a>
-        <button type="button" class="btn btn--ghost btn--sm" id="tkCopy">${T("نسخ التفاصيل", "Copy details")}</button>
-      </div>
-      ${b.reminders && b.reminders.ticket ? `<p class="hint">${icon("i-check")}${T("أُرسلت التذكرة بالبريد في", "Ticket emailed on")} ${fmtTime(b.reminders.ticket)}</p>` : ""}
-      ${ticketDocHtml(b)}`, true);
-    $("#tkPrint").addEventListener("click", () => { printHtml(ticketDocHtml(b)); log(T("طبع تذكرة", "Printed ticket"), b.id); });
-    $("#tkCopy").addEventListener("click", () => (navigator.clipboard ? navigator.clipboard.writeText(ticketTextFull(b)) : Promise.reject()).then(() => toast(T("تم النسخ", "Copied"))).catch(() => toast(T("تعذّر النسخ", "Couldn't copy"))));
-    // The PDF goes straight to WhatsApp / Messages / Mail through the phone's or computer's share sheet; otherwise it is saved and WhatsApp opens
-    $("#tkShare").addEventListener("click", async (e) => {
-      const btn = e.currentTarget; btn.disabled = true;
-      const name = `GreenTravel-${b.pnr || b.id}.pdf`;
-      try {
-        await loadPdfLib();
-        const blob = await window.html2pdf().set({ margin: 8, filename: name, image: { type: "jpeg", quality: 0.96 }, html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" }, jsPDF: { unit: "mm", format: "a4" } }).from($("#ticketDoc")).outputPdf("blob");
-        const file = new File([blob], name, { type: "application/pdf" });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: name, text: ticketTextFull(b) });
-          log(T("أرسل التذكرة PDF", "Shared ticket PDF"), b.id);
-        } else {
-          const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
-          toast(T("حُفظ ملف PDF: أرفقه في محادثة واتساب التي ستُفتح الآن.", "PDF saved: attach it in the WhatsApp chat that opens now."));
-          if (b.customer.phone) window.open(`https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(ticketTextFull(b))}`, "_blank", "noopener");
-        }
-      } catch (er) { if (er && er.name !== "AbortError") toast(T("تعذّر تجهيز الملف، استخدم «حفظ PDF».", "Couldn't prepare the file; use Save PDF.")); }
-      btn.disabled = false;
-    });
-    $("#tkPdf").addEventListener("click", async (e) => { const btn = e.currentTarget; btn.disabled = true; if (await savePdf($("#ticketDoc"), `GreenTravel-${b.pnr || b.id}.pdf`)) log(T("حفظ تذكرة PDF", "Saved ticket PDF"), b.id); btn.disabled = false; });
-    $("#tkEmail").addEventListener("click", async (e) => {
-      const to = $("#tkTo").value.trim(), btn = e.currentTarget;
-      if (!/^\S+@\S+\.\S+$/.test(to)) { toast(T("أدخل بريد العميل", "Enter the customer's email")); return; }
-      btn.disabled = true;
-      try { await DB.sendEmail("ticket", b.id, to); toast(T("أُرسلت التذكرة إلى ", "Ticket sent to ") + to); }
-      catch (er) {
-        if (/not_configured/.test(er.message)) {
-          // Email service not set up yet: save the PDF and open the email app with the details
-          toast(T("خدمة البريد غير مفعّلة بعد: سيُحفظ PDF وتُفتح رسالة لترفقه بها.", "Email service not set up yet: the PDF will be saved and an email opened to attach it."));
-          await savePdf($("#ticketDoc"), `GreenTravel-${b.pnr || b.id}.pdf`);
-          location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent("Green Travel — " + (b.pnr ? "PNR " + b.pnr : b.id))}&body=${encodeURIComponent(ticketText(b))}`;
-        } else errToast(er);
-      }
-      btn.disabled = false;
-    });
+    openModal(T("التذكرة وخط سير الرحلة", "Ticket and itinerary") + " · " + b.id, docActionsHtml(b, "ticket") + ticketDocHtml(b), true);
+    bindDocActions(b, "ticket", { el: () => $("#ticketDoc"), file: `GreenTravel-${b.pnr || b.id}.pdf`, text: () => ticketTextFull(b), print: () => ticketDocHtml(b) });
   }
+
 
   /* =========================================================
      Travel alerts: departures in the next 7 days + reminders
@@ -1219,6 +1552,30 @@
         <td class="row-actions"><button type="button" class="btn btn--ghost btn--sm" data-remind="${b.id}" data-kind="${d <= 1 ? "day" : "week"}">${icon("i-mail")}${T("تذكير بالبريد", "Email")}</button>
           ${b.customer.phone ? `<a class="btn btn--ghost btn--sm" target="_blank" rel="noopener" href="https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(reminderText(b))}">${icon("i-whatsapp")}WhatsApp</a>` : ""}
           <button type="button" class="btn btn--ghost btn--sm" data-ticket="${b.id}">${icon("i-ticket")}${T("التذكرة", "Ticket")}</button></td></tr>`; }).join("")}</tbody></table></div>`;
+  }
+  // Write an email to the customer from the back office: it carries the employee's name, and replies go to the employee
+  function mailForm(b) {
+    openModal(T("رسالة بالبريد إلى العميل", "Email the customer"), `
+      <form id="mlForm" class="dr-form" novalidate>
+        <div class="f3">${inp("to", T("إلى", "To"), b.customer.email || "", "email", "ltr")}${inp("subject", T("الموضوع", "Subject"), "Green Travel — " + (b.pnr ? "PNR " + b.pnr : b.id))}</div>
+        ${area("message", T("نص الرسالة", "Message"), T(`مرحباً ${b.customer.name || ""}،\n\n`, `Hello ${b.customer.name || ""},\n\n`), 'style="min-height:200px"')}
+        <p class="hint">${icon("i-mail")}${me.email ? T(`ردّ العميل يصل إلى بريدك ${me.email}.`, `The customer's reply comes to your email, ${me.email}.`) : T("ردّ العميل يصل إلى info@greentravel.us. أضف بريدك في ملفك ليصلك أنت.", "The customer's reply goes to info@greentravel.us. Add your email to your profile to receive it yourself.")}</p>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("إرسال", "Send")}</button></div>
+      </form>`);
+    const f = $("#mlForm");
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const to = f.elements.to.value.trim(), subject = f.elements.subject.value.trim(), message = f.elements.message.value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(to)) return toast(T("أدخل بريد العميل", "Enter the customer's email"));
+      if (!subject || message.length < 5) return toast(T("اكتب الموضوع والرسالة", "Write the subject and the message"));
+      const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+      try { await DB.sendEmail("message", b.id, to, { subject, message }); closeModal(); toast(T("أُرسلت الرسالة إلى ", "Email sent to ") + to); }
+      catch (er) {
+        btn.disabled = false;
+        if (/not_configured/.test(er.message)) { toast(T("خدمة البريد غير مفعّلة بعد: ستُفتح الرسالة في برنامج البريد.", "The email service isn't set up yet: the message opens in your email app.")); location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`; }
+        else errToast(er);
+      }
+    });
   }
   function bindAlertActions(el) {
     $$("[data-open]", el).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openBooking(a.dataset.open); }));
@@ -1845,7 +2202,7 @@
 
   /* ---------- Duty of care: where are the travelers right now ---------- */
   let APT = null;
-  async function airports() { if (APT) return APT; const rows = await (await fetch("assets/data/airports.json")).json(); APT = Object.fromEntries(rows.map((r) => [r[0], { lat: r[4], lon: r[5], city: r[2] }])); return APT; }
+  async function airports() { if (APT) return APT; const rows = await (await fetch("assets/data/airports.json")).json(); APT = Object.fromEntries(rows.map((r) => [r[0], { lat: r[4], lon: r[5], city: r[2], cc: r[3] }])); return APT; }
   async function viewDuty(el) {
     el.innerHTML = `<p class="muted">${T("جارٍ التحميل…", "Loading…")}</p>`;
     let A = {};
