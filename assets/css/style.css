@@ -1518,7 +1518,10 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 #trvAdd { margin-top: 10px; }
 @media (max-width: 760px) { .trv-row { grid-template-columns: 1fr 1fr; } }
 
-/* Invoices and tickets: the company logo centred at the top, larger */
-.doc-head { flex-wrap: wrap; }
-.doc-logo { flex: 0 0 100%; display: flex; justify-content: center; margin-bottom: 6px; }
+/* Invoices and tickets: company details | logo (centre, in line with both columns) | document details */
+.doc-head { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
+.doc-head .doc-co { order: 1; }
+.doc-head .doc-logo { order: 2; display: flex; justify-content: center; }
+.doc-head .st-meta { order: 3; margin: 0; }
 .doc-logo img { width: 110px; height: 110px; object-fit: contain; border-radius: 50%; }
+@media (max-width: 560px) { .doc-logo img { width: 72px; height: 72px; } .doc-head { gap: 8px; } }
