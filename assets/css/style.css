@@ -1536,3 +1536,13 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
   @page { size: A4; margin: 12mm; }
   .print-area .invoice-doc, .print-area .ticket-doc { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* Ticket (English): labels and status */
+.ticket-doc .tk-ids small, .ticket-doc .tk-foot small { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.ticket-doc .tk-h { text-transform: uppercase; letter-spacing: .08em; font-size: .8rem; color: var(--g-800, #0b3d1f); }
+.ticket-doc .st-meta b { font-size: 1.35rem; letter-spacing: .08em; color: var(--g-800, #0b3d1f); }
+.tk-status { justify-self: end; margin-top: 4px; font-size: .7rem; font-weight: 700; letter-spacing: .08em; padding: 3px 10px; border-radius: 999px; border: 1.5px solid; }
+.tk-status--ok { color: #12803f; border-color: #9fd3b1; background: #eef9f1; }
+.tk-status--wait { color: #a35c00; border-color: #f3c98b; background: #fff6e6; }
+.ticket-doc .tk-notes { margin: 4px 0 0; padding-left: 18px; color: var(--ink-2); font-size: .85rem; display: grid; gap: 4px; }
+@media print { .tk-status { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

@@ -1421,32 +1421,44 @@
         <small dir="ltr">${esc(coPhones().join(" · "))}</small><small dir="ltr">${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small dir="ltr">${esc(coIds())}</small>` : ""}</div>
       <div class="st-meta"><b>${titleEn}</b><span>${titleAr}</span>${meta || ""}</div></header>`;
   }
+  // Ticket / itinerary for the customer, always in English, in the same framed layout as the invoice
   function ticketDocHtml(b) {
-    const segs = segmentsOf(b), pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "—"];
-    const m = bookingMoney(b);
-    return `<div class="statement ticket-doc" id="ticketDoc">
-      ${letterhead(b.status === "ticketed" ? "E-TICKET RECEIPT" : "ITINERARY", b.status === "ticketed" ? "إيصال التذكرة الإلكترونية" : "خط سير الرحلة", `<span dir="ltr">${fmtDate(today())}</span>`)}
+    const c = CO(), m = bookingMoney(b), segs = segmentsOf(b);
+    const pp = b.passports || [];
+    const pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "—"];
+    const TYPE_EN = { adult: "Adult", child: "Child", infant: "Infant" };
+    const typeOf = (n, i) => { const x = pp.find((q) => q.name && q.name.toUpperCase() === String(n).toUpperCase()) || pp[i] || {}; return TYPE_EN[x.type] || "Adult"; };
+    const ticketed = b.status === "ticketed";
+    const total = (+b.sell || 0) + (+b.serviceFee || 0);
+    const addr = coAddress();
+    const box = (label, value, mono) => `<div><small>${label}</small><strong class="${mono ? "mono" : ""}">${value}</strong></div>`;
+    return `<div class="statement ticket-doc" id="ticketDoc" lang="en" dir="ltr">
+      <header class="st-head doc-head"><div class="doc-logo"><img src="assets/img/logo-512.png" alt="Logo" width="110" height="110"></div>
+        <div class="doc-co"><b>${esc(c.tradeName)}</b>${c.legalName && c.legalName !== c.tradeName ? `<small>${esc(c.legalName)}</small>` : ""}${addr ? `<small>${esc(addr)}</small>` : ""}<small>${esc(coPhones().join(" · "))}</small><small>${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small>${esc(coIds())}</small>` : ""}</div>
+        <div class="st-meta"><b>${ticketed ? "E-TICKET RECEIPT" : "ITINERARY"}</b><span class="mono">${esc(b.id)}</span><span>Issued: ${enDate(b.ticketedAt || today())}</span><span class="tk-status tk-status--${ticketed ? "ok" : "wait"}">${ticketed ? "TICKETED" : b.status === "confirmed" ? "CONFIRMED · NOT YET TICKETED" : "NOT YET TICKETED"}</span></div></header>
       <div class="tk-ids">
-        <div>${L("رقم الحجز", "Booking ref (PNR)")}<strong dir="ltr" class="mono">${esc(b.pnr || "—")}</strong></div>
-        <div>${L("شركة الطيران", "Airline")}<strong>${esc(b.airline || "—")}</strong></div>
-        <div>${L("الدرجة", "Cabin")}<strong>${esc(CABIN()[b.cabin] || b.cabin || "—")}</strong></div>
-        <div>${L("المرجع", "Reference")}<strong dir="ltr" class="mono">${esc(b.id)}</strong></div>
+        ${box("Booking reference (PNR)", esc(b.pnr || "—"), true)}
+        ${box("Airline", esc(b.airline || "—"))}
+        ${box("Cabin", esc(CABIN_EN[b.cabin] || b.cabin || "—"))}
+        ${box("Our reference", esc(b.id), true)}
       </div>
-      <h4 class="tk-h">${L("المسافرون", "Passengers")}</h4>
-      <table class="of-table"><thead><tr><th>#</th><th>${T("الاسم", "Name")} / Name</th><th>${T("رقم التذكرة", "Ticket number")} / E-ticket</th></tr></thead>
-        <tbody>${pax.map((n, i) => `<tr><td>${i + 1}</td><td><b>${esc(n)}</b></td><td dir="ltr" class="mono">${esc((b.tickets || [])[i] || (b.tickets || [])[0] || "—")}</td></tr>`).join("")}</tbody></table>
-      <h4 class="tk-h">${L("الرحلات", "Flights")}</h4>
-      <table class="of-table"><thead><tr><th>${T("الرحلة", "Flight")} / Flight</th><th>${T("من", "From")} → ${T("إلى", "To")}</th><th>${T("التاريخ", "Date")} / Date</th><th>${T("الإقلاع", "Departs")}</th><th>${T("الوصول", "Arrives")}</th></tr></thead>
-        <tbody>${segs.map((s) => `<tr><td dir="ltr" class="mono">${esc(s.flight || "—")}</td><td dir="ltr"><b>${esc(s.from)}</b> → <b>${esc(s.to)}</b>${s.via ? ` <small>via ${esc(s.via)}</small>` : ""}</td><td>${fmtDate(s.date)}</td><td dir="ltr" class="mono">${esc(s.dep || "—")}</td><td dir="ltr" class="mono">${esc(s.arr || "—")}${s.arrDate && s.arrDate !== s.date ? ` <small>${fmtDate(s.arrDate)}</small>` : ""}</td></tr>`).join("")}</tbody></table>
+      <h4 class="tk-h">Passengers</h4>
+      <table class="of-table"><thead><tr><th>#</th><th>Name (as on passport)</th><th>Type</th><th>E-ticket number</th></tr></thead>
+        <tbody>${pax.map((n, i) => `<tr><td>${i + 1}</td><td><b>${esc(n)}</b></td><td>${typeOf(n, i)}</td><td class="mono">${esc((b.tickets || [])[i] || "—")}</td></tr>`).join("")}</tbody></table>
+      <h4 class="tk-h">Flights</h4>
+      <table class="of-table"><thead><tr><th>Flight</th><th>From → To</th><th>Date</th><th>Departs</th><th>Arrives</th></tr></thead>
+        <tbody>${segs.map((x) => `<tr><td class="mono">${esc(x.flight || "—")}</td><td><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b>${x.via ? ` <small>via ${esc(x.via)}</small>` : ""}</td><td>${enDate(x.date)}</td><td class="mono">${esc(x.dep || "—")}</td><td class="mono">${esc(x.arr || "—")}${x.arrDate && x.arrDate !== x.date ? ` <small>${enDate(x.arrDate)}</small>` : ""}</td></tr>`).join("")}</tbody></table>
       <div class="tk-foot">
-        <div>${L("الأمتعة", "Baggage")}<span>${esc(b.baggage || T("حسب شروط شركة الطيران", "As per airline fare rules"))}</span></div>
-        <div>${L("المبلغ", "Amount")}<span><b dir="ltr">${usd.format(b.sell)}</b> · ${T("المدفوع", "Paid")} <span dir="ltr">${usd.format(m.inn)}</span>${m.due ? ` · ${T("المتبقي", "Due")} <span dir="ltr">${usd.format(m.due)}</span>` : ""}</span></div>
+        <div><small>Baggage</small><span>${esc(b.baggage || "As per the airline's fare rules")}</span></div>
+        <div><small>Fare</small><span><b>${usdEn.format(total)}</b> · Paid ${usdEn.format(m.inn)}${m.due ? ` · Balance ${usdEn.format(m.due)}` : ""}</span></div>
       </div>
       <ul class="tk-notes">
-        <li>${T("احضر إلى المطار قبل 3 ساعات للرحلات الدولية وساعتين للداخلية.", "Arrive 3 hours early for international flights and 2 hours for domestic.")} <small>Arrive 3h before international / 2h before domestic flights.</small></li>
-        <li>${T("تأكد من صلاحية جواز السفر (6 أشهر على الأقل) والتأشيرة إن لزمت.", "Make sure your passport is valid for 6+ months and you hold any required visa.")} <small>Passport valid 6+ months; visa if required.</small></li>
-        <li>${T("الأوقات بالتوقيت المحلي، والحجز يخضع لشروط شركة الطيران.", "Times are local; the booking is subject to the airline's fare rules.")} <small>Local times. Subject to the airline's fare rules.</small></li>
+        <li>Arrive at the airport 3 hours before international flights and 2 hours before domestic flights.</li>
+        <li>Make sure your passport is valid for at least 6 months after travel, and that you hold any visa you need.</li>
+        <li>Check in online with the airline 24 hours before departure.</li>
+        <li>All times are local. This booking is subject to the airline's fare rules and conditions.</li>
       </ul>
+      <p class="inv-thanks">Have a great trip with ${esc(c.tradeName)}.<small>${esc(coPhones()[0] || "")} · ${esc(c.email)} · ${esc(c.website)}</small></p>
     </div>`;
   }
   // Loads html2pdf only when someone saves a PDF
