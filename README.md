@@ -108,14 +108,21 @@ python3 -m http.server 8000
 - قسم «تنبيهات السفر» يعرض المسافرين خلال 7، 14 أو 30 يوماً، ومنه يُرسل التذكير بالبريد أو واتساب.
 - كل صباح (14:17 UTC) تُرسل الدالة `travel-reminders` تلقائياً تذكيراً بالبريد قبل أسبوع من السفر وآخر قبل يوم.
 
-**تفعيل البريد:** الإرسال يتم عبر Resend.
-1. أنشئ حساباً في resend.com.
-2. وثّق النطاق greentravel.us.
-3. أضف في Supabase (Edge Functions ← Secrets) السرّين `RESEND_API_KEY` و`EMAIL_FROM` (مثل `Green Travel <tickets@greentravel.us>`).
+**تفعيل البريد (بريد cPanel الخاص بالشركة):** الرسائل تُرسل من خادم بريد الاستضافة نفسه، عبر اتصال آمن SSL على المنفذ 465. تشمل التذاكر والتذكيرات و«رسالة للعميل» ورسائل المكتب الإلكتروني الموافق عليها.
+1. في cPanel ← Email Accounts: صندوق الإرسال، مثل `info@greentravel.us`. واسم خادم البريد من «Connect Devices» ← Outgoing Server.
+2. في Supabase ← Edge Functions ← Secrets:
+   - `SMTP_HOST`: خادم البريد الصادر، مثل `mail.greentravel.us` أو `gatorXXXX.hostgator.com`.
+   - `SMTP_USER`: البريد كاملاً.
+   - `SMTP_PASS`: كلمة مرور الصندوق.
+   - اختياري: `SMTP_PORT` (الافتراضي 465).
+3. كل رسالة تحمل اسم الموظف. ردّ العميل يصل إلى بريد الموظف المسجل في ملفه، وإلا إلى info@greentravel.us.
+4. قراءة البريد: زر «بريدي (Webmail)» في قائمة المكتب الخلفي.
+
+بديل: Resend (`RESEND_API_KEY` و`EMAIL_FROM`). يُستخدم فقط إذا لم تُضبط إعدادات SMTP.
 
 قبل التفعيل، زر «إرسال بالبريد» يحفظ التذكرة PDF ويفتح رسالة بريد جاهزة لترفقها بها.
 
-**كود الخادم:** في `supabase/functions/`. الملف `_shared/ticket.ts` يُرفع مع كل دالة باسم `ticket.ts`.
+**كود الخادم:** في `supabase/functions/`. الملف `send-email/ticket.ts` (قالب البريد والإرسال) تُرفع نسخة مطابقة منه مع `travel-reminders`.
 
 ## الربط بأنظمة الحجز (API): أكثر من شركة في الوقت نفسه
 
@@ -232,7 +239,7 @@ python3 -m http.server 8000
 **الإعدادات:** تغيير اسم كل موظف ومسماه، وإضافة تعليماتك الخاصة له، وإيقافه، وذاكرة مشتركة يعرفها كل الموظفين.
 
 **التفعيل (مرة واحدة):** أنشئ مفتاحاً من console.anthropic.com ← API Keys، ثم أضفه في Supabase ← Edge Functions ← Secrets باسم `ANTHROPIC_API_KEY`.
-اختياري: `AI_MODEL` (الافتراضي `claude-opus-5-5`، أو `claude-sonnet-5-5` الأقل تكلفة) و`AI_EFFORT` (`low` / `medium` / `high`). إرسال البريد يستخدم `RESEND_API_KEY` نفسه.
+اختياري: `AI_MODEL` (الافتراضي `claude-opus-5-5`، أو `claude-sonnet-5-5` الأقل تكلفة) و`AI_EFFORT` (`low` / `medium` / `high`). إرسال البريد يستخدم إعدادات بريد cPanel نفسها (`SMTP_*`)، أو `RESEND_API_KEY`.
 
 **المدقق الداخلي والعمل مع فريقك البشري:**
 - **المدقق الداخلي («منصور»):** يراجع عمل الموظفين البشر كل عدد ساعات تختاره (الافتراضي 6)، وفقط إن حدث عمل. يبحث عن:
