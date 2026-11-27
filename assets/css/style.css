@@ -1443,3 +1443,7 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 .ai-result { white-space: pre-wrap; line-height: 1.8; background: var(--paper); border-radius: 12px; padding: 12px 14px; margin: 8px 0; overflow-wrap: anywhere; }
 .ai-doc { margin: 6px 0; }
 .ai-doc summary { cursor: pointer; font-weight: 600; }
+
+/* Airport suggestions: scrollable with a finger on phones */
+.ac { touch-action: pan-y; -webkit-overflow-scrolling: touch; max-height: min(360px, 55vh); }
+.ac li { touch-action: pan-y; }

@@ -178,13 +178,23 @@
       else if (e.key === "Escape" && !box.hidden) { e.stopPropagation(); close(); }
       else if (e.key === "Tab" && !box.hidden && active >= 0 && input.value.trim() && !input.dataset.code) choose(items[active]);
     });
+    // Choose on a tap, not on the first touch, so a finger can scroll the list on phones.
+    let press = null;
     box.addEventListener("pointerdown", (e) => {
-      const li = e.target.closest("li[data-i]");
-      if (!li) return;
-      e.preventDefault();
-      choose(items[+li.dataset.i]);
+      if (e.pointerType === "mouse") e.preventDefault(); // keep the input focused for mouse users
+      press = { x: e.clientX, y: e.clientY, li: e.target.closest("li[data-i]") };
     });
-    input.addEventListener("blur", () => setTimeout(close, 120));
+    box.addEventListener("pointermove", (e) => {
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) press.li = null; // it is a scroll
+    });
+    box.addEventListener("pointerup", (e) => {
+      const p = press; press = null;
+      if (p && p.li && p.li === e.target.closest("li[data-i]")) choose(items[+p.li.dataset.i]);
+    });
+    box.addEventListener("pointercancel", () => { press = null; }); // the browser took the touch for scrolling
+    input.addEventListener("blur", () => setTimeout(() => { if (!press && !box.matches(":hover")) close(); }, 150));
+    // On phones the input loses focus while the list scrolls: close only on a touch outside the field
+    document.addEventListener("pointerdown", (e) => { if (!box.hidden && !field.contains(e.target)) close(); });
   }
 
   function resolveAirport(input) {
