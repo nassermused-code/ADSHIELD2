@@ -18,7 +18,7 @@ window.GTDB = (() => {
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, storageKey: "gt-auth", autoRefreshToken: true } });
 
   const cache = { staff: [], partners: [], bookings: [], payments: [], expenses: [], tasks: [], log: [], journal: [],
-    companies: [], costCenters: [], travelers: [], policies: [], trips: [], invoices: [], companyUsers: [] };
+    companies: [], costCenters: [], travelers: [], policies: [], trips: [], invoices: [], companyUsers: [], paymentMethods: [] };
   // The company's own details (letterhead of invoices, tickets and emails); defaults until loaded
   const COMPANY_DEFAULT = { tradeName: "Green Travel", tradeNameAr: "جرين ترافيل", legalName: "World Services dba Green Travel", address: "", city: "Chicago", state: "IL", zip: "", country: "United States",
     phones: ["+1 (708) 963-2552", "+1 (708) 940-2929", "+1 (331) 213-3768", "+1 (708) 953-2244"], email: "info@greentravel.us", website: "greentravel.us", taxId: "", iata: "", sellerOfTravel: "",
@@ -34,13 +34,14 @@ window.GTDB = (() => {
   /* ---------- Row <-> app object ---------- */
   const mapStaff = (r) => ({ id: r.id, kind: r.kind, role: r.kind, username: r.username || "", email: r.email || "", name: r.name, title: r.title, phone: r.phone, status: r.status, perms: r.perms || [], lastLogin: r.last_login, created: (r.created_at || "").slice(0, 10) });
   const mapPricing = (p) => (p ? { mode: p.mode, flatAll: +p.flat_all, pctAll: +p.pct_all, flat: +p.flat, threshold: +p.threshold, pct: +p.pct, publicMarkup: +p.public_markup } : {});
-  const mapPartner = (r, pr) => ({ id: r.id, email: r.email, agency: r.agency, contact: r.contact, phone: r.phone, contactEmail: r.contact_email, website: r.website, logo: r.logo, sellMarkup: +r.sell_markup, status: r.status, creditLimit: +r.credit_limit, created: (r.created_at || "").slice(0, 10), pricing: mapPricing(pr) });
+  const mapPartner = (r, pr) => ({ id: r.id, email: r.email, agency: r.agency, contact: r.contact, phone: r.phone, contactEmail: r.contact_email, website: r.website, logo: r.logo, sellMarkup: +r.sell_markup, status: r.status, creditLimit: +r.credit_limit, created: (r.created_at || "").slice(0, 10), pricing: mapPricing(pr),
+    legalName: r.legal_name || "", address: r.address || "", city: r.city || "", state: r.state || "", zip: r.zip || "", country: r.country || "", taxId: r.tax_id || "", iata: r.iata || "", licenseNo: r.license_no || "", officePhone: r.office_phone || "", notes: r.notes || "" });
   const mapBooking = (r, c) => ({ id: r.id, created: r.created, source: r.source, partnerId: r.partner_id, status: r.status, customer: Object.assign({ name: "", phone: "", email: "" }, r.customer || {}), route: r.route, airline: r.airline, cabin: r.cabin, depart: r.depart || "", ret: r.ret || "", pax: r.pax, travelers: r.travelers || [], pnr: r.pnr, tickets: r.tickets || [], sell: +r.sell, notes: r.notes, assignedTo: r.assigned_to || "", cost: c ? +c.cost : 0, fee: c ? +c.fee : 0, segments: r.segments || [], baggage: r.baggage || "", ticketedAt: r.ticketed_at || "", reminders: r.reminders || {}, provider: r.provider || "", providerRef: r.provider_ref || "", holdExpires: r.hold_expires || "",
-    companyId: r.company_id || "", travelerId: r.traveler_id || "", costCenterId: r.cost_center_id || "", tripId: r.trip_id || "", invoiceId: r.invoice_id || "", serviceFee: +r.service_fee || 0, passports: Array.isArray(r.passports) ? r.passports : [] });
+    companyId: r.company_id || "", travelerId: r.traveler_id || "", costCenterId: r.cost_center_id || "", tripId: r.trip_id || "", invoiceId: r.invoice_id || "", serviceFee: +r.service_fee || 0, passports: Array.isArray(r.passports) ? r.passports : [], invoice: r.invoice && typeof r.invoice === "object" ? r.invoice : {} });
   const bookingRow = (b) => {
     const r = {};
     const m = { status: "status", source: "source", partnerId: "partner_id", customer: "customer", route: "route", airline: "airline", cabin: "cabin", depart: "depart", ret: "ret", pax: "pax", travelers: "travelers", pnr: "pnr", tickets: "tickets", sell: "sell", notes: "notes", assignedTo: "assigned_to", segments: "segments", baggage: "baggage",
-      companyId: "company_id", travelerId: "traveler_id", costCenterId: "cost_center_id", tripId: "trip_id", serviceFee: "service_fee", passports: "passports" };
+      companyId: "company_id", travelerId: "traveler_id", costCenterId: "cost_center_id", tripId: "trip_id", serviceFee: "service_fee", passports: "passports", invoice: "invoice" };
     Object.entries(m).forEach(([k, col]) => { if (k in b) r[col] = b[k]; });
     if ("depart" in r) r.depart = r.depart || null;
     if ("ret" in r) r.ret = r.ret || null;
@@ -232,6 +233,7 @@ window.GTDB = (() => {
     if (!profile || profile.kind === "partner" || profile.status !== "active") { notify(); return; }
     const owner = profile.kind === "owner";
     const q = (t, sel = "*") => sb.from(t).select(sel).range(0, 9999);
+    sb.from("payment_methods").select("*").order("sort").order("created_at").then(({ data }) => { cache.paymentMethods = (data || []).map((r) => ({ id: r.id, kind: r.kind, label: r.label, details: r.details, showOnInvoice: !!r.show_on_invoice, enabled: !!r.enabled, sort: r.sort })); notify(); }, () => {});
     sb.from("company_profile").select("*").eq("id", 1).maybeSingle().then(({ data }) => { if (data) { company = Object.assign({}, COMPANY_DEFAULT, camel(data)); delete company.id; notify(); } }, () => {});
     const [st, pa, bk, pay, tk, costs, pricing, exp, lg, jr] = await Promise.all([
       q("profiles").in("kind", ["owner", "staff"]).order("created_at"),
@@ -283,6 +285,13 @@ window.GTDB = (() => {
     ready,
     get profile() { return profile; },
     get company() { return company; },
+    // Payment methods and bank accounts (owner or "billing" permission; the database enforces it)
+    async savePayMethod(m) {
+      const row = { kind: m.kind, label: m.label, details: m.details, show_on_invoice: !!m.showOnInvoice, enabled: m.enabled !== false, sort: +m.sort || 0, updated_at: new Date().toISOString() };
+      const res = m.id ? await sb.from("payment_methods").update(row).eq("id", m.id) : await sb.from("payment_methods").insert(row);
+      fail(res.error); await load();
+    },
+    async deletePayMethod(id) { fail((await sb.from("payment_methods").delete().eq("id", id)).error); await load(); },
     // Owner: save the company's details (letterhead)
     async saveCompany(c) {
       const row = { trade_name: c.tradeName, trade_name_ar: c.tradeNameAr, legal_name: c.legalName, address: c.address, city: c.city, state: c.state, zip: c.zip, country: c.country,

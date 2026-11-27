@@ -69,6 +69,7 @@
     ["agents_manage", T("فتح حسابات الوكلاء", "Open agent accounts"), T("إنشاء وتعديل دخول الوكلاء (بدون التسعير)", "Create and edit agent logins (not pricing)")],
     ["export", T("تصدير CSV", "Export CSV"), T("تنزيل قائمة الحجوزات", "Download the bookings list")],
     ["corporate", T("سفر الشركات (TMC)", "Corporate travel (TMC)"), T("الشركات والمسافرون والسياسات والموافقات وفواتير الشركات", "Companies, travelers, policies, approvals and company invoices")],
+    ["billing", T("الفوترة والحسابات البنكية", "Billing & bank accounts"), T("إدخال الحسابات البنكية ووسائل الدفع، وبيانات الشركة، وتعديل الفواتير", "Enter bank accounts and payment methods, company details, and edit invoices")],
     ["ai_office", T("المساعد الذكي", "AI assistant"), T("يطلب من الموظفين الأذكياء: ردود، خطابات، مراجعات (بدون التكاليف والأرباح، وما يحتاج موافقة يذهب للمالك)", "Asks the AI employees for replies, letters and reviews (no costs or profit; anything needing approval goes to the owner)")],
   ];
   const pill = (st) => `<span class="pill pill--${st}">${STATUS()[st] || st}</span>`;
@@ -103,14 +104,15 @@
     reports: { icon: "i-list", t: () => T("التقارير المالية", "Financial reports"), r: viewReports, ok: isOwner, owner: true },
     team: { icon: "i-shield", t: () => T("الموظفون والصلاحيات", "Team & permissions"), r: viewTeam, ok: isOwner, owner: true },
     activity: { icon: "i-clock", t: () => T("سجل النشاط", "Activity log"), r: viewActivity, ok: isOwner, owner: true },
-    company: { icon: "i-briefcase", t: () => T("بيانات الشركة (الفواتير والتذاكر)", "Company details (invoices & tickets)"), r: viewCompany, ok: isOwner, owner: true },
+    company: { icon: "i-briefcase", t: () => T("بيانات الشركة (الفواتير والتذاكر)", "Company details (invoices & tickets)"), r: viewCompany, ok: () => can("billing"), group: "billing" },
+    paymethods: { icon: "i-card", t: () => T("وسائل الدفع والحسابات البنكية", "Payment methods & bank accounts"), r: viewPayMethods, ok: () => can("billing"), group: "billing" },
     settings: { icon: "i-lock", t: () => T("الإعدادات", "Settings"), r: viewSettings, ok: isOwner, owner: true },
   };
   function renderNav() {
     const items = Object.entries(VIEWS).filter(([, v]) => v.ok());
-    const main = items.filter(([, v]) => !v.owner && !v.group), own = items.filter(([, v]) => v.owner), corpItems = items.filter(([, v]) => v.group === "corp");
+    const main = items.filter(([, v]) => !v.owner && !v.group), own = items.filter(([, v]) => v.owner), corpItems = items.filter(([, v]) => v.group === "corp"), billItems = items.filter(([, v]) => v.group === "billing");
     const link = ([k, v]) => { const n = v.badge ? v.badge() : 0; return `<a href="#${k}">${icon(v.icon)}<span>${v.t()}</span>${n ? `<em class="nav-badge">${n}</em>` : ""}</a>`; };
-    $("#ofNav").innerHTML = main.map(link).join("") + (corpItems.length ? `<p class="of-nav__label">${T("سفر الشركات", "Corporate travel")}</p>` + corpItems.map(link).join("") : "") + (own.length ? `<p class="of-nav__label">${T("للمالك فقط", "Owner only")}</p>` + own.map(link).join("") : "")
+    $("#ofNav").innerHTML = main.map(link).join("") + (corpItems.length ? `<p class="of-nav__label">${T("سفر الشركات", "Corporate travel")}</p>` + corpItems.map(link).join("") : "") + (billItems.length ? `<p class="of-nav__label">${T("الفوترة", "Billing")}</p>` + billItems.map(link).join("") : "") + (own.length ? `<p class="of-nav__label">${T("للمالك فقط", "Owner only")}</p>` + own.map(link).join("") : "")
       // The company mailboxes live on the cPanel mail server; webmail opens in a new tab
       + `<a href="https://greentravel.us/webmail" target="_blank" rel="noopener">${icon("i-mail")}<span>${T("بريدي (Webmail)", "My email (Webmail)")}</span></a>`
       + (isOwner() ? `<a href="ai-office.html" class="of-nav__ai">${icon("i-users")}<span>${T("المكتب الإلكتروني (موظفون أذكياء)", "AI office (AI employees)")}</span></a>` : "");
@@ -509,10 +511,10 @@
         <fieldset><legend>${T("الرحلة", "Trip")}</legend><div class="f3">
           ${inp("route", T("المسار (مثل ORD → AMM)", "Route (e.g. ORD → AMM)"), b.route, "text", "ltr", ro(edit))}${inp("airline", T("شركة الطيران", "Airline"), b.airline, "text", "", ro(edit))}${sel("cabin", T("الدرجة", "Cabin"), CABIN(), b.cabin)}
           ${inp("depart", T("الذهاب", "Depart"), b.depart, "date", "", ro(edit))}${inp("ret", T("العودة", "Return"), b.ret, "date", "", ro(edit))}${inp("pax", T("عدد المسافرين", "Travelers"), b.pax, "number", "ltr", ro(edit))}</div>
-          ${area("travelers", T("أسماء المسافرين (سطر لكل مسافر)", "Traveler names (one per line)"), (b.travelers || []).join("\n"), ro(edit))}
-          <div class="pp-ed"><p class="pp-ed__h">${icon("i-shield")}<b>${T("جوازات السفر", "Passports")}</b> <small class="muted" id="ppIntl">${T("مطلوبة للرحلات الدولية", "Required for international trips")}</small></p>
-            <div class="pp-ed__head"><span>${T("المسافر", "Traveler")}</span><span>${T("رقم الجواز", "Passport no.")}</span><span>${T("تاريخ الانتهاء", "Expiry")}</span><span>${T("الدولة المُصدِرة", "Issuing country")}</span><span></span></div>
-            <div id="ppRows"></div></div></fieldset>
+          <textarea name="travelers" hidden>${esc((b.travelers || []).join("\n"))}</textarea>
+          <div class="pp-ed"><p class="pp-ed__h">${icon("i-users")}<b>${T("المسافرون وجوازات السفر", "Travelers and passports")}</b> <small class="muted" id="ppIntl">${T("الجواز مطلوب للرحلات الدولية", "Passport required for international trips")}</small></p>
+            <div id="ppRows"></div>
+            ${edit ? `<button type="button" class="btn btn--ghost btn--sm" id="trvAdd">+ ${T("إضافة مسافر", "Add traveler")}</button>` : ""}</div></fieldset>
         <fieldset><legend>${T("الإصدار", "Ticketing")}${issue ? "" : ` <small class="muted">· ${T("لا تملك صلاحية الإصدار", "You can't issue tickets")}</small>`}</legend><div class="f3">
           ${inp("pnr", "PNR", b.pnr, "text", "ltr", ro(issue))}${inp("tickets", T("أرقام التذاكر (بنفس ترتيب المسافرين، افصل بفاصلة)", "Ticket numbers (same order as travelers, comma-separated)"), (b.tickets || []).join(", "), "text", "ltr", ro(issue))}${inp("baggage", T("الأمتعة", "Baggage"), b.baggage, "text", "", `${ro(segEdit)} placeholder="${T("مثال: حقيبتان 23 كغ", "e.g. 2 × 23 kg")}"`)}</div>
           <div class="seg-ed"><div class="seg-ed__h"><span>${T("الرحلة", "Flight")}</span><span>${T("من", "From")}</span><span>${T("إلى", "To")}</span><span>${T("التاريخ", "Date")}</span><span>${T("الإقلاع", "Departs")}</span><span>${T("الوصول", "Arrives")}</span><span></span></div>
@@ -552,10 +554,10 @@
       };
       fill(true); pol();
       f.companyId.addEventListener("change", () => { fill(false); const c = DB.get("companies", f.companyId.value); if (c && !id) f.serviceFee.value = c.serviceFee; pol(); });
-      f.travelerId.addEventListener("change", () => { const t = DB.get("travelers", f.travelerId.value); if (!t) return; if (!f.cname.value) f.cname.value = `${t.firstName} ${t.lastName}`; if (!f.cphone.value) f.cphone.value = t.phone || ""; if (!f.cemail.value) f.cemail.value = t.email || ""; if (!f.travelers.value.trim()) f.travelers.value = `${t.firstName} ${t.lastName}`.toUpperCase(); if (t.costCenterId && !f.costCenterId.value) f.costCenterId.value = t.costCenterId; });
+      f.travelerId.addEventListener("change", () => { const t = DB.get("travelers", f.travelerId.value); if (!t) return; if (!f.cname.value) f.cname.value = `${t.firstName} ${t.lastName}`; if (!f.cphone.value) f.cphone.value = t.phone || ""; if (!f.cemail.value) f.cemail.value = t.email || ""; if (!f.travelers.value.trim()) { f.travelers.value = `${t.firstName} ${t.lastName}`.toUpperCase(); f.travelers.dispatchEvent(new Event("change")); } if (t.costCenterId && !f.costCenterId.value) f.costCenterId.value = t.costCenterId; });
       ["cabin", "sell", "depart"].forEach((k) => f[k].addEventListener("change", pol));
     }
-    // Passports: one row per traveler name, with a check of the expiry against the trip dates
+    // Travelers: entered by hand (phone, WhatsApp, walk-in…), one card per traveler with passport details and a validity check
     const ppEdit = edit || issue;
     const tripEndOf = () => { const ds = [f.depart.value, f.ret.value, ...$$("#segRows [name=date]").map((i) => i.value)].filter(Boolean).sort(); return ds.pop() || ""; };
     const addMonths = (iso, n) => { const d = new Date(iso + "T12:00:00"); d.setMonth(d.getMonth() + n); return d.toISOString().slice(0, 10); };
@@ -567,18 +569,45 @@
       if (exp < addMonths(end, 6)) return ["warn", T("أقل من 6 أشهر بعد السفر", "Under 6 months after travel")];
       return ["ok", T("صالح", "Valid")];
     };
-    const ppState = () => $$("#ppRows [data-pp]").map((r) => ({ name: r.dataset.name, number: r.querySelector("[name=ppno]").value.replace(/[^A-Za-z0-9]/g, "").toUpperCase(), expiry: r.querySelector("[name=ppexp]").value, country: r.querySelector("[name=ppcc]").value.trim() }));
+    const TRV_TYPE = { adult: T("بالغ", "Adult"), child: T("طفل", "Child"), infant: T("رضيع", "Infant") };
+    const splitName = (n) => { const w = String(n || "").trim().split(/\s+/).filter(Boolean); return w.length > 1 ? [w.slice(0, -1).join(" "), w[w.length - 1]] : [w[0] || "", ""]; };
+    const trvRow = (x) => {
+      const [fn, ln] = x.first || x.last ? [x.first || "", x.last || ""] : splitName(x.name);
+      const ne = edit ? "" : "disabled", pe = ppEdit ? "" : "disabled";
+      const lab = (ar, en, inner) => `<label><span>${T(ar, en)}</span>${inner}</label>`;
+      return `<div class="trv-row" data-pp>
+        ${lab("الاسم الأول (كما في الجواز)", "First name (as on passport)", `<input name="tfirst" dir="ltr" value="${esc(fn)}" autocomplete="off" ${ne}>`)}
+        ${lab("اسم العائلة", "Last name", `<input name="tlast" dir="ltr" value="${esc(ln)}" autocomplete="off" ${ne}>`)}
+        ${lab("النوع", "Type", `<select name="ttype" ${ne}>${Object.entries(TRV_TYPE).map(([k, v]) => `<option value="${k}" ${(x.type || "adult") === k ? "selected" : ""}>${v}</option>`).join("")}</select>`)}
+        ${lab("تاريخ الميلاد", "Date of birth", `<input name="tdob" type="date" max="${today()}" value="${esc(x.dob || "")}" ${ne}>`)}
+        ${lab("الجنس", "Gender", `<select name="tgender" ${ne}><option value="">—</option><option value="m" ${x.gender === "m" ? "selected" : ""}>${T("ذكر", "Male")}</option><option value="f" ${x.gender === "f" ? "selected" : ""}>${T("أنثى", "Female")}</option></select>`)}
+        ${lab("رقم الجواز", "Passport no.", `<input name="ppno" dir="ltr" maxlength="20" value="${esc(x.number || "")}" autocomplete="off" ${pe}>`)}
+        ${lab("انتهاء الجواز", "Passport expiry", `<input name="ppexp" type="date" value="${esc(x.expiry || "")}" ${pe}>`)}
+        ${lab("الدولة المُصدِرة", "Issuing country", `<input name="ppcc" maxlength="60" value="${esc(x.country || "")}" ${pe}>`)}
+        <div class="trv-row__end"><span data-ppst class="pp-st"></span>${edit ? `<button type="button" class="btn btn--ghost btn--sm danger" data-rm-trv aria-label="${T("حذف المسافر", "Remove traveler")}">×</button>` : ""}</div>
+      </div>`;
+    };
+    const rowData = (r) => { const g = (n) => r.querySelector(`[name=${n}]`).value.trim(); const first = g("tfirst").toUpperCase(), last = g("tlast").toUpperCase();
+      return { name: `${first} ${last}`.trim(), first, last, type: g("ttype"), dob: g("tdob"), gender: g("tgender"), number: g("ppno").replace(/[^A-Za-z0-9]/g, "").toUpperCase(), expiry: g("ppexp"), country: g("ppcc") }; };
+    const ppState = () => $$("#ppRows [data-pp]").map(rowData).filter((x) => x.name);
+    const syncNames = () => { const st = ppState(); f.travelers.value = st.map((x) => x.name).join("\n"); if (edit && st.length) f.pax.value = st.length; };
     const ppBadge = (r) => { const [k, t] = ppStatus(r.querySelector("[name=ppexp]").value); const el = r.querySelector("[data-ppst]"); el.className = "pp-st " + k; el.textContent = t; };
+    const bindRows = () => $$("#ppRows [data-pp]").forEach((r) => {
+      ppBadge(r);
+      r.oninput = () => { ppBadge(r); syncNames(); };
+      r.onchange = r.oninput;
+      const rm = r.querySelector("[data-rm-trv]");
+      if (rm) rm.onclick = () => { if ($$("#ppRows [data-pp]").length > 1) { r.remove(); syncNames(); } else r.querySelectorAll("input").forEach((i) => (i.value = "")); };
+    });
     function ppRender() {
-      const prev = $$("#ppRows [data-pp]").length ? ppState() : b.passports || [];
-      const names = f.travelers.value.split("\n").map((x) => x.trim()).filter(Boolean);
-      const list = names.length ? names : [f.cname.value.trim() || T("المسافر 1", "Traveler 1")];
-      const dis = ppEdit ? "" : "disabled";
-      $("#ppRows").innerHTML = list.map((n, i) => { const x = prev.find((q) => q.name && q.name.toUpperCase() === n.toUpperCase()) || prev[i] || {};
-        return `<div class="pp-row" data-pp data-name="${esc(n)}"><b dir="ltr">${esc(n)}</b><input name="ppno" dir="ltr" value="${esc(x.number || "")}" maxlength="20" autocomplete="off" ${dis} aria-label="${T("رقم الجواز", "Passport number")}"><input name="ppexp" type="date" value="${esc(x.expiry || "")}" ${dis} aria-label="${T("تاريخ الانتهاء", "Expiry")}"><input name="ppcc" value="${esc(x.country || "")}" maxlength="60" ${dis} aria-label="${T("الدولة المُصدِرة", "Issuing country")}"><span data-ppst class="pp-st"></span></div>`; }).join("");
-      $$("#ppRows [data-pp]").forEach((r) => { ppBadge(r); r.querySelector("[name=ppexp]").addEventListener("input", () => ppBadge(r)); });
+      const names = f.travelers.value.split("\n").map((x) => x.trim()).filter(Boolean), pp = b.passports || [];
+      let list = names.map((n, i) => pp.find((q) => q.name && q.name.toUpperCase() === n.toUpperCase()) || Object.assign({}, pp[i] && !pp[i].name ? pp[i] : {}, { name: n }));
+      if (!list.length) list = [{ name: f.cname.value.trim() }];
+      $("#ppRows").innerHTML = list.map(trvRow).join("");
+      bindRows();
     }
     ppRender();
+    if ($("#trvAdd")) $("#trvAdd").addEventListener("click", () => { $("#ppRows").insertAdjacentHTML("beforeend", trvRow({})); bindRows(); $$("#ppRows [data-pp]").pop().querySelector("input").focus(); });
     f.travelers.addEventListener("change", ppRender);
     [f.depart, f.ret].forEach((x) => x && x.addEventListener("change", () => $$("#ppRows [data-pp]").forEach(ppBadge)));
     // International? (airports in different countries)
@@ -608,11 +637,13 @@
         data.segments = $$("#segRows [data-seg]").map((r) => Object.fromEntries($$("input", r).map((i) => [i.name, ["from", "to", "flight"].includes(i.name) ? i.value.trim().toUpperCase() : i.value]))).filter((x) => x.from && x.to);
       }
       if (owner) { data.cost = +d.cost || 0; data.assignedTo = d.assignedTo || ""; }
+      if (edit) { data.travelers = ppState().map((x) => x.name); if (data.travelers.length) data.pax = data.travelers.length; }
       if (ppEdit) {
-        data.passports = ppState().filter((x) => x.number || x.expiry || x.country);
+        const st = ppState();
+        data.passports = st;
         const end = tripEndOf();
-        const missing = tripIntl && ppState().some((x) => !x.number || !x.expiry);
-        const tooOld = data.passports.some((x) => x.expiry && end && x.expiry < end);
+        const missing = tripIntl && st.some((x) => !x.number || !x.expiry);
+        const tooOld = st.some((x) => x.expiry && end && x.expiry < end);
         if (["ticketed", "confirmed"].includes(data.status) && (missing || tooOld)) { toast(missing ? T("رحلة دولية: أدخل رقم الجواز وتاريخ انتهائه لكل مسافر قبل التأكيد أو الإصدار.", "International trip: enter every traveler's passport number and expiry before confirming or ticketing.") : T("يوجد جواز ينتهي قبل نهاية الرحلة: يجب تجديده قبل التأكيد أو الإصدار.", "A passport expires before the trip ends: it must be renewed before confirming or ticketing.")); return; }
         if (missing || tooOld) toast(T("تنبيه: بيانات جوازات ناقصة أو منتهية. أكملها قبل الإصدار.", "Note: passport details are missing or expired. Complete them before ticketing."));
       }
@@ -800,12 +831,19 @@
   function agentForm(id) {
     if (!can("agents_manage")) return;
     const owner = isOwner();
-    const p = id ? Object.assign({ password: "" }, DB.get("partners", id)) : { email: "", password: genPass(), agency: "", contact: "", phone: "", contactEmail: "", website: "", sellMarkup: 6, status: "active", creditLimit: 3000, pricing: { mode: "hybrid" } };
+    const p = id ? Object.assign({ password: "" }, DB.get("partners", id)) : { email: "", password: genPass(), agency: "", contact: "", phone: "", contactEmail: "", website: "", sellMarkup: 6, status: "active", creditLimit: 3000, pricing: { mode: "hybrid" }, legalName: "", address: "", city: "", state: "", zip: "", country: "United States", taxId: "", iata: "", licenseNo: "", officePhone: "", notes: "" };
     const c = Object.assign({}, DEF_PRICING, p.pricing || {});
     openModal(id ? T("تعديل وكيل", "Edit agent") : T("وكيل B2B جديد", "New B2B agent"), `
       <form id="agForm" class="dr-form" novalidate>
         <fieldset><legend>${T("بيانات الوكالة", "Agency details")}</legend><div class="f3">
-          ${inp("agency", T("اسم الوكالة", "Agency name"), p.agency)}${inp("contact", T("اسم المسؤول", "Contact person"), p.contact)}${inp("phone", T("الهاتف", "Phone"), p.phone, "tel", "ltr")}</div></fieldset>
+          ${inp("agency", T("اسم الوكالة (التجاري)", "Agency (trade) name"), p.agency)}${inp("legalName", T("الاسم القانوني المسجل", "Registered legal name"), p.legalName, "text", "ltr")}${inp("contact", T("اسم المسؤول", "Contact person"), p.contact)}
+          ${inp("phone", T("جوال المسؤول", "Contact mobile"), p.phone, "tel", "ltr")}${inp("officePhone", T("هاتف المكتب", "Office phone"), p.officePhone, "tel", "ltr")}${inp("contactEmail", T("بريد المراسلات والفواتير", "Billing / contact email"), p.contactEmail, "email", "ltr")}
+          ${inp("website", T("الموقع", "Website"), p.website, "text", "ltr")}</div></fieldset>
+        <fieldset><legend>${T("العنوان والأرقام الرسمية", "Address and official numbers")}</legend><div class="f3">
+          ${inp("address", T("الشارع والرقم", "Street address"), p.address, "text", "ltr")}${inp("city", T("المدينة", "City"), p.city, "text", "ltr")}${inp("state", T("الولاية / المنطقة", "State / region"), p.state, "text", "ltr")}
+          ${inp("zip", T("الرمز البريدي", "ZIP / postal code"), p.zip, "text", "ltr")}${inp("country", T("الدولة", "Country"), p.country, "text", "ltr")}${inp("taxId", T("الرقم الضريبي / EIN", "Tax ID / EIN"), p.taxId, "text", "ltr")}
+          ${inp("iata", T("رقم IATA / ARC", "IATA / ARC number"), p.iata, "text", "ltr")}${inp("licenseNo", T("رقم الرخصة التجارية", "Business license no."), p.licenseNo, "text", "ltr")}</div>
+          ${area("notes", T("ملاحظات داخلية", "Internal notes"), p.notes)}</fieldset>
         <fieldset><legend>${T("الدخول إلى بوابة الشركاء", "Partner portal login")}</legend><div class="f3">
           ${inp("email", T("البريد (اسم الدخول)", "Email (login)"), p.email, "email", "ltr")}
           <label class="fl"><span>${T("كلمة المرور", "Password")}</span><span class="pw-row"><input name="password" type="text" dir="ltr" value="${esc(p.password)}" placeholder="${id ? T("اتركها فارغة للإبقاء عليها", "Leave empty to keep") : ""}" autocomplete="off"><button type="button" class="btn btn--ghost btn--sm" data-gen>${T("توليد", "Generate")}</button></span></label>
@@ -823,7 +861,8 @@
       const d = Object.fromEntries(new FormData(e.target));
       const email = d.email.trim().toLowerCase();
       if (!d.agency.trim() || !email || (!id && d.password.length < 8) || (d.password && d.password.length < 8)) { toast(T("اسم الوكالة والبريد وكلمة مرور من 8 أحرف على الأقل مطلوبة", "Agency name, email and a password of 8+ characters are required")); return; }
-      const payload = { id, agency: d.agency.trim(), contact: d.contact.trim(), phone: d.phone.trim(), email, password: d.password || undefined, status: d.status };
+      const payload = { id, agency: d.agency.trim(), contact: d.contact.trim(), phone: d.phone.trim(), email, password: d.password || undefined, status: d.status,
+        legalName: d.legalName.trim(), address: d.address.trim(), city: d.city.trim(), state: d.state.trim(), zip: d.zip.trim(), country: d.country.trim(), taxId: d.taxId.trim(), iata: d.iata.trim(), licenseNo: d.licenseNo.trim(), officePhone: d.officePhone.trim(), contactEmail: d.contactEmail.trim(), website: d.website.trim(), notes: d.notes.trim() };
       if (owner) Object.assign(payload, { creditLimit: +d.creditLimit || 0, pricing: { mode: d.mode, flatAll: +d.flatAll || 0, pctAll: (+d.pctAll || 0) / 100, flat: +d.flat || 0, threshold: +d.threshold || 0, pct: (+d.pct || 0) / 100, publicMarkup: (+d.publicMarkup || 0) / 100 } });
       const btn = e.target.querySelector("[type=submit]"); btn.disabled = true;
       try { await DB.admin("save_partner", payload); } catch (er) { btn.disabled = false; return errToast(er); }
@@ -878,54 +917,142 @@
   }
 
   /* ---------- Invoice ---------- */
-  // Customer invoice for one booking: the company letterhead, bill-to, lines, payments and balance
-  function invoiceDocHtml(b) {
-    const c = CO(), m = bookingMoney(b);
+  // Customer invoice for one booking, always in English: company letterhead, bill-to, lines, payments, balance and a PAID / UNPAID stamp.
+  // Anything on it can be changed with «Edit invoice» (saved in bookings.invoice); otherwise it is built from the booking.
+  const enDate = (iso) => (iso ? new Date(String(iso).slice(0, 10) + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—");
+  const usdEn = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+  const CABIN_EN = { economy: "Economy", premium: "Premium Economy", business: "Business", first: "First" };
+  const METHOD_EN = { card: "Card", cash: "Cash", bank: "Bank transfer", zelle: "Zelle", check: "Check" };
+  const PM_KIND = () => ({ bank: T("حساب بنكي", "Bank account"), wire: T("تحويل دولي (Wire)", "Wire transfer"), zelle: "Zelle", card: T("بطاقة", "Card"), cash: T("نقداً", "Cash"), check: T("شيك", "Check"), other: T("أخرى", "Other") });
+  function invoiceDefaults(b) {
     const p = b.partnerId ? DB.get("partners", b.partnerId) : null, co = b.companyId ? DB.get("companies", b.companyId) : null;
-    const bill = p ? [p.agency, p.contact, p.phone, p.contactEmail || p.email] : co ? [co.name, co.legalName, co.email, co.phone] : [b.customer.name, b.customer.phone, b.customer.email];
-    const pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "—"];
-    const total = (+b.sell || 0) + (+b.serviceFee || 0);
+    const addr = (x) => [x.address, [x.city, [x.state, x.zip].filter(Boolean).join(" ")].filter(Boolean).join(", "), x.country].filter(Boolean).join("\n");
+    const billTo = p ? [p.legalName || p.agency, p.legalName && p.legalName !== p.agency ? `dba ${p.agency}` : "", addr(p), p.contact ? `Attn: ${p.contact}` : "", p.officePhone || p.phone, p.contactEmail || p.email, p.taxId ? `Tax ID: ${p.taxId}` : "", p.iata ? `IATA: ${p.iata}` : ""]
+      : co ? [co.legalName || co.name, co.address || "", co.email || "", co.phone || "", co.taxId ? `Tax ID: ${co.taxId}` : ""]
+      : [b.customer.name, b.customer.phone, b.customer.email];
+    const pax = (b.travelers || []).length ? b.travelers : [b.customer.name || "Traveler"];
+    const segs = segmentsOf(b);
+    const trip = segs.length ? segs.map((x) => `${x.flight ? x.flight + " " : ""}${x.from} → ${x.to} · ${enDate(x.date)}`).join("\n") : `${b.route} · ${enDate(b.depart)}${b.ret ? " – " + enDate(b.ret) : ""}`;
+    const items = [{ desc: `Air tickets — ${b.airline || "Airline"} (${CABIN_EN[b.cabin] || b.cabin || ""})`, detail: `${trip}\nPassengers: ${pax.join(", ")}${b.pnr ? `\nPNR: ${b.pnr}` : ""}${(b.tickets || []).length ? `\nE-tickets: ${b.tickets.join(", ")}` : ""}`, qty: pax.length, unit: +((+b.sell || 0) / pax.length).toFixed(2) }];
+    if (+b.serviceFee) items.push({ desc: "Service fee", detail: "", qty: 1, unit: +b.serviceFee });
+    const date = b.ticketedAt || b.created || today();
+    return { number: `INV-${b.id}`, date, due: date, billTo: billTo.filter(Boolean).join("\n"), items, notes: "", terms: CO().invoiceTerms || "", methods: null };
+  }
+  const invoiceOf = (b) => { const d = invoiceDefaults(b), e = b.invoice || {}; const o = Object.assign({}, d, Object.fromEntries(Object.entries(e).filter(([, v]) => v !== "" && v != null))); if (!Array.isArray(o.items) || !o.items.length) o.items = d.items; return o; };
+  const invMoney = (b, inv) => {
+    const total = inv.items.reduce((sum, x) => sum + (+x.qty || 0) * (+x.unit || 0), 0);
     const pays = DB.all("payments").filter((x) => x.bookingId === b.id && (x.dir === "in" || x.dir === "refund"));
     const paid = pays.reduce((sum, x) => sum + (x.dir === "in" ? x.amount : -x.amount), 0);
-    const due = Math.max(0, total - paid);
-    const issued = b.ticketedAt || b.created || today();
-    const segs = segmentsOf(b);
-    const trip = segs.length ? segs.map((x) => `${x.from} → ${x.to} ${fmtDate(x.date)}`).join(" · ") : `${b.route} · ${fmtDate(b.depart)}${b.ret ? " – " + fmtDate(b.ret) : ""}`;
-    const row = (d, sub, q, unit, amt) => `<tr><td><b>${d}</b>${sub ? `<br><small>${sub}</small>` : ""}</td><td class="num">${q}</td><td class="num" dir="ltr">${unit}</td><td class="num" dir="ltr"><b>${amt}</b></td></tr>`;
-    const per = pax.length ? (+b.sell || 0) / pax.length : +b.sell || 0;
-    return `<div class="statement invoice-doc" id="invoiceDoc">
-      ${letterhead("INVOICE", "فاتورة", `<span dir="ltr" class="mono">INV-${esc(b.id)}</span><span>${T("التاريخ", "Date")}: <span dir="ltr">${fmtDate(issued)}</span></span>`)}
-      <div class="inv-stamp ${due > 0.004 ? "is-due" : "is-paid"}">${due > 0.004 ? `${T("المستحق", "Balance due")} <b dir="ltr">${usd.format(due)}</b>` : `✓ ${T("مدفوعة بالكامل", "Paid in full")}`}</div>
+    return { total, pays, paid, due: Math.max(0, +(total - paid).toFixed(2)) };
+  };
+  const invMethods = (inv) => DB.all("paymentMethods").filter((m) => m.enabled && (Array.isArray(inv.methods) ? inv.methods.includes(m.id) : m.showOnInvoice));
+  const nl = (t) => esc(t || "").replace(/\n/g, "<br>");
+  function invoiceDocHtml(b) {
+    const c = CO(), inv = invoiceOf(b), m = invMoney(b, inv);
+    const stamp = m.total > 0 && m.due <= 0.004 ? ["paid", "PAID"] : m.paid > 0.004 ? ["partial", "PARTIALLY PAID"] : ["unpaid", "UNPAID"];
+    const addr = coAddress();
+    return `<div class="statement invoice-doc" id="invoiceDoc" lang="en" dir="ltr">
+      <div class="inv-watermark inv-watermark--${stamp[0]}" aria-hidden="true"><span>${stamp[1]}</span>${stamp[0] === "paid" && m.pays.length ? `<small>${enDate(m.pays.map((x) => x.date).sort().pop())}</small>` : ""}</div>
+      <header class="st-head doc-head"><img src="assets/img/logo.png" alt="" width="58" height="58">
+        <div class="doc-co"><b>${esc(c.tradeName)}</b>${c.legalName && c.legalName !== c.tradeName ? `<small>${esc(c.legalName)}</small>` : ""}${addr ? `<small>${esc(addr)}</small>` : ""}<small>${esc(coPhones().join(" · "))}</small><small>${esc(c.email)} · ${esc(c.website)}</small>${coIds() ? `<small>${esc(coIds())}</small>` : ""}</div>
+        <div class="st-meta"><b>INVOICE</b><span class="mono">${esc(inv.number)}</span><span>Date: ${enDate(inv.date)}</span><span>Due: ${inv.due && inv.due !== inv.date ? enDate(inv.due) : "On receipt"}</span></div></header>
       <div class="inv-parties">
-        <div><small>${L("فاتورة إلى", "Bill to")}</small><b>${esc(bill[0] || "—")}</b>${bill.slice(1).filter(Boolean).map((x) => `<span dir="auto">${esc(x)}</span>`).join("")}</div>
-        <div><small>${L("الحجز", "Booking")}</small><b dir="ltr" class="mono">${esc(b.id)}</b>${b.pnr ? `<span dir="ltr">PNR <b class="mono">${esc(b.pnr)}</b></span>` : ""}<span>${esc(b.airline || "")} · ${esc(CABIN()[b.cabin] || "")}</span></div>
+        <div><small>BILL TO</small>${String(inv.billTo || "").split("\n").map((x) => x.trim()).filter(Boolean).map((x, i) => (i ? `<span>${esc(x)}</span>` : `<b>${esc(x)}</b>`)).join("")}</div>
+        <div><small>BOOKING</small><b class="mono">${esc(b.id)}</b>${b.pnr ? `<span>PNR <b class="mono">${esc(b.pnr)}</b></span>` : ""}<span>${esc(b.airline || "")}${b.cabin ? " · " + esc(CABIN_EN[b.cabin] || b.cabin) : ""}</span></div>
       </div>
-      <table class="of-table inv-lines"><thead><tr><th>${T("البيان / Description", "Description")}</th><th>${T("الكمية", "Qty")}</th><th>${T("السعر", "Unit price")}</th><th>${T("المبلغ", "Amount")}</th></tr></thead>
-        <tbody>
-          ${row(`${T("تذاكر طيران", "Air tickets")} · ${esc(b.airline || "")}`, `<span dir="ltr">${esc(trip)}</span><br>${esc(pax.join(", "))}${(b.tickets || []).length ? `<br>${T("أرقام التذاكر", "E-tickets")}: <span dir="ltr" class="mono">${esc(b.tickets.join(", "))}</span>` : ""}`, pax.length, usd.format(per), usd.format(+b.sell || 0))}
-          ${+b.serviceFee ? row(T("رسوم الخدمة", "Service fee"), "", 1, usd.format(+b.serviceFee), usd.format(+b.serviceFee)) : ""}
-        </tbody>
+      <table class="of-table inv-lines"><thead><tr><th>Description</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr></thead>
+        <tbody>${inv.items.map((x) => `<tr><td><b>${esc(x.desc || "")}</b>${x.detail ? `<br><small>${nl(x.detail)}</small>` : ""}</td><td class="num">${+x.qty || 0}</td><td class="num">${usdEn.format(+x.unit || 0)}</td><td class="num"><b>${usdEn.format((+x.qty || 0) * (+x.unit || 0))}</b></td></tr>`).join("")}</tbody>
         <tfoot>
-          <tr><td colspan="3">${T("الإجمالي", "Total")} (USD)</td><td class="num" dir="ltr"><b>${usd.format(total)}</b></td></tr>
-          ${pays.map((x) => `<tr class="inv-pay"><td colspan="3">${x.dir === "in" ? T("دفعة مستلمة", "Payment received") : T("استرداد", "Refund")} · ${fmtDate(x.date)} · ${esc(METHOD()[x.method] || x.method || "")}${x.ref ? ` · <span dir="ltr">${esc(x.ref)}</span>` : ""}</td><td class="num" dir="ltr">${x.dir === "in" ? "−" : "+"}${usd.format(x.amount)}</td></tr>`).join("")}
-          <tr class="inv-due"><td colspan="3">${T("الرصيد المستحق", "Balance due")}</td><td class="num" dir="ltr"><b>${usd.format(due)}</b></td></tr>
+          <tr><td colspan="3">Total (USD)</td><td class="num"><b>${usdEn.format(m.total)}</b></td></tr>
+          ${m.pays.map((x) => `<tr class="inv-pay"><td colspan="3">${x.dir === "in" ? "Payment received" : "Refund"} · ${enDate(x.date)} · ${esc(METHOD_EN[x.method] || x.method || "")}${x.ref ? ` · ${esc(x.ref)}` : ""}</td><td class="num">${x.dir === "in" ? "−" : "+"}${usdEn.format(x.amount)}</td></tr>`).join("")}
+          <tr class="inv-due"><td colspan="3">Balance due</td><td class="num"><b>${usdEn.format(m.due)}</b></td></tr>
         </tfoot></table>
-      ${c.paymentInfo ? `<div class="inv-box"><small>${L("طريقة الدفع", "How to pay")}</small><p dir="auto">${esc(c.paymentInfo).replace(/\n/g, "<br>")}</p></div>` : ""}
-      <div class="inv-box"><small>${L("الشروط", "Terms")}</small><p dir="auto">${esc(c.invoiceTerms || "").replace(/\n/g, "<br>")}</p></div>
-      <p class="inv-thanks">${T(`شكراً لاختياركم ${esc(c.tradeNameAr || c.tradeName)}.`, `Thank you for choosing ${esc(c.tradeName)}.`)} <small dir="ltr">${esc(c.legalName)}${coIds() ? " · " + esc(coIds()) : ""}</small></p>
+      ${inv.notes ? `<div class="inv-box"><small>NOTES</small><p>${nl(inv.notes)}</p></div>` : ""}
+      ${invMethods(inv).length || c.paymentInfo ? `<div class="inv-box"><small>HOW TO PAY</small>${invMethods(inv).map((x) => `<p><b>${esc(x.label)}</b><br>${nl(x.details)}</p>`).join("")}${c.paymentInfo ? `<p>${nl(c.paymentInfo)}</p>` : ""}</div>` : ""}
+      ${inv.terms ? `<div class="inv-box"><small>TERMS</small><p>${nl(inv.terms)}</p></div>` : ""}
+      <p class="inv-thanks">Thank you for choosing ${esc(c.tradeName)}.<small>${esc(c.legalName)}${coIds() ? " · " + esc(coIds()) : ""}</small></p>
     </div>`;
   }
   const invoiceText = (b) => {
-    const total = (+b.sell || 0) + (+b.serviceFee || 0), paid = DB.paidIn(b.id);
-    return `${CO().tradeName} — ${T("فاتورة", "Invoice")} INV-${b.id}\n${b.pnr ? "PNR " + b.pnr + " · " : ""}${b.airline || ""} · ${b.route}\n${T("الإجمالي", "Total")}: ${usd.format(total)} · ${T("المدفوع", "Paid")}: ${usd.format(paid)} · ${T("المستحق", "Due")}: ${usd.format(Math.max(0, total - paid))}\n${coPhones()[0] || ""} · ${CO().email}`;
+    const inv = invoiceOf(b), m = invMoney(b, inv);
+    return `${CO().tradeName} — Invoice ${inv.number}\n${b.pnr ? "PNR " + b.pnr + " · " : ""}${b.airline || ""} · ${b.route}\nTotal: ${usdEn.format(m.total)} · Paid: ${usdEn.format(m.paid)} · Balance due: ${usdEn.format(m.due)}\n${coPhones()[0] || ""} · ${CO().email}`;
   };
   function printInvoice(id) {
     const b = DB.get("bookings", id);
     if (!b) return;
     closeDrawer();
-    openModal(T("الفاتورة", "Invoice") + " · INV-" + b.id, docActionsHtml(b, "invoice") + invoiceDocHtml(b), true);
-    bindDocActions(b, "invoice", { el: () => $("#invoiceDoc"), file: `Invoice-INV-${b.id}.pdf`, text: () => invoiceText(b), print: () => invoiceDocHtml(b), csv: () => downloadCsv(`invoice-INV-${b.id}`, ["invoice", "date", "bill_to", "booking", "pnr", "airline", "route", "travelers", "tickets", "fare", "service_fee", "total", "paid", "balance_due"],
-      [[`INV-${b.id}`, b.ticketedAt || b.created, b.customer.name, b.id, b.pnr, b.airline, b.route, (b.travelers || []).join(" / "), (b.tickets || []).join(" / "), +b.sell || 0, +b.serviceFee || 0, (+b.sell || 0) + (+b.serviceFee || 0), DB.paidIn(b.id), Math.max(0, (+b.sell || 0) + (+b.serviceFee || 0) - DB.paidIn(b.id))]]) });
+    const inv = invoiceOf(b), m = invMoney(b, inv);
+    const tools = `<div class="tk-actions inv-tools">
+        ${can("billing") ? `<button type="button" class="btn btn--ghost btn--sm" id="invEdit">✎ ${T("تعديل الفاتورة", "Edit invoice")}</button>` : ""}
+        ${can("payments") && m.due > 0.004 ? `<button type="button" class="btn btn--accent btn--sm" id="invPay">${icon("i-card")}${T("تسجيل دفعة", "Record payment")}</button>` : ""}
+        ${Math.abs(m.total - ((+b.sell || 0) + (+b.serviceFee || 0))) > 0.004 ? `<span class="tag tag--out">${T("إجمالي الفاتورة يختلف عن سعر الحجز", "Invoice total differs from the booking price")}</span>` : ""}
+      </div>`;
+    openModal(T("الفاتورة", "Invoice") + " · " + inv.number, tools + docActionsHtml(b, "invoice") + invoiceDocHtml(b), true);
+    bindDocActions(b, "invoice", { el: () => $("#invoiceDoc"), file: `Invoice-${inv.number}.pdf`, text: () => invoiceText(b), print: () => invoiceDocHtml(b), csv: () => downloadCsv(`invoice-${inv.number}`, ["invoice", "date", "due", "bill_to", "booking", "pnr", "description", "details", "qty", "unit_price", "amount"],
+      inv.items.map((x) => [inv.number, inv.date, inv.due, inv.billTo.split("\n")[0], b.id, b.pnr, x.desc, String(x.detail || "").replace(/\n/g, " / "), +x.qty || 0, +x.unit || 0, (+x.qty || 0) * (+x.unit || 0)])) });
+    if ($("#invEdit")) $("#invEdit").addEventListener("click", () => invoiceEditor(b));
+    if ($("#invPay")) $("#invPay").addEventListener("click", () => invoicePayment(b));
+  }
+  // Edit anything on the invoice (owner or "billing" permission; the database checks it too)
+  function invoiceEditor(b) {
+    const inv = invoiceOf(b), saved = b.invoice || {};
+    const pms = DB.all("paymentMethods").filter((x) => x.enabled);
+    const itemRow = (x) => `<div class="inv-ed-item" data-item><input name="desc" value="${esc(x.desc || "")}" placeholder="Description" aria-label="Description"><textarea name="detail" rows="2" placeholder="Details" aria-label="Details">${esc(x.detail || "")}</textarea><input name="qty" type="number" min="0" step="any" value="${+x.qty || 0}" aria-label="Qty"><input name="unit" type="number" min="0" step="0.01" value="${+x.unit || 0}" aria-label="Unit price"><button type="button" class="btn btn--ghost btn--sm" data-rm-item aria-label="${T("حذف", "Remove")}">×</button></div>`;
+    openModal(T("تعديل الفاتورة", "Edit invoice") + " · " + inv.number, `
+      <form id="invForm" class="dr-form" novalidate lang="en">
+        <p class="hint">${icon("i-list")}${T("الفاتورة تُطبع بالإنجليزية دائماً، فاكتب البيانات بالإنجليزية. بيانات شركتك تُعدَّل من «بيانات الشركة».", "Invoices are always printed in English, so write in English. Your company's details are edited in «Company details».")}</p>
+        <div class="f3">${inp("number", "Invoice number", inv.number, "text", "ltr")}${inp("date", "Invoice date", inv.date, "date")}${inp("due", "Due date", inv.due, "date")}</div>
+        ${area("billTo", "Bill to (one line each: name, address, phone, email…)", inv.billTo, 'dir="ltr" style="min-height:120px"')}
+        <fieldset><legend>Lines</legend><div class="inv-ed-head"><span>Description</span><span>Details</span><span>Qty</span><span>Unit price (USD)</span><span></span></div>
+          <div id="invItems">${inv.items.map(itemRow).join("")}</div><button type="button" class="btn btn--ghost btn--sm" id="invAddItem">+ ${T("سطر", "Line")}</button></fieldset>
+        ${area("notes", "Notes (optional)", inv.notes, 'dir="ltr"')}
+        ${area("terms", "Terms", inv.terms, 'dir="ltr" style="min-height:70px"')}
+        <fieldset><legend>${T("وسائل الدفع التي تظهر في الفاتورة", "Payment methods shown on the invoice")}</legend>
+          ${pms.length ? pms.map((x) => `<label class="perm"><input type="checkbox" name="pm" value="${x.id}" ${(Array.isArray(inv.methods) ? inv.methods.includes(x.id) : x.showOnInvoice) ? "checked" : ""}><span><b>${esc(x.label)}</b><small>${esc(PM_KIND()[x.kind] || x.kind)}</small></span></label>`).join("") : `<p class="muted">${T("لا توجد وسائل دفع بعد. أضفها من «وسائل الدفع والحسابات البنكية».", "No payment methods yet. Add them in «Payment methods & bank accounts».")}</p>`}</fieldset>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ الفاتورة", "Save invoice")}</button><button type="button" class="btn btn--ghost" id="invBack">${T("رجوع", "Back")}</button>${Object.keys(saved).length ? `<button type="button" class="btn btn--ghost danger" id="invReset">${T("إرجاعها تلقائية من بيانات الحجز", "Reset to automatic (from the booking)")}</button>` : ""}</div>
+      </form>`, true);
+    const f = $("#invForm");
+    const bindRm = () => $$("[data-rm-item]", f).forEach((x) => (x.onclick = () => { if ($$("[data-item]", f).length > 1) x.parentNode.remove(); }));
+    bindRm();
+    $("#invAddItem").addEventListener("click", () => { $("#invItems").insertAdjacentHTML("beforeend", itemRow({ qty: 1, unit: 0 })); bindRm(); });
+    $("#invBack").addEventListener("click", () => printInvoice(b.id));
+    const save = async (invoice) => {
+      try { await DB.update("bookings", b.id, { invoice }); } catch (er) { return errToast(er); }
+      log(T("عدّل الفاتورة", "Edited invoice"), b.id); toast(T("حُفظت الفاتورة", "Invoice saved"));
+      printInvoice(b.id);
+    };
+    if ($("#invReset")) $("#invReset").addEventListener("click", (e) => { const x = e.currentTarget; if (x.dataset.confirm !== "1") { x.dataset.confirm = "1"; x.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; } save({}); });
+    f.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const items = $$("[data-item]", f).map((r) => ({ desc: r.querySelector("[name=desc]").value.trim(), detail: r.querySelector("[name=detail]").value.trim(), qty: +r.querySelector("[name=qty]").value || 0, unit: +(+r.querySelector("[name=unit]").value || 0).toFixed(2) })).filter((x) => x.desc || x.unit);
+      if (!items.length) return toast(T("أضف سطراً واحداً على الأقل", "Add at least one line"));
+      const v = (n) => f.elements[n].value.trim();
+      save({ number: v("number").slice(0, 40), date: v("date"), due: v("due"), billTo: v("billTo").slice(0, 1500), items: items.slice(0, 40), notes: v("notes").slice(0, 3000), terms: v("terms").slice(0, 3000), methods: $$("[name=pm]:checked", f).map((x) => x.value) });
+    });
+  }
+  // Record a payment straight from the invoice
+  function invoicePayment(b) {
+    const inv = invoiceOf(b), m = invMoney(b, inv);
+    const pms = DB.all("paymentMethods").filter((x) => x.enabled);
+    openModal(T("تسجيل دفعة على الفاتورة", "Record a payment on the invoice") + " · " + inv.number, `
+      <form id="ipBkForm" class="dr-form" novalidate>
+        <p class="hint">${T("المستحق الآن", "Balance due now")}: <b dir="ltr">${usdEn.format(m.due)}</b></p>
+        <div class="f3">${inp("amount", T("المبلغ (USD)", "Amount (USD)"), m.due, "number", "ltr")}${sel("method", T("الطريقة", "Method"), METHOD(), "zelle")}${inp("date", T("التاريخ", "Date"), today(), "date")}</div>
+        <div class="f3">${pms.length ? sel("account", T("الحساب المستلِم", "Received into"), Object.fromEntries([["", "—"], ...pms.map((x) => [x.label, x.label])]), "") : ""}${inp("ref", T("مرجع العملية", "Transaction reference"), "", "text", "ltr")}</div>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("تسجيل الدفعة", "Record payment")}</button><button type="button" class="btn btn--ghost" id="ipBack">${T("رجوع", "Back")}</button></div>
+      </form>`);
+    $("#ipBack").addEventListener("click", () => printInvoice(b.id));
+    $("#ipBkForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(e.target)), amount = +d.amount;
+      if (!(amount > 0)) return toast(T("أدخل مبلغاً صحيحاً", "Enter a valid amount"));
+      const btn = e.target.querySelector("[type=submit]"); btn.disabled = true;
+      try { await DB.insert("payments", { date: d.date || today(), dir: "in", amount, method: d.method, bookingId: b.id, partnerId: b.partnerId || null, ref: (d.ref || "").trim(), note: d.account ? `${T("إلى حساب", "Into")}: ${d.account}` : "" }); }
+      catch (er) { btn.disabled = false; return errToast(er); }
+      log(T("سجّل دفعة على الفاتورة", "Recorded invoice payment"), `${b.id} · ${usdEn.format(amount)}`);
+      toast(amount >= m.due - 0.004 ? T("تم الدفع بالكامل: الفاتورة مختومة PAID", "Paid in full: the invoice is stamped PAID") : T("تم تسجيل الدفعة", "Payment recorded"));
+      printInvoice(b.id); route();
+    });
   }
   // The same actions for a ticket and an invoice: print, PDF, email with the PDF attached, share the PDF to any app, WhatsApp / SMS text, copy, Excel (CSV)
   function docActionsHtml(b, kind) {
@@ -1183,11 +1310,50 @@
   }
 
   /* ---------- Settings (owner) ---------- */
+  /* ---------- Payment methods & bank accounts (owner or "billing") ---------- */
+  function viewPayMethods(el) {
+    const list = DB.all("paymentMethods");
+    el.innerHTML = `
+      <p class="hint">${icon("i-lock")}${T("لا يضيف أو يعدّل وسائل الدفع والحسابات البنكية إلا المالك أو الموظف الذي أعطيته صلاحية «الفوترة والحسابات البنكية». القاعدة نفسها تمنع غيرهم.", "Only the owner, or staff you give the «Billing & bank accounts» permission, can add or change payment methods and bank accounts. The database itself blocks everyone else.")}</p>
+      <div class="of-toolbar"><button type="button" class="btn btn--accent btn--sm" id="pmNew">+ ${T("وسيلة دفع / حساب بنكي", "Payment method / bank account")}</button></div>
+      <section class="of-card"><div class="table-wrap"><table class="of-table"><thead><tr><th>${T("الاسم", "Name")}</th><th>${T("النوع", "Type")}</th><th>${T("التفاصيل", "Details")}</th><th>${T("في الفاتورة", "On invoice")}</th><th>${T("الحالة", "Status")}</th><th></th></tr></thead>
+        <tbody>${list.length ? list.map((m) => `<tr><td><b>${esc(m.label)}</b></td><td>${esc(PM_KIND()[m.kind] || m.kind)}</td><td dir="ltr"><small>${nl(m.details)}</small></td><td>${m.showOnInvoice ? "✓" : "—"}</td><td>${m.enabled ? `<span class="pill pill--ticketed">${T("مفعّلة", "On")}</span>` : `<span class="pill pill--cancelled">${T("متوقفة", "Off")}</span>`}</td><td class="row-actions"><button type="button" class="btn btn--ghost btn--sm" data-pm="${m.id}">${T("تعديل", "Edit")}</button></td></tr>`).join("") : `<tr><td colspan="6" class="muted empty">${T("لا توجد وسائل دفع بعد. أضف حسابك البنكي أو Zelle ليظهر في الفواتير.", "No payment methods yet. Add your bank account or Zelle to show it on invoices.")}</td></tr>`}</tbody></table></div></section>`;
+    $("#pmNew").addEventListener("click", () => payMethodForm(null));
+    $$("[data-pm]", el).forEach((x) => x.addEventListener("click", () => payMethodForm(DB.all("paymentMethods").find((m) => m.id === x.dataset.pm))));
+  }
+  function payMethodForm(m) {
+    m = m || { kind: "bank", label: "", details: "", showOnInvoice: true, enabled: true, sort: 0 };
+    const ex = { bank: "Bank: Chase\nAccount name: World Services dba Green Travel\nRouting: 000000000\nAccount: 000000000", zelle: "Zelle: info@greentravel.us", wire: "Bank, SWIFT, IBAN / account, beneficiary address", card: "Visa / Mastercard / Amex — pay by phone or payment link", cash: "At our office", check: "Payable to: World Services dba Green Travel", other: "" };
+    openModal(m.id ? T("تعديل وسيلة دفع", "Edit payment method") : T("وسيلة دفع جديدة", "New payment method"), `
+      <form id="pmForm" class="dr-form" novalidate>
+        <div class="f3">${sel("kind", T("النوع", "Type"), PM_KIND(), m.kind)}${inp("label", T("الاسم الظاهر (بالإنجليزية)", "Name shown (English)"), m.label, "text", "ltr")}${inp("sort", T("الترتيب", "Order"), m.sort || 0, "number", "ltr")}</div>
+        ${area("details", T("التفاصيل التي تظهر للعميل (بالإنجليزية)", "Details shown to the customer (English)"), m.details, `dir="ltr" style="min-height:120px" placeholder="${esc(ex[m.kind] || "")}"`)}
+        <label class="perm"><input type="checkbox" name="showOnInvoice" ${m.showOnInvoice ? "checked" : ""}><span><b>${T("تظهر في الفواتير", "Show on invoices")}</b><small>${T("يمكن اختيارها لكل فاتورة أيضاً", "Can also be chosen per invoice")}</small></span></label>
+        <label class="perm"><input type="checkbox" name="enabled" ${m.enabled ? "checked" : ""}><span><b>${T("مفعّلة", "Enabled")}</b><small>${T("تظهر عند تسجيل الدفعات", "Offered when recording payments")}</small></span></label>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button>${m.id ? `<button type="button" class="btn btn--ghost danger" id="pmDel">${T("حذف", "Delete")}</button>` : ""}</div>
+      </form>`);
+    const f = $("#pmForm");
+    f.elements.kind.addEventListener("change", () => (f.elements.details.placeholder = ex[f.elements.kind.value] || ""));
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const d = { id: m.id, kind: f.elements.kind.value, label: f.elements.label.value.trim().slice(0, 80), details: f.elements.details.value.trim().slice(0, 1500), sort: +f.elements.sort.value || 0, showOnInvoice: f.elements.showOnInvoice.checked, enabled: f.elements.enabled.checked };
+      if (!d.label) return toast(T("اكتب اسم وسيلة الدفع", "Enter a name for the payment method"));
+      try { await DB.savePayMethod(d); } catch (er) { return errToast(er); }
+      log(m.id ? T("عدّل وسيلة دفع", "Edited payment method") : T("أضاف وسيلة دفع", "Added payment method"), d.label);
+      closeModal(); toast(T("تم الحفظ", "Saved")); route();
+    });
+    if ($("#pmDel")) $("#pmDel").addEventListener("click", async (e) => {
+      const x = e.currentTarget; if (x.dataset.confirm !== "1") { x.dataset.confirm = "1"; x.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
+      try { await DB.deletePayMethod(m.id); } catch (er) { return errToast(er); }
+      log(T("حذف وسيلة دفع", "Deleted payment method"), m.label); closeModal(); route();
+    });
+  }
+
   /* ---------- Company details: the letterhead of every invoice and ticket (owner) ---------- */
   function viewCompany(el) {
     const c = CO();
     el.innerHTML = `
-      <p class="hint">${icon("i-briefcase")}${T("هذه البيانات تظهر في رأس كل فاتورة وتذكرة وخط سير رحلة تُطبع أو تُرسل للعملاء. أكملها بدقة كما في أوراق الشركة الرسمية.", "These details appear at the top of every invoice, ticket and itinerary you print or send. Fill them in exactly as on the company's official papers.")}</p>
+      <p class="hint">${icon("i-briefcase")}${T("هذه البيانات تظهر في رأس كل فاتورة وتذكرة وخط سير رحلة. الفواتير تُطبع بالإنجليزية، فاكتب العنوان والشروط بالإنجليزية. الحسابات البنكية تُضاف من «وسائل الدفع والحسابات البنكية».", "These details appear at the top of every invoice, ticket and itinerary. Invoices are printed in English, so write the address and terms in English. Bank accounts are added in «Payment methods & bank accounts».")}</p>
       <form id="coForm" class="of-card dr-form" novalidate>
         <fieldset><legend>${T("الاسم", "Name")}</legend><div class="f3">
           ${inp("tradeName", T("الاسم التجاري (إنجليزي)", "Trade name (English)"), c.tradeName)}${inp("tradeNameAr", T("الاسم التجاري (عربي)", "Trade name (Arabic)"), c.tradeNameAr)}${inp("legalName", T("الاسم القانوني المسجل", "Registered legal name"), c.legalName)}</div></fieldset>

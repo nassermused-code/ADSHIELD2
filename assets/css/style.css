@@ -1490,3 +1490,30 @@ body.is-loading .of-login { opacity: .4; pointer-events: none; }
 .pp-st.ok { background: #eef9f1; color: #1b6b3a; } .pp-st.warn { background: #fff6df; color: #8a5a00; } .pp-st.bad { background: #fdecec; color: #a3231a; }
 @media (max-width: 760px) { .pp-ed__head { display: none; } .pp-row { grid-template-columns: 1fr 1fr; } .pp-row b { grid-column: 1 / -1; } }
 @media print { .inv-stamp, .inv-parties > div, .inv-lines .inv-due td, .pp-st { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* ---------- Invoice: diagonal PAID / UNPAID stamp in the middle ---------- */
+.invoice-doc { position: relative; overflow: hidden; }
+.invoice-doc > *:not(.inv-watermark) { position: relative; z-index: 1; }
+.inv-watermark { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; pointer-events: none; }
+.inv-watermark span { display: block; transform: rotate(-28deg); font-family: var(--font-display, Arial), Arial, sans-serif; font-weight: 800; font-size: clamp(3.4rem, 9vw, 6.6rem); letter-spacing: .14em; padding: .08em .45em; border: .09em solid currentColor; border-radius: .18em; opacity: .2; white-space: nowrap; line-height: 1.1; }
+.inv-watermark small { transform: rotate(-28deg) translateY(-.4em); font-weight: 700; font-size: 1.3rem; letter-spacing: .1em; opacity: .35; }
+.inv-watermark--paid { color: #12803f; }
+.inv-watermark--unpaid { color: #c0262d; }
+.inv-watermark--partial { color: #c46a00; }
+.inv-watermark--partial span { font-size: clamp(2.4rem, 6.4vw, 4.6rem); }
+@media print { .inv-watermark span, .inv-watermark small { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.inv-tools { align-items: center; }
+/* Invoice editor lines */
+.inv-ed-head, .inv-ed-item { display: grid; grid-template-columns: 1.3fr 1.6fr 70px 120px auto; gap: 8px; align-items: start; }
+.inv-ed-head { font-size: .75rem; color: var(--ink-3); padding-bottom: 4px; }
+.inv-ed-item { padding: 6px 0; border-top: 1px solid var(--line); }
+.inv-ed-item input, .inv-ed-item textarea { font: inherit; padding: .45em .6em; border: 1px solid var(--line); border-radius: 10px; min-width: 0; width: 100%; box-sizing: border-box; }
+@media (max-width: 760px) { .inv-ed-head { display: none; } .inv-ed-item { grid-template-columns: 1fr 1fr; } .inv-ed-item textarea { grid-column: 1 / -1; } }
+/* Travelers entered by hand: one card each */
+.trv-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 10px; padding: 12px; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.trv-row label { display: grid; gap: 3px; font-size: .72rem; color: var(--ink-3); }
+.trv-row input, .trv-row select { font: inherit; font-size: .92rem; color: var(--ink); padding: .45em .6em; border: 1px solid var(--line); border-radius: 10px; min-width: 0; background: #fff; }
+.trv-row__end { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; min-height: 0; }
+.trv-row__end:empty { display: none; }
+#trvAdd { margin-top: 10px; }
+@media (max-width: 760px) { .trv-row { grid-template-columns: 1fr 1fr; } }

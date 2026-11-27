@@ -58,9 +58,12 @@ Deno.serve(async (req) => {
   const to = String(body.to || b.customer?.email || "").trim();
   if (!/^\S+@\S+\.\S+$/.test(to)) return json({ error: "no_email" }, 400);
   const sender = String(me.name || "Green Travel");
-  const total = (+b.sell || 0) + (+b.service_fee || 0);
-  const invoiceMsg = () => messageEmail(b, `Invoice INV-${b.id} · فاتورة — Green Travel`,
-    `Hello ${b.customer?.name || ""},\n\nPlease find attached your invoice INV-${b.id}${b.pnr ? " (PNR " + b.pnr + ")" : ""}, total USD ${total.toFixed(2)}.\nIf you have any question, reply to this email or call us.\n\nمرحباً ${b.customer?.name || ""}،\nمرفق فاتورتكم رقم INV-${b.id}${b.pnr ? " (رقم الحجز " + b.pnr + ")" : ""}، بإجمالي ${total.toFixed(2)} دولار أمريكي.\nلأي استفسار ردّوا على هذه الرسالة أو اتصلوا بنا.`, sender);
+  // Invoices are in English; the number and total follow the invoice as edited in the back office
+  const invEd = b.invoice && typeof b.invoice === "object" ? b.invoice : {};
+  const invNo = String(invEd.number || `INV-${b.id}`).slice(0, 40);
+  const total = Array.isArray(invEd.items) && invEd.items.length ? invEd.items.reduce((sum: number, x: any) => sum + (+x.qty || 0) * (+x.unit || 0), 0) : (+b.sell || 0) + (+b.service_fee || 0);
+  const invoiceMsg = () => messageEmail(b, `Invoice ${invNo} — Green Travel`,
+    `Hello ${b.customer?.name || ""},\n\nPlease find attached invoice ${invNo}${b.pnr ? " (PNR " + b.pnr + ")" : ""} for USD ${total.toFixed(2)}.\nIf you have any question, simply reply to this email or call us.\n\nThank you for choosing Green Travel.`, sender);
   const r = await sendEmail(to, custom ? messageEmail(b, subject, message, sender) : invoice ? invoiceMsg() : ticketEmail(b, kind), { fromName: sender, replyTo: me.email || "", attachments });
   if (!r.ok) return json({ error: r.error }, r.error === "email_not_configured" ? 412 : 502);
   if (!custom) await admin.from("bookings").update({ reminders: { ...(b.reminders || {}), [invoice ? "invoice" : kind]: new Date().toISOString() } }).eq("id", b.id);

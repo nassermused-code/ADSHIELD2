@@ -9,7 +9,7 @@ const cors = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
-const PERMS = ["bookings_all", "bookings_create", "bookings_issue", "bookings_cancel", "payments", "customers", "agents", "agents_manage", "export", "corporate", "ai_office"];
+const PERMS = ["bookings_all", "bookings_create", "bookings_issue", "bookings_cancel", "payments", "customers", "agents", "agents_manage", "export", "corporate", "ai_office", "billing"];
 const STAFF_DOMAIN = "staff.greentravel.us";
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 const fail = (msg: string, status = 400) => json({ error: msg }, status);
@@ -131,7 +131,10 @@ Deno.serve(async (req) => {
     if (body.password && String(body.password).length < 8) return fail("Password must be 8+ characters");
     if (!id && !body.password) return fail("Password is required");
     const status = ["active", "pending", "suspended"].includes(body.status) ? body.status : "active";
-    const row: Record<string, unknown> = { email, agency: str(body.agency, 120), contact: str(body.contact, 120), phone: str(body.phone, 40), status };
+    const row: Record<string, unknown> = { email, agency: str(body.agency, 120), contact: str(body.contact, 120), phone: str(body.phone, 40), status,
+      // Full company details (shown on invoices and statements)
+      legal_name: str(body.legalName, 160), address: str(body.address, 200), city: str(body.city, 80), state: str(body.state, 60), zip: str(body.zip, 20), country: str(body.country, 60),
+      tax_id: str(body.taxId, 40), iata: str(body.iata, 40), license_no: str(body.licenseNo, 60), office_phone: str(body.officePhone, 40), contact_email: str(body.contactEmail, 160).toLowerCase() || undefined, website: str(body.website, 200) || undefined, notes: str(body.notes, 2000) };
     if (isOwner && body.creditLimit != null) row.credit_limit = Math.max(0, Number(body.creditLimit) || 0);
     let pid = id;
     if (id) {
