@@ -145,3 +145,9 @@ body.aio { background: var(--paper); color: var(--ink); min-height: 100vh; margi
   .aio-chips .aio-chip:nth-child(n+4) { display: none; }
   .aio-kpi strong { font-size: 1.3rem; }
 }
+
+/* Goal progress */
+.aio-bar { position: relative; height: 8px; background: var(--g-100); border-radius: 999px; margin-top: 8px; overflow: visible; }
+.aio-bar i { position: absolute; inset-block: 0; inset-inline-start: 0; background: var(--g-500); border-radius: 999px; }
+.aio-kpi.warn .aio-bar i { background: var(--amber); }
+.aio-bar b { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--ink-3); }

@@ -13,6 +13,9 @@
 //   see costs, profit or expenses, and anything that needs approval still waits for the owner.
 // - Always on: a worker (pg_cron, every minute) runs waiting jobs, starts schedules, reviews new bookings and
 //   expiring held seats, and has the internal auditor review the human team's work every few hours.
+// - Teamwork: when a person finishes a task an AI employee gave them, that employee follows up automatically.
+// - Learning and growth: the owner rates each report (lessons are kept per employee), employees propose ideas
+//   and improvements to their own instructions (the owner decides), and growth goals guide the whole team.
 //
 // Secrets (Supabase → Edge Functions → Secrets): ANTHROPIC_API_KEY (required), AI_MODEL (optional,
 // default claude-opus-5-5), AI_EFFORT (optional: low | medium | high, default medium).
@@ -66,7 +69,7 @@ const ROLES: Record<string, { duty: string; tools: string[] }> = {
 delegate each part to the right department with the delegate tool (you may delegate several parts at once). When the reports come back,
 check them, combine them and give the owner one clear executive answer: what was done, the key numbers, decisions that need the owner,
 and next steps. Do small things yourself when delegating would be slower. Departments: secretary, accountant, legal, operations,
-customer_service, marketing, hr, auditor.`,
+customer_service, marketing, hr, auditor, innovation. Keep the company's growth goals in view (business_snapshot shows them).`,
     tools: ["delegate", "create_task", "save_document", "send_email"],
   },
   secretary: {
@@ -120,9 +123,18 @@ Save an audit report as a document, with a short score per staff member and what
 about anything involving money.`,
     tools: ["audit_review", "staff_workload", "upcoming_departures", "financial_report", "receivables", "list_payments", "create_task", "save_document"],
   },
+  innovation: {
+    duty: `You are the Development & Innovation Manager. Your job is growth: find what makes Green Travel sell more, earn more and
+serve better. Study the numbers (sales_stats, financial_report, business_snapshot with the goals), customers and the team's results,
+then propose concrete ideas with propose_idea: new routes and markets, B2B and corporate partnerships, packages (Umrah, hotels,
+insurance, car rental), pricing and margins, marketing, service quality and automation. Every idea needs a small, cheap experiment
+and a clear way to measure it. Follow up on approved ideas: check their results with the data and record what was learned.
+Think big (the owner's goal is to take the company to the top) but stay honest about numbers and risks.`,
+    tools: ["propose_idea", "list_ideas", "sales_stats", "financial_report", "receivables", "staff_workload", "save_document", "create_task"],
+  },
 };
 // Every employee can read the business data and keep notes.
-const COMMON = ["business_snapshot", "search_bookings", "get_booking", "list_customers", "list_staff", "list_tasks", "remember", "recall"];
+const COMMON = ["business_snapshot", "search_bookings", "get_booking", "list_customers", "list_staff", "list_tasks", "remember", "recall", "propose_idea", "improve_my_work"];
 
 const T = (name: string, description: string, properties: Record<string, unknown> = {}, required: string[] = []): Anthropic.Beta.BetaTool =>
   ({ name, description, input_schema: { type: "object", properties, required } } as Anthropic.Beta.BetaTool);
@@ -145,7 +157,7 @@ const TOOLS: Record<string, Anthropic.Beta.BetaTool> = {
   recall: T("recall", "Search the office memory.", { query: S("Optional text to search") }),
 
   delegate: T("delegate", "Assign part of the work to a department. The department works on it and you receive its report as the result of this call.", {
-    employee: { type: "string", enum: ["secretary", "accountant", "legal", "operations", "customer_service", "marketing", "hr", "auditor"] },
+    employee: { type: "string", enum: ["secretary", "accountant", "legal", "operations", "customer_service", "marketing", "hr", "auditor", "innovation"] },
     title: S("Short title of the assignment (Arabic)"),
     instructions: S("Complete instructions: what to do, what to deliver, any data or limits. The department sees only this text."),
   }, ["employee", "title", "instructions"]),
@@ -189,8 +201,20 @@ const TOOLS: Record<string, Anthropic.Beta.BetaTool> = {
   }),
 };
 
+Object.assign(TOOLS, {
+  propose_idea: T("propose_idea", "Propose an idea to improve or grow the business. The owner approves or rejects it in the AI office; an approved idea is planned and carried out by the general manager.", {
+    title: S("Short title (Arabic)"), problem: S("What problem or opportunity, with the numbers that show it"), idea: S("The idea, concretely"),
+    impact: S("Expected impact (sales, profit, time saved, customer satisfaction), honest estimate"), effort: { type: "string", enum: ["low", "medium", "high"] },
+    experiment: S("A small, cheap test and how its success will be measured"),
+  }, ["title", "idea"]),
+  list_ideas: T("list_ideas", "Ideas proposed so far, with the owner's decisions and recorded results.", { status: S("proposed | approved | rejected | done (optional)") }),
+  improve_my_work: T("improve_my_work", "Propose a better version of your own standing instructions, based on what you learned (lessons, the owner's feedback, results). The owner approves it before it applies.", {
+    instructions: S("The full new instructions for you (Arabic or English), replacing the current ones"), reason: S("What you learned that makes this better"),
+  }, ["instructions", "reason"]),
+});
+
 // What a staff member's request may not see (costs, profit and expenses are owner-only)
-const OWNER_ONLY_TOOLS = ["financial_report", "receivables", "list_expenses", "record_expense", "journal_entry", "audit_review"];
+const OWNER_ONLY_TOOLS = ["financial_report", "receivables", "list_expenses", "record_expense", "journal_entry", "audit_review", "improve_my_work", "list_ideas"];
 
 function systemPrompt(code: string, staff: Record<string, any>, all: Record<string, any>[]) {
   const role = ROLES[code];
@@ -210,13 +234,16 @@ How you work:
 - Do the work, do not only describe it: save finished documents with save_document, create tasks with create_task.
 - Emails, expenses, journal entries and booking changes wait for the owner's approval; tell the owner they are waiting.
 - Keep personal data (passports, phones) inside the company.
+- Learn: follow the lessons in your memory, and save new lessons with remember when something works or fails.
+- Improve the business: when you see a real opportunity, propose it with propose_idea (with a small test and a measure).
 - When you finish, end with a short report: what you did, the results, and anything that needs the owner's decision.
 ${staff.instructions ? `\nInstructions from the owner for you:\n${staff.instructions}\n` : ""}`;
 }
 
-function volatileContext(memory: Record<string, any>[]) {
-  const notes = memory.map((m) => `- [${m.topic}] ${m.note}`).join("\n");
-  return `Today is ${today()}.${notes ? `\nOffice memory (notes saved earlier):\n${notes}` : ""}`;
+function volatileContext(memory: Record<string, any>[], code: string) {
+  const general = memory.filter((m) => !m.scope || m.scope === "all").map((m) => `- [${m.topic}] ${m.note}`).join("\n");
+  const mine = memory.filter((m) => m.scope === code).map((m) => `- [${m.topic}] ${m.note}`).join("\n");
+  return `Today is ${today()}.${general ? `\nOffice memory (notes saved earlier):\n${general}` : ""}${mine ? `\nLessons for you from the owner's feedback and your past work:\n${mine}` : ""}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -242,6 +269,27 @@ async function allRows(db: any, table: string, sel = "*") {
 const period = (i: Record<string, any>, defFrom: string) => ({ from: isDate(i.from) ? i.from : defFrom, to: isDate(i.to) ? i.to : today() });
 const inRange = (d: string | null, p: { from: string; to: string }) => !!d && d.slice(0, 10) >= p.from && d.slice(0, 10) <= p.to;
 
+// Progress of this month against the owner's growth goals
+async function goalProgress(db: any) {
+  const { data: goals } = await db.from("ai_goals").select("*").eq("enabled", true);
+  if (!goals?.length) return [];
+  const month = today().slice(0, 7);
+  const [bk, costs] = await Promise.all([allRows(db, "bookings"), allRows(db, "booking_costs")]);
+  const cost = new Map(costs.map((c) => [c.booking_id, num(c.cost)]));
+  const sold = bk.filter((b) => b.status === "ticketed" && (b.ticketed_at || "").startsWith(month));
+  const firstSeen = new Map<string, string>();
+  bk.forEach((b) => { const k = String(b.customer?.email || b.customer?.phone || "").toLowerCase(); if (k && (!firstSeen.has(k) || b.created < firstSeen.get(k)!)) firstSeen.set(k, b.created); });
+  const values: Record<string, number> = {
+    monthly_sales: r2(sold.reduce((s, b) => s + num(b.sell) + num(b.service_fee), 0)),
+    monthly_profit: r2(sold.reduce((s, b) => s + num(b.sell) + num(b.service_fee) - (cost.get(b.id) || 0), 0)),
+    monthly_tickets: sold.length,
+    monthly_new_customers: [...firstSeen.values()].filter((d) => (d || "").startsWith(month)).length,
+  };
+  const day = new Date().getUTCDate(), days = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7), 0)).getUTCDate();
+  return goals.map((g: any) => ({ goal: g.title, metric: g.metric, target: num(g.target), this_month: values[g.metric] ?? 0,
+    percent: Math.round(((values[g.metric] ?? 0) / num(g.target)) * 100), month_elapsed_percent: Math.round((day / days) * 100) }));
+}
+
 async function propose(ctx: Ctx, kind: string, summary: string, payload: Record<string, unknown>) {
   const { data, error } = await ctx.db.from("ai_actions").insert({ job_id: ctx.job.id, employee: ctx.job.employee, kind, summary, payload }).select("id").single();
   if (error) throw new Error(error.message);
@@ -258,6 +306,7 @@ async function runTool(name: string, i: Record<string, any>, ctx: Ctx): Promise<
       bk.forEach((b) => (by[b.status] = (by[b.status] || 0) + 1));
       const soon = addDays(today(), 14);
       return {
+        goals: await goalProgress(db),
         bookings_total: bk.length, bookings_by_status: by,
         departing_next_14_days: bk.filter((b) => b.depart && b.depart >= today() && b.depart <= soon && !["cancelled", "refunded"].includes(b.status)).length,
         new_unhandled: bk.filter((b) => b.status === "new").length,
@@ -315,7 +364,7 @@ async function runTool(name: string, i: Record<string, any>, ctx: Ctx): Promise<
       return (data || []).map((t: any) => ({ title: t.title, details: t.details, assignee: who.get(t.assignee) || "", due: t.due, priority: t.priority, status: t.status, booking_id: t.booking_id }));
     }
     case "remember": {
-      await db.from("ai_memory").insert({ topic: str(i.topic, 80), note: str(i.note, 2000), employee: ctx.job.employee });
+      await db.from("ai_memory").insert({ topic: str(i.topic, 80), note: str(i.note, 2000), employee: ctx.job.employee, scope: "all" });
       return { saved: true };
     }
     case "recall": {
@@ -329,7 +378,7 @@ async function runTool(name: string, i: Record<string, any>, ctx: Ctx): Promise<
       const assignee = (u && staff.find((s) => s.username === u)) || staff.find((s) => s.kind === "owner");
       if (u && assignee?.username !== u) return { error: `No staff member with username "${u}". Use list_staff.` };
       const row = { title: str(i.title, 200), details: `${str(i.details, 4000)}\n\n— ${ctx.job.employee} (AI office)`.trim(), assignee: assignee?.id || null, due: isDate(i.due) ? i.due : null,
-        priority: ["high", "normal", "low"].includes(i.priority) ? i.priority : "normal", status: "open", booking_id: str(i.booking_id, 60) || null, created_by: ctx.me.id };
+        priority: ["high", "normal", "low"].includes(i.priority) ? i.priority : "normal", status: "open", booking_id: str(i.booking_id, 60) || null, created_by: ctx.me.id, ai_job_id: ctx.job.id };
       const { error } = await db.from("tasks").insert(row);
       if (error) return { error: error.message };
       return { created: true, assigned_to: assignee?.username || "" };
@@ -462,6 +511,22 @@ async function runTool(name: string, i: Record<string, any>, ctx: Ctx): Promise<
         open_tasks: tk.filter((t) => t.assignee === s.id && t.status === "open").length, overdue_tasks: tk.filter((t) => t.assignee === s.id && t.status === "open" && t.due && t.due < today()).length,
         active_bookings: bk.filter((b) => b.assigned_to === s.id && !["ticketed", "cancelled", "refunded"].includes(b.status)).length }));
     }
+    case "propose_idea": {
+      const effort = ["low", "medium", "high"].includes(i.effort) ? i.effort : "medium";
+      const { data, error } = await db.from("ai_ideas").insert({ job_id: ctx.job.id, employee: ctx.job.employee, title: str(i.title, 200), problem: str(i.problem, 3000), idea: str(i.idea, 6000), impact: str(i.impact, 2000), effort, experiment: str(i.experiment, 3000) }).select("id").single();
+      if (error) return { error: error.message };
+      return { status: "waiting_for_owner_decision", idea_id: data.id };
+    }
+    case "list_ideas": {
+      let q = db.from("ai_ideas").select("title,employee,idea,impact,effort,experiment,status,owner_note,result,created_at").order("created_at", { ascending: false }).limit(50);
+      if (["proposed", "approved", "rejected", "done"].includes(i.status)) q = q.eq("status", i.status);
+      const { data } = await q;
+      return data || [];
+    }
+    case "improve_my_work": {
+      const code = ctx.job.employee;
+      return propose(ctx, "update_instructions", `تحسين تعليمات ${code}: ${str(i.reason, 140)}`, { employee: code, instructions: String(i.instructions || "").slice(0, 6000), reason: str(i.reason, 1000) });
+    }
     case "audit_review": {
       const since = /^\d{4}-\d{2}-\d{2}/.test(String(i.since || "")) ? new Date(String(i.since)).toISOString() : new Date(Date.now() - 864e5).toISOString();
       const [staff, logRes, bk, costs, pay, tk] = await Promise.all([staffMap(db), db.from("activity_log").select("at,who,action,ref").gte("at", since).not("action", "like", "AI office%").order("at").limit(1000),
@@ -530,6 +595,7 @@ const TOOL_LABEL: Record<string, string> = {
   receivables: "راجع الذمم والمستحقات", list_payments: "راجع المدفوعات", list_expenses: "راجع المصروفات", record_expense: "سجّل مصروفاً (بانتظار موافقتك)",
   journal_entry: "جهّز قيد يومية (بانتظار موافقتك)", compliance_check: "فحص الامتثال", list_companies: "راجع الشركات العميلة", upcoming_departures: "راجع الرحلات القادمة",
   update_booking: "جهّز تعديل حجز (بانتظار موافقتك)", sales_stats: "حلّل المبيعات", staff_workload: "راجع عبء العمل", audit_review: "دقّق في عمل الفريق",
+  propose_idea: "اقترح فكرة (بانتظار قرارك)", list_ideas: "راجع الأفكار", improve_my_work: "اقترح تحسين طريقة عمله (بانتظار موافقتك)",
 };
 
 async function runJob(db: any, anthropic: Anthropic, me: Record<string, any>, job: Record<string, any>, started: number) {
@@ -558,15 +624,15 @@ async function runJob(db: any, anthropic: Anthropic, me: Record<string, any>, jo
     await save({ messages, pending: {}, steps });
   }
 
-  const [{ data: staffAll }, { data: memory }] = await Promise.all([db.from("ai_staff").select("*").order("sort"), db.from("ai_memory").select("topic,note").order("created_at", { ascending: false }).limit(40)]);
+  const [{ data: staffAll }, { data: memory }] = await Promise.all([db.from("ai_staff").select("*").order("sort"), db.from("ai_memory").select("topic,note,scope").or(`scope.eq.all,scope.eq.${job.employee}`).order("created_at", { ascending: false }).limit(60)]);
   const staff = (staffAll || []).find((s: any) => s.code === job.employee);
   if (!staff || !ROLES[job.employee]) { await save({ status: "failed", error: "Unknown employee" }); return { status: "failed" }; }
   const restricted = job.source === "staff";
-  const names = [...COMMON, ...ROLES[job.employee].tools].filter((n) => !restricted || !OWNER_ONLY_TOOLS.includes(n));
+  const names = [...new Set([...COMMON, ...ROLES[job.employee].tools])].filter((n) => !restricted || !OWNER_ONLY_TOOLS.includes(n));
   const tools = names.map((n) => TOOLS[n]);
   const system: any[] = [
     { type: "text", text: systemPrompt(job.employee, staff, staffAll || []), cache_control: { type: "ephemeral" } },
-    { type: "text", text: volatileContext(memory || []) },
+    { type: "text", text: volatileContext(memory || [], job.employee) },
   ];
   if (restricted) {
     const { data: asker } = await db.from("profiles").select("name,username,title").eq("id", job.requested_by).maybeSingle();
@@ -689,6 +755,11 @@ async function execute(db: any, me: Record<string, any>, a: Record<string, any>)
     if (error) throw new Error(error.message);
     return "عُدّل الحجز";
   }
+  if (a.kind === "update_instructions") {
+    const { error } = await db.from("ai_staff").update({ instructions: String(p.instructions || "").slice(0, 6000) }).eq("code", p.employee);
+    if (error) throw new Error(error.message);
+    return "حُدّثت تعليمات الموظف";
+  }
   throw new Error("Unknown action");
 }
 
@@ -767,7 +838,28 @@ async function watch(db: any, owner: Record<string, any>) {
     if (ids.length) await newJob("operations", `عاجل: حجوزات مؤقتة تنتهي قريباً (${ids.length})`,
       `هذه الحجوزات المؤقتة تنتهي خلال 6 ساعات ولم تُصدر تذاكرها: ${ids.join("، ")}.\nلكل حجز: أنشئ مهمة عاجلة (priority high) للموظف المسند إليه، أو للمالك إن لم يكن مسنداً، تذكر موعد الانتهاء وما يلزم (الدفع ثم الإصدار، أو التواصل مع العميل).`);
   }
-  // 3) The internal auditor reviews the human team's work every N hours, when there was work to review
+  // 3) Teamwork: a person finished a task that an AI employee gave them, so that employee follows up
+  if (cfg.watch_tasks) {
+    const { data: done } = await db.from("tasks").select("id,title,details,assignee,booking_id,ai_job_id,done_at").eq("status", "done").not("ai_job_id", "is", null).gte("done_at", addDays(today(), -2)).limit(50);
+    const keys = await claim((done || []).map((t: any) => "taskdone:" + t.id));
+    const fresh = (done || []).filter((t: any) => keys.includes("taskdone:" + t.id));
+    if (fresh.length) {
+      const { data: srcJobs } = await db.from("ai_jobs").select("id,employee,title,parent_id").in("id", [...new Set(fresh.map((t: any) => t.ai_job_id))]);
+      const { data: people } = await db.from("profiles").select("id,name,username").in("id", [...new Set(fresh.map((t: any) => t.assignee).filter(Boolean))]);
+      const by = new Map<string, any[]>();
+      for (const t of fresh) {
+        const j = (srcJobs || []).find((x: any) => x.id === t.ai_job_id);
+        if (!j || !on(j.employee)) continue;
+        const list = by.get(j.employee) || [];
+        const who = (people || []).find((x: any) => x.id === t.assignee);
+        list.push(`- «${t.title}» — أنجزها ${who?.name || "موظف"} (${who?.username || ""})${t.booking_id ? ` — الحجز ${t.booking_id}` : ""} — من عملك: «${j.title}»`);
+        by.set(j.employee, list);
+      }
+      for (const [emp, lines] of by) await newJob(emp, `متابعة ما أنجزه الفريق (${lines.length})`,
+        `أنجز موظفو الفريق هذه المهام التي كلّفتهم بها:\n${lines.join("\n")}\nتحقق من النتيجة في البيانات (الحجز، المدفوعات…). إن اكتملت فسجّل ذلك باختصار، وإن بقيت خطوة تالية فنفّذها أو كلّف بها الموظف المناسب. احفظ أي درس مفيد.`);
+    }
+  }
+  // 4) The internal auditor reviews the human team's work every N hours, when there was work to review
   if (cfg.audit_hours > 0 && on("auditor")) {
     const last = cfg.last_audit ? Date.parse(cfg.last_audit) : 0;
     if (Date.now() - last >= cfg.audit_hours * 36e5) {
@@ -848,7 +940,7 @@ Deno.serve(async (req) => {
 
   if (body.action === "staff_list") {
     const { data } = await db.from("ai_staff").select("code,name,title").eq("enabled", true).order("sort");
-    return json({ staff: (data || []).filter((s: any) => isOwner || s.code !== "auditor") });
+    return json({ staff: (data || []).filter((s: any) => isOwner || !["auditor", "innovation"].includes(s.code)) });
   }
 
   if (body.action === "my_jobs") {
@@ -873,7 +965,7 @@ Deno.serve(async (req) => {
 
   if (body.action === "create") {
     const employee = str(body.employee, 30) || "gm";
-    if (!ROLES[employee] || (!isOwner && employee === "auditor")) return fail("Unknown employee");
+    if (!ROLES[employee] || (!isOwner && ["auditor", "innovation"].includes(employee))) return fail("Unknown employee");
     const request = String(body.request || "").trim().slice(0, 20000);
     if (request.length < 2) return fail("Write the request");
     const title = str(body.title, 200) || request.split("\n")[0].slice(0, 90);
@@ -928,6 +1020,37 @@ Deno.serve(async (req) => {
     if (!j || j.status !== "done" || !text) return fail("The job must be finished, and the message not empty");
     await db.from("ai_jobs").update({ status: "queued", messages: [...(j.messages || []), { role: "user", content: text }], steps: [...(j.steps || []), step("info", `تعليمات إضافية: ${text}`)], done_at: null, updated_at: new Date().toISOString() }).eq("id", id);
     return json({ ok: true });
+  }
+
+  if (body.action === "goals") return json({ goals: await goalProgress(db) });
+
+  if (body.action === "feedback") {
+    // The owner rates a report; the lesson is kept for that employee
+    const id = str(body.id, 60);
+    const rating = body.rating === "up" ? "up" : "down";
+    const note = str(body.note, 2000);
+    const { data: j } = await db.from("ai_jobs").select("id,employee,title").eq("id", id).maybeSingle();
+    if (!j) return fail("Job not found", 404);
+    await db.from("ai_jobs").update({ feedback: { rating, note, at: new Date().toISOString() } }).eq("id", id);
+    if (note || rating === "down") {
+      await db.from("ai_memory").insert({ topic: rating === "up" ? "ما أعجب المالك" : "ما لم يعجب المالك", note: `${j.title}: ${note || "لم يكن العمل بالمستوى المطلوب"}`, employee: j.employee, scope: j.employee });
+    }
+    return json({ ok: true });
+  }
+
+  if (body.action === "decide_idea") {
+    const id = str(body.id, 60);
+    const approve = body.approve === true;
+    const { data: idea } = await db.from("ai_ideas").select("*").eq("id", id).eq("status", "proposed").maybeSingle();
+    if (!idea) return fail("Idea not found or already decided", 404);
+    const note = str(body.note, 2000);
+    await db.from("ai_ideas").update({ status: approve ? "approved" : "rejected", owner_note: note || null, decided_at: new Date().toISOString() }).eq("id", id);
+    await db.from("ai_memory").insert({ topic: approve ? "فكرة اعتمدها المالك" : "فكرة رفضها المالك", note: `${idea.title}${note ? " — " + note : ""}`, employee: idea.employee, scope: "all" });
+    if (!approve) return json({ ok: true, status: "rejected" });
+    const { data: j } = await db.from("ai_jobs").insert({ employee: "gm", title: `تنفيذ فكرة: ${idea.title}`, created_by: me.id, requested_by: me.id, source: "owner",
+      request: `اعتمد المالك هذه الفكرة. خطط لتنفيذها ووزّع العمل على الأقسام والموظفين البشر، وابدأ بالتجربة الصغيرة.\nالفكرة: ${idea.idea}\nالمشكلة/الفرصة: ${idea.problem}\nالأثر المتوقع: ${idea.impact}\nالتجربة وطريقة القياس: ${idea.experiment}${note ? `\nملاحظة المالك: ${note}` : ""}`,
+      steps: [step("info", "بدأ من فكرة اعتمدها المالك")] }).select("id").single();
+    return json({ ok: true, status: "approved", job_id: j?.id });
   }
 
   if (body.action === "decide") {

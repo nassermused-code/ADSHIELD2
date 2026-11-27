@@ -18,10 +18,10 @@
   const time = (iso) => (iso ? new Date(iso).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : "");
   const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.classList.add("is-visible"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("is-visible"), 3500); };
 
-  const COLORS = { gm: "#0f4227", secretary: "#b5487a", accountant: "#2459c7", legal: "#6b4bc4", operations: "#d97a00", customer_service: "#0e8f8f", marketing: "#d4463c", hr: "#5a7a1f", auditor: "#7a3e1d" };
+  const COLORS = { gm: "#0f4227", secretary: "#b5487a", accountant: "#2459c7", legal: "#6b4bc4", operations: "#d97a00", customer_service: "#0e8f8f", marketing: "#d4463c", hr: "#5a7a1f", auditor: "#7a3e1d", innovation: "#b8860b" };
   const STATUS = { queued: "في الانتظار", running: "يعمل الآن", waiting: "بانتظار الأقسام", done: "منجز", failed: "تعذّر", cancelled: "أُلغي" };
   const KIND = { letter: "خطاب", contract: "عقد", report: "تقرير", memo: "مذكرة", email: "بريد", policy: "سياسة", offer: "عرض", invoice: "فاتورة", minutes: "محضر", other: "مستند" };
-  const ACT = { send_email: "إرسال بريد", record_expense: "تسجيل مصروف", journal_entry: "قيد يومية", update_booking: "تعديل حجز" };
+  const ACT = { send_email: "إرسال بريد", record_expense: "تسجيل مصروف", journal_entry: "قيد يومية", update_booking: "تعديل حجز", update_instructions: "تحسين طريقة العمل" };
   const IDEAS = [
     ["gm", "أعطني تقريراً شاملاً عن وضع الشركة هذا الشهر: المبيعات والأرباح والمستحقات والحجوزات التي تحتاج متابعة، مع توصياتك."],
     ["operations", "راجع الحجوزات الجديدة والرحلات القادمة خلال 7 أيام، ووزّع ما لم يُسند على الموظفين، وأنشئ مهام المتابعة."],
@@ -32,10 +32,11 @@
     ["secretary", "اكتب خطاباً رسمياً لشركة طيران نطلب فيه اتفاقية أسعار خاصة للمجموعات، وأنشئ مهمة متابعة بعد أسبوع."],
     ["customer_service", "اكتب ردوداً جاهزة لأكثر 8 أسئلة يطرحها العملاء (الأمتعة، الإلغاء، تغيير الموعد، التأشيرة…)."],
     ["auditor", "دقّق في عمل الفريق خلال آخر 7 أيام: الحجوزات والتذاكر والمدفوعات والمهام، وأعطني تقييماً لكل موظف."],
+    ["innovation", "ادرس أرقام الشركة واقترح أفضل 5 أفكار لمضاعفة المبيعات هذا العام، لكل فكرة تجربة صغيرة وطريقة قياس."],
   ];
 
   const SOURCE = { staff: "طلب موظف", schedule: "مجدول", watch: "تلقائي 24/7" };
-  const state = { staff: [], jobs: [], actions: [], docs: [], memory: [], schedules: [], settings: null, people: [], cfg: null, view: "office", filter: "all", panel: null };
+  const state = { staff: [], jobs: [], actions: [], docs: [], memory: [], schedules: [], settings: null, people: [], ideas: [], goals: [], progress: [], cfg: null, view: "office", filter: "all", panel: null };
   const driving = new Set();
   const staffBy = (code) => state.staff.find((s) => s.code === code) || { code, name: code, title: "" };
   const av = (code, busy) => { const s = staffBy(code); return `<span class="aio-av${busy ? " is-busy" : ""}" style="--c:${COLORS[code] || "#14713a"}">${esc((s.name || "?").trim().charAt(0))}</span>`; };
@@ -83,19 +84,22 @@
     return data;
   }
   async function load() {
-    const [st, jb, ac, dc, mm, sc, se, pp] = await Promise.all([
+    const [st, jb, ac, dc, mm, sc, se, pp, idq, gq] = await Promise.all([
       sb.from("ai_staff").select("*").order("sort"),
-      sb.from("ai_jobs").select("id,parent_id,employee,title,request,status,steps,result,error,usage,created_at,updated_at,done_at,source,requested_by").order("created_at", { ascending: false }).limit(300),
+      sb.from("ai_jobs").select("id,parent_id,employee,title,request,status,steps,result,error,usage,created_at,updated_at,done_at,source,requested_by,feedback").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_actions").select("*").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_documents").select("*").order("created_at", { ascending: false }).limit(300),
       sb.from("ai_memory").select("*").order("created_at", { ascending: false }),
       sb.from("ai_schedules").select("*").order("created_at"),
       sb.from("ai_settings").select("*").eq("id", 1).maybeSingle(),
       sb.from("profiles").select("id,name,username").in("kind", ["owner", "staff"]),
+      sb.from("ai_ideas").select("*").order("created_at", { ascending: false }).limit(200),
+      sb.from("ai_goals").select("*").order("created_at"),
     ]);
     const e = st.error || jb.error || ac.error || dc.error || mm.error || sc.error;
     if (e) throw new Error(e.message);
-    state.staff = st.data; state.jobs = jb.data; state.actions = ac.data; state.docs = dc.data; state.memory = mm.data; state.schedules = sc.data; state.settings = se.data; state.people = pp.data || [];
+    state.staff = st.data; state.jobs = jb.data; state.actions = ac.data; state.docs = dc.data; state.memory = mm.data; state.schedules = sc.data; state.settings = se.data; state.people = pp.data || []; state.ideas = idq.data || []; state.goals = gq.data || [];
+    if (state.goals.some((g) => g.enabled) && state.cfg) call("goals").then((r) => { state.progress = r.goals || []; if (["office", "team"].includes(state.view)) render(); }).catch(() => {});
     render();
   }
   let reloadT = null;
@@ -149,10 +153,13 @@
   function render(force) {
     $("#tJobs").textContent = topJobs().filter(active).length || "";
     $("#tAppr").textContent = pending().length || "";
+    $("#tIdeas").textContent = state.ideas.filter((i) => i.status === "proposed").length || "";
     $$("#aioTabs a").forEach((a) => a.classList.toggle("is-active", a.getAttribute("href") === "#" + state.view));
+    const activeTab = $("#aioTabs a.is-active");
+    if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
     const st = $("#aioStatus");
     if (state.cfg) { st.className = "aio-status " + (state.cfg.configured ? "ok" : "bad"); st.textContent = state.cfg.configured ? "الموظفون متصلون" : "غير مفعّل"; }
-    const v = { office: viewOffice, jobs: viewJobs, approvals: viewApprovals, docs: viewDocs, schedule: viewSchedule, team: viewTeam }[state.view] || viewOffice;
+    const v = { office: viewOffice, jobs: viewJobs, approvals: viewApprovals, ideas: viewIdeas, docs: viewDocs, schedule: viewSchedule, team: viewTeam }[state.view] || viewOffice;
     // Keep what the owner is typing when the page refreshes itself
     const typing = (document.activeElement && $("#aioView").contains(document.activeElement) && /TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName)) || $("#aioView [data-dirty]");
     if (force || !typing) $("#aioView").innerHTML = v();
@@ -182,6 +189,7 @@
         <div class="aio-kpi"><strong>${done}</strong><span>مهام منجزة</span></div>
         <div class="aio-kpi"><strong>${state.docs.length}</strong><span>مستندات جاهزة</span></div>
       </div>
+      ${goalsBlock()}
       <h2 class="aio-h">فريق العمل <small>اضغط على موظف لتكليفه مباشرة</small></h2>
       <div class="aio-staff">${state.staff.map((s) => { const n = busy(s.code); return `
         <button type="button" class="aio-card aio-emp${s.enabled ? "" : " is-off"}" data-emp="${s.code}">${av(s.code, n)}
@@ -225,6 +233,7 @@
         <label class="aio-field"><span>نص الرسالة</span><textarea data-f="body" rows="8" dir="auto" ${a.status !== "pending" ? "disabled" : ""}>${esc(p.body)}</textarea></label></div>`;
     else if (a.kind === "record_expense") body = `<p>${esc(p.date)} · ${esc(p.category)} · <b dir="ltr">$${esc(p.amount)}</b> · ${esc(p.method)}${p.note ? ` · ${esc(p.note)}` : ""}</p>`;
     else if (a.kind === "journal_entry") body = `<p>${esc(p.date)} · ${esc(p.memo)}</p><div class="aio-md"><table><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>ملاحظة</th></tr>${(p.lines || []).map((l) => `<tr><td>${esc(l.account)}</td><td dir="ltr">${l.debit || ""}</td><td dir="ltr">${l.credit || ""}</td><td>${esc(l.note)}</td></tr>`).join("")}</table></div>`;
+    else if (a.kind === "update_instructions") body = `<p><b>السبب:</b> ${esc(p.reason)}</p><div class="aio-md small"><b>التعليمات الجديدة لـ ${esc(staffBy(p.employee).name)}:</b><br>${esc(p.instructions)}</div>`;
     else if (a.kind === "update_booking") body = `<p>الحجز <b dir="ltr">${esc(p.id)}</b>${p.status ? ` · الحالة الجديدة: <b>${esc(p.status)}</b>` : ""}${p.note ? `<br>ملاحظة: ${esc(p.note)}` : ""}</p>`;
     return `<div class="aio-card" data-action="${a.id}">
       <div class="aio-row" style="cursor:default">${av(a.employee)}<span><b>${esc(ACT[a.kind] || a.kind)}: ${esc(a.summary)}</b><small>${esc(staffBy(a.employee).name)} · ${fmt(a.created_at)}${job ? ` · <a href="#" data-job="${job.id}">${esc(job.title)}</a>` : ""}</small></span>
@@ -238,6 +247,28 @@
     return `<h2 class="aio-h">بانتظار موافقتك <small>لا يُرسل بريد ولا يُسجَّل مبلغ ولا يُعدَّل حجز إلا بعد موافقتك</small></h2>
       <div class="aio-list">${pend.length ? pend.map(actionCard).join("") : `<p class="aio-card aio-empty">لا شيء بانتظارك.</p>`}</div>
       ${old.length ? `<h2 class="aio-h">قرارات سابقة</h2><div class="aio-list">${old.map(actionCard).join("")}</div>` : ""}`;
+  }
+
+  const EFFORT = { low: "جهد قليل", medium: "جهد متوسط", high: "جهد كبير" };
+  const IDEA_ST = { proposed: "بانتظار قرارك", approved: "معتمدة", rejected: "مرفوضة", done: "منفّذة" };
+  function viewIdeas() {
+    const card = (i) => `<div class="aio-card" data-idea-card="${i.id}">
+      <div class="aio-row" style="cursor:default">${av(i.employee)}<span><b>${esc(i.title)}</b><small>${esc(staffBy(i.employee).name)} · ${fmt(i.created_at)} · ${EFFORT[i.effort] || ""}</small></span><span class="aio-badge ${i.status === "proposed" ? "waiting" : i.status === "rejected" ? "rejected" : ""}">${IDEA_ST[i.status]}</span></div>
+      <div class="aio-md">${i.problem ? `<p><b>الفرصة:</b> ${esc(i.problem)}</p>` : ""}<p><b>الفكرة:</b> ${esc(i.idea)}</p>${i.impact ? `<p><b>الأثر المتوقع:</b> ${esc(i.impact)}</p>` : ""}${i.experiment ? `<p><b>التجربة والقياس:</b> ${esc(i.experiment)}</p>` : ""}${i.owner_note ? `<p><b>ملاحظتك:</b> ${esc(i.owner_note)}</p>` : ""}${i.result ? `<p><b>النتيجة:</b> ${esc(i.result)}</p>` : ""}</div>
+      ${i.status === "proposed" ? `<div class="aio-form"><input class="aio-input" data-idea-note placeholder="ملاحظة اختيارية (مثال: ابدأ بشركة واحدة)"><div class="aio-actions"><button type="button" class="btn btn--accent btn--sm" data-idea-ok="${i.id}">اعتمد وابدأ التنفيذ</button><button type="button" class="btn btn--danger btn--sm" data-idea-no="${i.id}">ارفض</button></div></div>` : ""}</div>`;
+    const open = state.ideas.filter((i) => i.status === "proposed"), rest = state.ideas.filter((i) => i.status !== "proposed");
+    return `<h2 class="aio-h">أفكار التطوير والنمو <small>يقترحها الموظفون الأذكياء، وأنت تقرر. الفكرة المعتمدة يخطط المدير العام لتنفيذها</small></h2>
+      <div class="aio-list">${open.length ? open.map(card).join("") : `<p class="aio-card aio-empty">لا أفكار جديدة الآن. «${esc(staffBy("innovation").name)}» يراجع النمو كل أسبوع، ويمكنك أن تطلب منه أفكاراً في أي وقت من «المكتب».</p>`}</div>
+      ${rest.length ? `<h2 class="aio-h">قرارات سابقة</h2><div class="aio-list">${rest.map(card).join("")}</div>` : ""}`;
+  }
+
+  function goalsBlock() {
+    if (!state.progress.length) return "";
+    return `<h2 class="aio-h">الأهداف هذا الشهر</h2><div class="aio-kpis">${state.progress.map((g) => {
+      const pct = Math.min(100, g.percent), behind = g.percent < g.month_elapsed_percent;
+      return `<div class="aio-kpi ${behind ? "warn" : ""}"><strong>${g.percent}%</strong><span>${esc(g.goal)}: ${Number(g.this_month).toLocaleString("en-US")} / ${Number(g.target).toLocaleString("en-US")}</span>
+        <div class="aio-bar"><i style="width:${pct}%"></i><b style="inset-inline-start:${Math.min(100, g.month_elapsed_percent)}%" title="مضى من الشهر"></b></div></div>`;
+    }).join("")}</div>`;
   }
 
   function viewDocs() {
@@ -296,11 +327,21 @@
       ${state.settings ? `<form class="aio-card aio-form" id="watchForm">
         <label class="aio-switch"><input type="checkbox" name="watch_bookings" ${state.settings.watch_bookings ? "checked" : ""}> كل حجز جديد يراجعه «${esc(staffBy("operations").name)}» خلال دقائق: يتأكد من البيانات ويقترح إسناده لموظف وينشئ له مهمة المتابعة</label>
         <label class="aio-switch"><input type="checkbox" name="watch_holds" ${state.settings.watch_holds ? "checked" : ""}> الحجوزات المؤقتة التي تنتهي خلال 6 ساعات: مهمة عاجلة للموظف المسؤول</label>
+        <label class="aio-switch"><input type="checkbox" name="watch_tasks" ${state.settings.watch_tasks ? "checked" : ""}> عندما ينهي موظف بشري مهمة كلّفه بها موظف ذكي، يتابعها الموظف الذكي تلقائياً ويكمل الخطوة التالية</label>
         <label class="aio-field"><span>المدقق الداخلي «${esc(staffBy("auditor").name)}» يراجع عمل الفريق البشري كل</span>
           <select name="audit_hours">${[[0, "متوقف"], [2, "ساعتين"], [4, "4 ساعات"], [6, "6 ساعات"], [12, "12 ساعة"], [24, "يوم"]].map(([v, t]) => `<option value="${v}" ${+state.settings.audit_hours === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
         <p class="small muted" style="margin:0">المدقق يراجع: التذاكر بلا PNR أو أرقام تذاكر، الإصدار بلا دفع، البيع تحت التكلفة، الحجوزات المتروكة أو غير المسندة، الرحلات القريبة بلا تذاكر، الاستردادات والمدفوعات غير المتطابقة، والمهام المتأخرة. ثم ينشئ مهام تصحيح للموظف المسؤول ويحفظ تقريراً${state.settings.last_audit ? ` · آخر تدقيق: ${fmt(state.settings.last_audit)}` : ""}.</p>
         <p class="small muted" style="margin:0">ليطلب موظفوك من الموظفين الأذكياء: المكتب الخلفي ← الموظفون والصلاحيات ← فعّل صلاحية «المساعد الذكي». لا يرون التكاليف والأرباح، وما يحتاج موافقة يصلك أنت.</p>
         <button class="btn btn--ghost btn--sm" type="submit" style="justify-self:start">حفظ</button></form>` : ""}
+      <h2 class="aio-h">أهداف النمو <small>يعمل الفريق كله نحوها، ويراها المدير العام ومدير التطوير في كل تقرير</small></h2>
+      <div class="aio-card">
+        ${state.goals.map((g) => `<div class="aio-mem"><span><b>${esc(g.title)}</b>: ${{ monthly_sales: "مبيعات الشهر ($)", monthly_profit: "ربح الشهر ($)", monthly_tickets: "تذاكر الشهر", monthly_new_customers: "عملاء جدد في الشهر" }[g.metric]} — الهدف ${Number(g.target).toLocaleString("en-US")}</span><button type="button" class="aio-x-sm" data-del-goal="${g.id}" aria-label="حذف">×</button></div>`).join("") || `<p class="muted">لا أهداف بعد. ابدأ بهدف واحد واضح، مثل مبيعات الشهر.</p>`}
+        <form class="aio-form" id="goalForm" style="margin-top:10px"><div class="aio-grid2">
+          <label class="aio-field"><span>الهدف</span><input name="title" required maxlength="80" placeholder="مثال: مبيعات نوفمبر"></label>
+          <label class="aio-field"><span>المقياس</span><select name="metric"><option value="monthly_sales">مبيعات الشهر ($)</option><option value="monthly_profit">ربح الشهر ($)</option><option value="monthly_tickets">تذاكر الشهر</option><option value="monthly_new_customers">عملاء جدد في الشهر</option></select></label>
+          <label class="aio-field"><span>الرقم المستهدف</span><input name="target" type="number" min="1" required dir="ltr"></label></div>
+          <button class="btn btn--ghost btn--sm" type="submit" style="justify-self:start">إضافة هدف</button></form>
+      </div>
       <h2 class="aio-h">الموظفون <small>غيّر الأسماء والمسميات، وأضف تعليماتك الخاصة لكل موظف</small></h2>
       <div class="aio-grid2">${state.staff.map((s) => `<form class="aio-card aio-form" data-staff="${s.code}">
         <div class="aio-row" style="cursor:default;grid-template-columns:auto 1fr auto">${av(s.code)}<b>${esc(s.title)}</b><label class="aio-switch"><input type="checkbox" name="enabled" ${s.enabled ? "checked" : ""} ${s.code === "gm" ? "disabled" : ""}> يعمل</label></div>
@@ -345,7 +386,10 @@
         </div>
         ${j.error && j.status !== "done" ? `<p class="aio-note">${esc(j.error)}</p>` : ""}
         ${j.result ? `<h3 class="aio-h">التقرير</h3><div class="aio-card aio-md">${md(j.result)}</div>
-          <div class="aio-actions"><button type="button" class="btn btn--ghost btn--sm" data-print-job="${j.id}">طباعة / PDF</button><button type="button" class="btn btn--ghost btn--sm" data-copy-job="${j.id}">نسخ</button></div>` : ""}
+          <div class="aio-actions"><button type="button" class="btn btn--ghost btn--sm" data-print-job="${j.id}">طباعة / PDF</button><button type="button" class="btn btn--ghost btn--sm" data-copy-job="${j.id}">نسخ</button></div>
+          <div class="aio-card aio-form" style="margin-top:8px"><b>قيّم هذا العمل ليتعلم منه ${esc(s.name)}</b>${j.feedback ? `<p class="small muted" style="margin:0">تقييمك: ${j.feedback.rating === "up" ? "👍" : "👎"} ${esc(j.feedback.note || "")}</p>` : ""}
+            <input class="aio-input" id="fbNote" placeholder="ما الذي أعجبك أو تريد تغييره؟ (اختياري)">
+            <div class="aio-actions" style="margin:0"><button type="button" class="btn btn--ghost btn--sm" data-fb-up="${j.id}">👍 ممتاز</button><button type="button" class="btn btn--ghost btn--sm" data-fb-down="${j.id}">👎 يحتاج تحسين</button></div></div>` : ""}
         ${acts.length ? `<h3 class="aio-h">إجراءات تحتاج موافقتك</h3><div class="aio-list">${acts.map(actionCard).join("")}</div>` : ""}
         ${docs.length ? `<h3 class="aio-h">المستندات</h3><div class="aio-list">${docs.map((d) => `<button type="button" class="aio-card aio-row" data-doc="${d.id}">${av(d.employee)}<span><b>${esc(d.title)}</b><small>${esc(KIND[d.kind] || d.kind)} · ${esc(staffBy(d.employee).name)}</small></span><span class="aio-badge">فتح</span></button>`).join("")}</div>` : ""}
         <h3 class="aio-h">سير العمل</h3>
@@ -404,7 +448,7 @@
 
   /* ---------------- Events ---------------- */
   document.addEventListener("click", async (e) => {
-    const t = e.target.closest("[data-close],[data-emp],[data-idea],[data-job],[data-doc],[data-filter],[data-approve],[data-reject],[data-drive],[data-cancel],[data-retry],[data-del-job],[data-print-job],[data-copy-job],[data-print-doc],[data-word-doc],[data-copy-doc],[data-edit-doc],[data-del-doc],[data-del-mem],[data-save-doc],[data-run-sched],[data-toggle-sched],[data-del-sched],[data-sched-idea]");
+    const t = e.target.closest("[data-close],[data-emp],[data-idea],[data-job],[data-doc],[data-filter],[data-approve],[data-reject],[data-drive],[data-cancel],[data-retry],[data-del-job],[data-print-job],[data-copy-job],[data-print-doc],[data-word-doc],[data-copy-doc],[data-edit-doc],[data-del-doc],[data-del-mem],[data-save-doc],[data-run-sched],[data-toggle-sched],[data-del-sched],[data-sched-idea],[data-idea-ok],[data-idea-no],[data-fb-up],[data-fb-down],[data-del-goal]");
     if (!t) return;
     const d = t.dataset;
     if ("close" in d) return closePanel();
@@ -447,6 +491,19 @@
         $("#aioPanelBody").dataset.mode = "view"; toast("حُفظ"); await load(); return openDoc(d.saveDoc);
       }
       if (d.delDoc) { if (!confirm("حذف المستند؟")) return; const { error } = await sb.from("ai_documents").delete().eq("id", d.delDoc); if (error) throw error; closePanel(); return load(); }
+      if (d.ideaOk || d.ideaNo) {
+        const id = d.ideaOk || d.ideaNo, note = ($("[data-idea-note]", t.closest("[data-idea-card]")) || {}).value || "";
+        t.disabled = true;
+        const r = await call("decide_idea", { id, approve: !!d.ideaOk, note });
+        clean(); await load();
+        if (r.job_id) { toast("اعتُمدت. بدأ المدير العام التخطيط للتنفيذ"); openJob(r.job_id); drive(r.job_id); } else toast("رُفضت");
+        return;
+      }
+      if (d.fbUp || d.fbDown) {
+        await call("feedback", { id: d.fbUp || d.fbDown, rating: d.fbUp ? "up" : "down", note: ($("#fbNote") || {}).value || "" });
+        clean(); toast("شكراً، سيتعلم الموظف من تقييمك"); return load();
+      }
+      if (d.delGoal) { const { error } = await sb.from("ai_goals").delete().eq("id", d.delGoal); if (error) throw error; return load(); }
       if (d.schedIdea) { const [c, ttl, fq, h, req] = SCHED_IDEAS[+d.schedIdea], f = $("#schedForm").elements; f.employee.value = c; f.title.value = ttl; f.freq.value = fq; f.at_hour.value = h; f.request.value = req; f.request.focus(); return; }
       if (d.runSched) { const { id } = await call("run_schedule", { id: d.runSched }); toast("بدأ التنفيذ"); await load(); openJob(id); return drive(id); }
       if (d.toggleSched) { const x = state.schedules.find((y) => y.id === d.toggleSched); const { error } = await sb.from("ai_schedules").update({ enabled: !x.enabled }).eq("id", x.id); if (error) throw error; return load(); }
@@ -475,9 +532,15 @@
         box.value = ""; box.blur();
         await load(); return drive(id);
       }
+      if (f.id === "goalForm") {
+        const el = f.elements;
+        const { error } = await sb.from("ai_goals").insert({ title: el.title.value.trim(), metric: el.metric.value, target: +el.target.value });
+        if (error) throw error;
+        f.reset(); clean(); toast("أُضيف الهدف"); return load();
+      }
       if (f.id === "watchForm") {
         const el = f.elements;
-        const { error } = await sb.from("ai_settings").update({ watch_bookings: el.watch_bookings.checked, watch_holds: el.watch_holds.checked, audit_hours: +el.audit_hours.value, updated_at: new Date().toISOString() }).eq("id", 1);
+        const { error } = await sb.from("ai_settings").update({ watch_bookings: el.watch_bookings.checked, watch_holds: el.watch_holds.checked, watch_tasks: el.watch_tasks.checked, audit_hours: +el.audit_hours.value, updated_at: new Date().toISOString() }).eq("id", 1);
         if (error) throw error;
         clean(); toast("حُفظ"); return load();
       }
@@ -503,7 +566,7 @@
       }
     } catch (er) { toast(er.message || String(er)); $$("button[type=submit]", f).forEach((b) => (b.disabled = false)); }
   });
-  document.addEventListener("input", (e) => { if (e.target.matches("[data-f], [data-staff] *, #schedForm *, #watchForm *")) e.target.dataset.dirty = "1"; });
+  document.addEventListener("input", (e) => { if (e.target.matches("[data-f], [data-staff] *, #schedForm *, #watchForm *, #goalForm *, [data-idea-note], #fbNote")) e.target.dataset.dirty = "1"; });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.panel) closePanel(); if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && e.target.id === "cmdText") $("#cmdForm").requestSubmit(); });
   window.addEventListener("hashchange", () => { clean(); state.view = location.hash.slice(1) || "office"; state.filter = "all"; closePanel(); document.activeElement && document.activeElement.blur(); render(true); window.scrollTo(0, 0); });
 
@@ -516,7 +579,8 @@
     sb.channel("ai-office").on("postgres_changes", { event: "*", schema: "public", table: "ai_jobs" }, () => reloadSoon())
       .on("postgres_changes", { event: "*", schema: "public", table: "ai_actions" }, () => reloadSoon())
       .on("postgres_changes", { event: "*", schema: "public", table: "ai_documents" }, () => reloadSoon())
-      .on("postgres_changes", { event: "*", schema: "public", table: "ai_schedules" }, () => reloadSoon()).subscribe();
+      .on("postgres_changes", { event: "*", schema: "public", table: "ai_schedules" }, () => reloadSoon())
+      .on("postgres_changes", { event: "*", schema: "public", table: "ai_ideas" }, () => reloadSoon()).subscribe();
     setInterval(() => { if (state.jobs.some(active)) reloadSoon(0); }, 5000);
     resumeOpen();
   }
