@@ -2,16 +2,17 @@
    Green Travel — Arabic / English
    - Arabic is the source language of index.html.
    - English comes from assets/js/i18n-en.js (static text) and T("ar", "en") calls in the scripts.
-   - The choice is kept in localStorage ("gt-lang") and can be forced with ?lang=en / ?lang=ar.
+   - English opens by default; the visitor's choice is kept in localStorage ("gt-lang") and can be forced with ?lang=en / ?lang=ar.
    Loaded before the other scripts so they can use T() and I18N.locale.
    ========================================================= */
 (() => {
   const KEY = "gt-lang";
-  let lang = "ar";
+  // English by default on a first visit; Arabic once the visitor chooses it (remembered)
+  let lang = "en";
   try {
     const q = new URLSearchParams(location.search).get("lang");
     if (q === "en" || q === "ar") { lang = q; localStorage.setItem(KEY, q); }
-    else lang = localStorage.getItem(KEY) === "en" ? "en" : "ar";
+    else lang = localStorage.getItem(KEY) === "ar" ? "ar" : "en";
   } catch (e) {}
   const en = lang === "en";
 
