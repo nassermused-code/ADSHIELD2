@@ -21,9 +21,23 @@
 // default claude-opus-5-5), AI_EFFORT (optional: low | medium | high, default medium).
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 import Anthropic from "npm:@anthropic-ai/sdk@1.8.0";
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 
-// Sends through Resend, like the other functions (RESEND_API_KEY secret; EMAIL_FROM optional).
+// Sends like the back office: the company's cPanel mail server when SMTP_HOST/SMTP_USER/SMTP_PASS are set
+// (SSL, port 465 by default), otherwise Resend (RESEND_API_KEY; EMAIL_FROM optional).
 async function sendEmail(to: string, msg: { subject: string; html: string; text: string }) {
+  const host = Deno.env.get("SMTP_HOST"), user = Deno.env.get("SMTP_USER"), pass = Deno.env.get("SMTP_PASS");
+  if (host && user && pass) {
+    const client = new SMTPClient({ connection: { hostname: host, port: Number(Deno.env.get("SMTP_PORT") || 465), tls: true, auth: { username: user, password: pass } } });
+    try {
+      await client.send({ from: `Green Travel <${user}>`, to, replyTo: "info@greentravel.us", subject: msg.subject, content: msg.text, html: msg.html });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: "send_failed: " + String((e as Error)?.message || e).slice(0, 300) };
+    } finally {
+      try { await client.close(); } catch { /* already closed */ }
+    }
+  }
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return { ok: false, error: "email_not_configured" };
   const from = Deno.env.get("EMAIL_FROM") || "Green Travel <onboarding@resend.dev>";
@@ -730,7 +744,7 @@ async function execute(db: any, me: Record<string, any>, a: Record<string, any>)
     const esc = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[ch]!));
     const html = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.7;white-space:pre-wrap" dir="auto">${esc(p.body)}</div><p style="color:#667;font-size:13px">Green Travel · greentravel.us · +1 (708) 963-2552</p>`;
     const r = await sendEmail(p.to, { subject: p.subject, html, text: p.body });
-    if (!r.ok) throw new Error(r.error === "email_not_configured" ? "البريد غير مفعّل بعد (RESEND_API_KEY)" : r.error);
+    if (!r.ok) throw new Error(r.error === "email_not_configured" ? "البريد غير مفعّل بعد (إعدادات SMTP أو RESEND_API_KEY)" : r.error);
     return `أُرسل إلى ${p.to}`;
   }
   if (a.kind === "record_expense") {
@@ -940,7 +954,7 @@ Deno.serve(async (req) => {
   if (["run", "followup", "cancel"].includes(body.action) && !(await mine(str(body.id, 60)))) return fail("Not your request", 403);
   const log = (action: string, ref = "") => db.from("activity_log").insert({ who: me.id, action, ref });
 
-  if (body.action === "status") return json({ configured: !!Deno.env.get("ANTHROPIC_API_KEY"), model: MODEL, effort: EFFORT, email: !!Deno.env.get("RESEND_API_KEY"), background: true });
+  if (body.action === "status") return json({ configured: !!Deno.env.get("ANTHROPIC_API_KEY"), model: MODEL, effort: EFFORT, email: !!((Deno.env.get("SMTP_HOST") && Deno.env.get("SMTP_USER") && Deno.env.get("SMTP_PASS")) || Deno.env.get("RESEND_API_KEY")), background: true });
 
   if (body.action === "staff_list") {
     const { data } = await db.from("ai_staff").select("code,name,title").eq("enabled", true).order("sort");

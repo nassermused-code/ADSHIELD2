@@ -1,4 +1,5 @@
 // Green Travel: e-ticket / travel reminder email (Arabic + English).
+import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const CABIN: Record<string, [string, string]> = { economy: ["سياحية", "Economy"], premium: ["سياحية ممتازة", "Premium economy"], business: ["رجال أعمال", "Business"], first: ["أولى", "First"] };
 const fmt = (iso: string) => (iso ? new Date(iso + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "");
@@ -82,15 +83,31 @@ export function ticketEmail(b: Record<string, any>, kind: Kind) {
   return { subject, html, text };
 }
 
-// Sends through Resend (https://resend.com). Needs the RESEND_API_KEY secret; EMAIL_FROM is optional.
+// Is email set up? Either the company's own mail server (cPanel: SMTP_HOST, SMTP_USER, SMTP_PASS) or Resend (RESEND_API_KEY).
+export const emailConfigured = () => !!((Deno.env.get("SMTP_HOST") && Deno.env.get("SMTP_USER") && Deno.env.get("SMTP_PASS")) || Deno.env.get("RESEND_API_KEY"));
+
+// Sends through the company's cPanel mail server when SMTP_* is set (SSL, port 465 by default), otherwise through Resend.
 // fromName / replyTo: the employee who sends it, so the customer's reply reaches them.
 export async function sendEmail(to: string, msg: { subject: string; html: string; text: string }, opt: { fromName?: string; replyTo?: string } = {}) {
+  const name = opt.fromName ? `${opt.fromName.replace(/[<>"\r\n]/g, "").slice(0, 60)} · Green Travel` : "Green Travel";
+  const replyTo = opt.replyTo && /^\S+@\S+\.\S+$/.test(opt.replyTo) ? opt.replyTo : "info@greentravel.us";
+  const host = Deno.env.get("SMTP_HOST"), user = Deno.env.get("SMTP_USER"), pass = Deno.env.get("SMTP_PASS");
+  if (host && user && pass) {
+    const client = new SMTPClient({ connection: { hostname: host, port: Number(Deno.env.get("SMTP_PORT") || 465), tls: true, auth: { username: user, password: pass } } });
+    try {
+      await client.send({ from: `${name} <${user}>`, to, replyTo, subject: msg.subject, content: msg.text, html: msg.html });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: "send_failed: " + String((e as Error)?.message || e).slice(0, 300) };
+    } finally {
+      try { await client.close(); } catch { /* already closed */ }
+    }
+  }
   const key = Deno.env.get("RESEND_API_KEY");
   if (!key) return { ok: false, error: "email_not_configured" };
-  let from = Deno.env.get("EMAIL_FROM") || "Green Travel <onboarding@resend.dev>";
-  const addr = (from.match(/<([^>]+)>/) || [, from])[1];
-  if (opt.fromName) from = `${opt.fromName.replace(/[<>"\r\n]/g, "").slice(0, 60)} · Green Travel <${addr}>`;
-  const replyTo = opt.replyTo && /^\S+@\S+\.\S+$/.test(opt.replyTo) ? opt.replyTo : "info@greentravel.us";
+  const fromEnv = Deno.env.get("EMAIL_FROM") || "Green Travel <onboarding@resend.dev>";
+  const addr = (fromEnv.match(/<([^>]+)>/) || [, fromEnv])[1];
+  const from = opt.fromName ? `${name} <${addr}>` : fromEnv;
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
