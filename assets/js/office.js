@@ -519,7 +519,7 @@
         ${area("notes", T("ملاحظات داخلية", "Internal notes"), b.notes)}
         <div class="dr-actions">
           <button type="submit" class="btn btn--primary">${T("حفظ", "Save")}</button>
-          ${id ? `<button type="button" class="btn btn--ghost" id="bkTicket">${icon("i-ticket")}${T("التذكرة: طباعة / PDF / بريد", "Ticket: print / PDF / email")}</button><button type="button" class="btn btn--ghost" id="bkInvoice">${T("فاتورة", "Invoice")}</button>` : ""}
+          ${id ? `<button type="button" class="btn btn--ghost" id="bkTicket">${icon("i-ticket")}${T("التذكرة: طباعة / PDF / بريد", "Ticket: print / PDF / email")}</button><button type="button" class="btn btn--ghost" id="bkInvoice">${T("فاتورة", "Invoice")}</button><button type="button" class="btn btn--ghost" id="bkMail">${icon("i-mail")}${T("رسالة للعميل", "Email the customer")}</button>` : ""}
           ${id && owner ? `<button type="button" class="btn btn--ghost" id="bkTask">+ ${T("مهمة على هذا الحجز", "Task for this booking")}</button><button type="button" class="btn btn--ghost danger" id="bkDelete">${T("حذف", "Delete")}</button>` : ""}
         </div>
       </form>
@@ -592,6 +592,7 @@
     if (id) {
       $("#bkInvoice").addEventListener("click", () => printInvoice(id));
       $("#bkTicket").addEventListener("click", () => openTicket(id));
+      $("#bkMail").addEventListener("click", () => mailForm(b));
       const provAct = (btnId, action, okMsg) => { const btn = $(btnId); if (!btn) return; btn.addEventListener("click", async () => {
         if (btn.dataset.confirm !== "1") { btn.dataset.confirm = "1"; btn.textContent = T("اضغط مرة أخرى للتأكيد", "Press again to confirm"); return; }
         btn.disabled = true;
@@ -1229,6 +1230,30 @@
         <td class="row-actions"><button type="button" class="btn btn--ghost btn--sm" data-remind="${b.id}" data-kind="${d <= 1 ? "day" : "week"}">${icon("i-mail")}${T("تذكير بالبريد", "Email")}</button>
           ${b.customer.phone ? `<a class="btn btn--ghost btn--sm" target="_blank" rel="noopener" href="https://wa.me/${digits(b.customer.phone)}?text=${encodeURIComponent(reminderText(b))}">${icon("i-whatsapp")}WhatsApp</a>` : ""}
           <button type="button" class="btn btn--ghost btn--sm" data-ticket="${b.id}">${icon("i-ticket")}${T("التذكرة", "Ticket")}</button></td></tr>`; }).join("")}</tbody></table></div>`;
+  }
+  // Write an email to the customer from the back office: it carries the employee's name, and replies go to the employee
+  function mailForm(b) {
+    openModal(T("رسالة بالبريد إلى العميل", "Email the customer"), `
+      <form id="mlForm" class="dr-form" novalidate>
+        <div class="f3">${inp("to", T("إلى", "To"), b.customer.email || "", "email", "ltr")}${inp("subject", T("الموضوع", "Subject"), "Green Travel — " + (b.pnr ? "PNR " + b.pnr : b.id))}</div>
+        ${area("message", T("نص الرسالة", "Message"), T(`مرحباً ${b.customer.name || ""}،\n\n`, `Hello ${b.customer.name || ""},\n\n`), 'style="min-height:200px"')}
+        <p class="hint">${icon("i-mail")}${me.email ? T(`ردّ العميل يصل إلى بريدك ${me.email}.`, `The customer's reply comes to your email, ${me.email}.`) : T("ردّ العميل يصل إلى info@greentravel.us. أضف بريدك في ملفك ليصلك أنت.", "The customer's reply goes to info@greentravel.us. Add your email to your profile to receive it yourself.")}</p>
+        <div class="dr-actions"><button type="submit" class="btn btn--primary">${T("إرسال", "Send")}</button></div>
+      </form>`);
+    const f = $("#mlForm");
+    f.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const to = f.elements.to.value.trim(), subject = f.elements.subject.value.trim(), message = f.elements.message.value.trim();
+      if (!/^\S+@\S+\.\S+$/.test(to)) return toast(T("أدخل بريد العميل", "Enter the customer's email"));
+      if (!subject || message.length < 5) return toast(T("اكتب الموضوع والرسالة", "Write the subject and the message"));
+      const btn = f.querySelector("[type=submit]"); btn.disabled = true;
+      try { await DB.sendEmail("message", b.id, to, { subject, message }); closeModal(); toast(T("أُرسلت الرسالة إلى ", "Email sent to ") + to); }
+      catch (er) {
+        btn.disabled = false;
+        if (/not_configured/.test(er.message)) { toast(T("خدمة البريد غير مفعّلة بعد: ستُفتح الرسالة في برنامج البريد.", "The email service isn't set up yet: the message opens in your email app.")); location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`; }
+        else errToast(er);
+      }
+    });
   }
   function bindAlertActions(el) {
     $$("[data-open]", el).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); openBooking(a.dataset.open); }));

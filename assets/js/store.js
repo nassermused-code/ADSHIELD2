@@ -295,8 +295,8 @@ window.GTDB = (() => {
     },
     async toggleTask(id) { const { data, error } = await sb.rpc("toggle_task", { p_id: id }); fail(error); await load(); return data; },
     // Email a ticket ("ticket") or a reminder ("week" / "day") to the customer. Throws "email_not_configured" until the email service is set up.
-    async sendEmail(kind, bookingId, to) {
-      const { data, error } = await sb.functions.invoke("send-email", { body: { kind, bookingId, to: to || undefined } });
+    async sendEmail(kind, bookingId, to, extra) {
+      const { data, error } = await sb.functions.invoke("send-email", { body: Object.assign({ kind, bookingId, to: to || undefined }, extra || {}) });
       if (error) {
         let msg = error.message;
         try { const j = await error.context.json(); msg = j.error || msg; } catch (e) {}
