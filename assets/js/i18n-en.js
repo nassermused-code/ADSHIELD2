@@ -460,4 +460,17 @@ window.I18N_EN = {
   "🔒 كل شركة ترى بياناتها فقط. لفتح حساب لشركتكم تواصل معنا.": "🔒 Each company sees only its own data. To open an account for your company, contact us.",
   "بوابة الشركات · Green Travel": "Company portal · Green Travel",
   "بوابة الشركات (سفر الأعمال)": "Company portal (business travel)",
+  // AI office (ai-office.html)
+  "المكتب الإلكتروني | جرين ترافيل": "AI Office | Green Travel",
+  "المكتب الإلكتروني": "AI Office",
+  "موظفون أذكياء يعملون على بيانات جرين ترافيل. الدخول بحساب المالك.": "AI employees working on Green Travel's data. Sign in with the owner account.",
+  "اسم المستخدم": "Username",
+  "العودة إلى المكتب الخلفي": "Back to the back office",
+  "المكتب": "Office",
+  "المهام": "Jobs",
+  "بانتظار موافقتك": "Approvals",
+  "الأفكار": "Ideas",
+  "المستندات": "Documents",
+  "الجدولة": "Schedule",
+  "الفريق والإعدادات": "Team & settings",
 };
